@@ -143,19 +143,46 @@ CREATE TABLE AGENTS.ROOT (
 | Column | Description |
 |---|---|
 | `provider` | A short, lowercase identifier for the metadata contributor. Typically a vendor name (`fivetran`, `dbt`) or an internal team name (`acme_data_platform`). Must match the prefix used in any `AGENTS.{PROVIDER}_*` tables contributed by this provider. |
-| `key` | An arbitrary string chosen by the provider to organize their description into sections. Examples: `overview`, `connectors`, `lineage`, `costs`. Unique within a provider. |
-| `description` | A markdown blob. May describe the provider, explain an extension table, document conventions, or provide any context useful to an agent or human reader. Taken together, these rows document the rest of the schema. |
+| `key` | A provider-defined identifier, unique within the provider. Treated as an opaque string by the spec, but conventionally one of two shapes: (1) the unprefixed name of a contributed table (e.g. `connector` documents `AGENTS.FIVETRAN_CONNECTOR`), or (2) a flat or slash-separated path used like a filesystem (e.g. `overview`, `conventions`, `skills/refund_workflow`). Both shapes can coexist in the same provider. |
+| `description` | A markdown blob. May describe the provider, document a specific table, capture conventions, hold a skill, or carry any other context useful to an agent or human reader. Taken together, these rows document the rest of the schema. |
+
+### What goes in `ROOT`
+
+Rows in `AGENTS.ROOT` are units of context. They are not constrained to any one role — a provider may write a handful or hundreds, and they may serve any of the following purposes:
+
+- **Provider orientation** — who the provider is, what their tables are for, where to start reading. Conventionally keyed `overview`.
+- **Table references** — one row per contributed table, keyed by the unprefixed table name. The mapping is deterministic: a row `(provider, key)` documents `AGENTS.UPPER(provider || '_' || key)` whenever that table exists. Used when freeform prose adds something beyond the typed columns of the extension table itself.
+- **Conventions** — provider-wide rules an agent should know about (e.g. "all tables carry `_synced_at`; treat `NULL` as never-synced"). Conventionally keyed `conventions`.
+- **Skills and playbooks** — named bundles of instructions an agent can load by key, the in-warehouse analogue of files under a skills directory. Conventionally keyed `skills/<name>`. The same shape generalizes to other freeform content (deprecation notices, query recipes, on-call procedures) using whatever path prefix the provider finds useful.
+
+None of these is required and none excludes the others. A minimal provider may publish only `overview`; a richer one may publish dozens of skill entries alongside per-table references.
+
+Because the table-reference shape and the path-like shape share the same `key` column, the spec relies on a simple disambiguation rule: if `AGENTS.UPPER(provider || '_' || key)` resolves to a real table, the row documents that table; otherwise the row is freeform context. Path-like keys containing `/` can never collide with table names. Providers should avoid choosing freeform top-level keys that look like they could be table names but aren't (e.g. don't use `connectors` as a section name when `connector` is also a documented table). The following top-level keys are recommended as reserved for orientation and convention: `overview`, `conventions`, `schema`, `costs`.
 
 ### Example rows
 
 ```
-provider   key        description
----------  ---------  ------------------------------------------------
-fivetran   overview   # Fivetran\nFivetran syncs data from SaaS sources...
-fivetran   schema     See AGENTS.FIVETRAN_CONNECTOR and AGENTS.FIVETRAN_TABLE...
-dbt        overview   # dbt\nTransformation layer. See AGENTS.DBT_MODEL...
-dbt        lineage    Column-level lineage available in AGENTS.DBT_COLUMN_LINEAGE...
-acme_corp  costs      # Query Costs\nSee AGENTS.ACME_CORP_TABLE_COSTS...
+provider   key                       description
+---------  ------------------------  ------------------------------------------------
+fivetran   overview                  # Fivetran\nFivetran syncs data from SaaS sources...
+fivetran   conventions               All sync logs are retained 30 days.
+fivetran   connector                 One row per Fivetran connector. See AGENTS.FIVETRAN_CONNECTOR.
+fivetran   sync_log                  Recent sync events, errors, and warnings.
+dbt        overview                  # dbt\nTransformation layer. See AGENTS.DBT_MODEL...
+dbt        model                     One row per dbt model with documentation and owner.
+acme_corp  skills/refund_workflow    # Refund Workflow\nWhen a user asks about refunds...
+acme_corp  skills/etl_failure        # ETL Failure\n1. Check AGENTS.FIVETRAN_SYNC_LOG...
+acme_corp  costs                     # Query Costs\nSee AGENTS.ACME_CORP_TABLE_COSTS.
+```
+
+A consumer can join `ROOT` to `information_schema` to pair every contributed table with its description, when one exists:
+
+```sql
+SELECT t.table_name, r.description
+FROM information_schema.tables t
+LEFT JOIN AGENTS.ROOT r
+  ON UPPER(r.provider || '_' || r.key) = t.table_name
+WHERE t.table_schema = 'AGENTS';
 ```
 
 ---
@@ -168,7 +195,7 @@ Providers may contribute additional tables to the `AGENTS` schema. To prevent na
 AGENTS.{PROVIDER}_{TABLE_NAME}
 ```
 
-The `PROVIDER` prefix must exactly match the `provider` value used in `AGENTS.ROOT`. Providers should document each contributed table in `AGENTS.ROOT` with an appropriate `key`.
+The `PROVIDER` prefix must exactly match the `provider` value used in `AGENTS.ROOT`. Providers should register themselves in `AGENTS.ROOT` (at minimum with an `overview` key) and may optionally add a row per contributed table using the table-reference key shape described above.
 
 **Example:** If `provider = 'acme_corp'`, contributed tables must be named `AGENTS.ACME_CORP_*`.
 
