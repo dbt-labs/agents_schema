@@ -143,17 +143,14 @@ CREATE TABLE AGENTS.ROOT (
 | Column | Description |
 |---|---|
 | `provider` | A short, lowercase identifier for the metadata contributor. Typically a vendor name (`fivetran`, `dbt`) or an internal team name (`acme_data_platform`). Must match the prefix used in any `AGENTS.{PROVIDER}_*` tables contributed by this provider. |
-| `key` | A provider-defined identifier, unique within the provider. Treated as an opaque string by the spec, but conventionally one of two shapes: (1) the unprefixed name of a contributed table (e.g. `connector` documents `AGENTS.FIVETRAN_CONNECTOR`), or (2) a flat or slash-separated path used like a filesystem (e.g. `overview`, `conventions`, `skills/refund_workflow`). Both shapes can coexist in the same provider. |
-| `description` | A markdown blob. May describe the provider, document a specific table, capture conventions, hold a skill, or carry any other context useful to an agent or human reader. Taken together, these rows document the rest of the schema. |
+| `key` | A provider-defined identifier, unique within the provider. Treated as an opaque string by the spec. Two conventional shapes are common and can coexist: (1) the unprefixed name of a contributed table (e.g. `connector` for `AGENTS.FIVETRAN_CONNECTOR`), recommended whenever a row documents a specific table, and (2) a flat or slash-separated path used like a filesystem (e.g. `overview`, `conventions`, `skills/refund_workflow`). |
+| `description` | Free-form text. May describe the provider, document a specific table, capture conventions, hold a skill, or carry any other context useful to an agent or human reader. Markdown is the natural default since LLMs are common consumers, but the column is plain text and any shape works. |
 
 ### What goes in `ROOT`
 
-Rows in `AGENTS.ROOT` are units of context. They are not constrained to any one role — a provider may write a handful or hundreds, and they may serve any of the following purposes:
+A row in `AGENTS.ROOT` can hold any text a provider wants discoverable from inside the warehouse. The only hard rule is that `(provider, key)` is unique. Beyond that, providers are free to use rows however they like — for an overview, conventions, per-table notes, skills, query recipes, deprecation notices, or anything else worth publishing alongside the data. Markdown is a natural fit because consumers are often LLMs, but the column is plain text and any shape works.
 
-- **Provider orientation** — who the provider is, what their tables are for, where to start reading. Conventionally keyed `overview`.
-- **Table references** — one row per contributed table, keyed by the unprefixed table name. The mapping is deterministic: a row `(provider, key)` documents `AGENTS.UPPER(provider || '_' || key)` whenever that table exists. Used when freeform prose adds something beyond the typed columns of the extension table itself.
-- **Conventions** — provider-wide rules an agent should know about (e.g. "all tables carry `_synced_at`; treat `NULL` as never-synced"). Conventionally keyed `conventions`.
-- **Skills and playbooks** — named bundles of instructions an agent can load by key, the in-warehouse analogue of files under a skills directory. Conventionally keyed `skills/<name>`. The same shape generalizes to other freeform content (query recipes, deprecation notices, etc.) using whatever path prefix the provider finds useful.
+It is strongly recommended that when a row is meant to document a specific contributed table, its key match the unprefixed table name (so `(fivetran, connector)` documents `AGENTS.FIVETRAN_CONNECTOR`). This isn't enforced, but following the convention keeps consumers — especially LLM agents — from getting confused about whether a row describes a table or is freeform context.
 
 ### Example rows
 
@@ -181,7 +178,7 @@ Providers may contribute additional tables to the `AGENTS` schema. To prevent na
 AGENTS.{PROVIDER}_{TABLE_NAME}
 ```
 
-The `PROVIDER` prefix must exactly match the `provider` value used in `AGENTS.ROOT`. Providers should register themselves in `AGENTS.ROOT` should add a row per contributed table using the table-reference key shape described above.
+The `PROVIDER` prefix must exactly match the `provider` value used in `AGENTS.ROOT`. Providers should register themselves in `AGENTS.ROOT` and should add a row per contributed table using the table-reference key shape described above.
 
 **Example:** If `provider = 'acme_corp'`, contributed tables must be named `AGENTS.ACME_CORP_*`.
 
