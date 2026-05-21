@@ -143,19 +143,29 @@ CREATE TABLE AGENTS.ROOT (
 | Column | Description |
 |---|---|
 | `provider` | A short, lowercase identifier for the metadata contributor. Typically a vendor name (`fivetran`, `dbt`) or an internal team name (`acme_data_platform`). Must match the prefix used in any `AGENTS.{PROVIDER}_*` tables contributed by this provider. |
-| `key` | An arbitrary string chosen by the provider to organize their description into sections. Examples: `overview`, `connectors`, `lineage`, `costs`. Unique within a provider. |
-| `description` | A markdown blob. May describe the provider, explain an extension table, document conventions, or provide any context useful to an agent or human reader. Taken together, these rows document the rest of the schema. |
+| `key` | A provider-defined identifier, unique within the provider. Treated as an opaque string by the spec. Two conventional shapes are common and can coexist: (1) the unprefixed name of a contributed table (e.g. `connector` for `AGENTS.FIVETRAN_CONNECTOR`), recommended whenever a row documents a specific table, and (2) a flat or slash-separated path used like a filesystem (e.g. `overview`, `conventions`, `skills/refund_workflow`). |
+| `description` | Free-form text. May describe the provider, document a specific table, capture conventions, hold a skill, or carry any other context useful to an agent or human reader. Markdown is the natural default since LLMs are common consumers, but the column is plain text and any shape works. |
+
+### What goes in `ROOT`
+
+A row in `AGENTS.ROOT` can hold any text a provider wants discoverable from inside the warehouse. The only hard rule is that `(provider, key)` is unique. Beyond that, providers are free to use rows however they like — for an overview, conventions, per-table notes, skills, query recipes, deprecation notices, or anything else worth publishing alongside the data. Markdown is a natural fit because consumers are often LLMs, but the column is plain text and any shape works.
+
+It is strongly recommended that when a row is meant to document a specific contributed table, its key match the unprefixed table name (so `(fivetran, connector)` documents `AGENTS.FIVETRAN_CONNECTOR`). This isn't enforced, but following the convention keeps consumers — especially LLM agents — from getting confused about whether a row describes a table or is freeform context.
 
 ### Example rows
 
 ```
-provider   key        description
----------  ---------  ------------------------------------------------
-fivetran   overview   # Fivetran\nFivetran syncs data from SaaS sources...
-fivetran   schema     See AGENTS.FIVETRAN_CONNECTOR and AGENTS.FIVETRAN_TABLE...
-dbt        overview   # dbt\nTransformation layer. See AGENTS.DBT_MODEL...
-dbt        lineage    Column-level lineage available in AGENTS.DBT_COLUMN_LINEAGE...
-acme_corp  costs      # Query Costs\nSee AGENTS.ACME_CORP_TABLE_COSTS...
+provider   key                       description
+---------  ------------------------  ------------------------------------------------
+fivetran   overview                  # Fivetran\nFivetran syncs data from SaaS sources...
+fivetran   conventions               All sync logs are retained 30 days.
+fivetran   connector                 One row per Fivetran connector. See AGENTS.FIVETRAN_CONNECTOR.
+fivetran   sync_log                  Recent sync events, errors, and warnings.
+dbt        overview                  # dbt\nTransformation layer. See AGENTS.DBT_MODEL...
+dbt        model                     One row per dbt model with documentation and owner.
+acme_corp  skills/refund_workflow    # Refund Workflow\nWhen a user asks about refunds...
+acme_corp  skills/etl_failure        # ETL Failure\n1. Check AGENTS.FIVETRAN_SYNC_LOG...
+acme_corp  costs                     # Query Costs\nSee AGENTS.ACME_CORP_TABLE_COSTS.
 ```
 
 ---
@@ -168,7 +178,7 @@ Providers may contribute additional tables to the `AGENTS` schema. To prevent na
 AGENTS.{PROVIDER}_{TABLE_NAME}
 ```
 
-The `PROVIDER` prefix must exactly match the `provider` value used in `AGENTS.ROOT`. Providers should document each contributed table in `AGENTS.ROOT` with an appropriate `key`.
+The `PROVIDER` prefix must exactly match the `provider` value used in `AGENTS.ROOT`. Providers should register themselves in `AGENTS.ROOT` and should add a row per contributed table using the table-reference key shape described above.
 
 **Example:** If `provider = 'acme_corp'`, contributed tables must be named `AGENTS.ACME_CORP_*`.
 
