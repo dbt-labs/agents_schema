@@ -271,6 +271,8 @@ SELECT DISTINCT m.name, m.schema_name, m.description
 FROM lineage JOIN AGENTS.DBT_MODEL m ON m.unique_id = lineage.node_id;
 ```
 
+---
+
 ## Conventions and Guidance for Implementors
 
 ### Populating the tables
