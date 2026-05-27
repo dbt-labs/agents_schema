@@ -32,7 +32,7 @@ In practice, this means an agent should be able to connect to a warehouse, inspe
 - who owns this data product?
 
 Well-known extensions are also a mechanism for tools to discover specific metadata they care about. For example:
-- a BI tool could look specifically for dbt semantic-layer tables such as `AGENTS.DBT_SEMANTIC_MODEL`, `AGENTS.DBT_METRIC`, or related tables
+- a BI tool could look specifically for dbt model metadata such as `AGENTS.DBT_MODEL` or `AGENTS.DBT_COLUMN`
 - an observability tool could look for freshness or lineage metadata from a specific provider
 - a generic agent runtime could use `AGENTS.ROOT` to discover which providers are present before deciding what else to query
 
@@ -43,7 +43,7 @@ An important property of the Agents Schema is that it is self-documenting. The s
 - the descriptions in `AGENTS.ROOT` explain what provider-contributed tables exist and how to interpret them
 - a consumer can discover useful metadata by querying the warehouse alone, without prior vendor-specific assumptions
 
-Well-known extensions are an optimization on top of that default discovery flow, not a replacement for it. A tool may choose to look directly for a stable, well-known table shape such as a dbt semantic-layer extension, but it does not have to. The baseline contract is still that the schema can be explored and understood through `AGENTS.ROOT`.
+Well-known extensions are an optimization on top of that default discovery flow, not a replacement for it. A tool may choose to look directly for a stable, well-known table shape such as the dbt extension, but it does not have to. The baseline contract is still that the schema can be explored and understood through `AGENTS.ROOT`.
 
 ---
 
@@ -298,11 +298,9 @@ ORDER BY hours_since_sync DESC NULLS FIRST;
 
 ## Extension: `dbt`
 
-The dbt extension provides a normalized, queryable representation of the information in dbt's `manifest.json`. It captures the transformation layer: what models exist, how they are documented, how they depend on each other, and what tests are defined.
+The dbt extension provides a normalized, queryable representation of the information in dbt's `manifest.json`. It captures the transformation layer: what models exist, how they are documented, and how they depend on each other.
 
-Agents can use this extension to understand what "curated" tables exist (as opposed to raw ingested data), trace column lineage, find model owners, and assess test coverage.
-
-For teams using dbt's Semantic Layer, this extension can also be extended with metadata normalized from `semantic_manifest.json`. That artifact captures semantic models, entities, dimensions, measures, metrics, and saved queries defined on top of dbt models.
+Agents can use this extension to understand what "curated" tables exist (as opposed to raw ingested data), trace column lineage, and find model owners.
 
 ### `AGENTS.DBT_MODEL`
 
@@ -350,29 +348,6 @@ CREATE TABLE AGENTS.DBT_COLUMN (
 );
 ```
 
-### `AGENTS.DBT_SOURCE`
-
-One row per dbt source table. Corresponds to `sources` entries in `manifest.json`.
-
-```sql
-CREATE TABLE AGENTS.DBT_SOURCE (
-  unique_id      VARCHAR NOT NULL PRIMARY KEY, -- 'source.<package>.<source>.<table>'
-  source_name    VARCHAR NOT NULL,             -- the source block name in schema.yml
-  table_name     VARCHAR NOT NULL,             -- the individual table within the source
-  database_name  VARCHAR NOT NULL,
-  schema_name    VARCHAR NOT NULL,
-  description    TEXT,
-  loader         VARCHAR,                      -- e.g. 'fivetran', 'airbyte', 'stitch'
-  freshness_warn_after_hours  INTEGER,
-  freshness_error_after_hours INTEGER
-);
-```
-
-| Column | Description |
-|---|---|
-| `loader` | Declared in `schema.yml`. When `loader = 'fivetran'`, join to `AGENTS.FIVETRAN_CONNECTOR` on `schema_name` to get sync health. |
-| `freshness_*` | Thresholds from dbt source freshness configuration. |
-
 ### `AGENTS.DBT_DEPENDENCY`
 
 The lineage graph: one row per directed edge in the DAG. Normalized from `parent_map` and `child_map` in `manifest.json`.
@@ -392,304 +367,13 @@ To find all models that depend (directly or indirectly) on a source, agents can 
 ```sql
 WITH RECURSIVE lineage AS (
   SELECT downstream_id AS node_id FROM AGENTS.DBT_DEPENDENCY
-  WHERE upstream_id = 'source.my_project.fivetran_salesforce.account'
+  WHERE upstream_id = 'source.my_project.raw.account'
   UNION ALL
   SELECT d.downstream_id FROM AGENTS.DBT_DEPENDENCY d
   JOIN lineage l ON d.upstream_id = l.node_id
 )
 SELECT DISTINCT m.name, m.schema_name, m.description
 FROM lineage JOIN AGENTS.DBT_MODEL m ON m.unique_id = lineage.node_id;
-```
-
-### `AGENTS.DBT_TEST`
-
-One row per dbt test. Corresponds to `nodes` where `resource_type = 'test'`.
-
-```sql
-CREATE TABLE AGENTS.DBT_TEST (
-  unique_id        VARCHAR NOT NULL PRIMARY KEY,
-  test_name        VARCHAR NOT NULL,   -- e.g. 'not_null', 'unique', 'accepted_values'
-  attached_to_id   VARCHAR NOT NULL,   -- unique_id of model or source being tested
-  column_name      VARCHAR,            -- NULL for model-level tests
-  severity         VARCHAR NOT NULL,   -- 'warn' or 'error'
-  test_type        VARCHAR NOT NULL    -- 'generic' or 'singular'
-);
-```
-
-### `AGENTS.DBT_EXPOSURE`
-
-One row per dbt exposure: downstream consumers of dbt models such as dashboards, ML models, or applications.
-
-```sql
-CREATE TABLE AGENTS.DBT_EXPOSURE (
-  unique_id    VARCHAR NOT NULL PRIMARY KEY,
-  name         VARCHAR NOT NULL,
-  type         VARCHAR NOT NULL,   -- 'dashboard', 'ml', 'application', 'analysis', 'notebook'
-  description  TEXT,
-  owner_name   VARCHAR,
-  owner_email  VARCHAR,
-  url          VARCHAR,
-  tags         ARRAY
-);
-```
-
-```sql
--- Which exposures depend on a given model?
-SELECT e.name, e.type, e.owner_email, e.url
-FROM AGENTS.DBT_EXPOSURE e
-JOIN AGENTS.DBT_DEPENDENCY d ON d.downstream_id = e.unique_id
-WHERE d.upstream_id = 'model.my_project.fct_orders';
-```
-
-### Semantic Layer Sketch
-
-dbt's Semantic Layer sits one level above the core DAG metadata above. A practical representation in the Agents Schema is:
-- keep `AGENTS.DBT_MODEL` as the physical/modeling layer
-- add semantic-layer tables sourced from `semantic_manifest.json`
-- link each semantic model back to exactly one dbt model
-- normalize reusable semantic primitives separately from queryable metrics
-
-That yields a shape like this:
-
-### `AGENTS.DBT_SEMANTIC_MODEL`
-
-One row per semantic model. Corresponds to semantic model definitions in `semantic_manifest.json`.
-
-```sql
-CREATE TABLE AGENTS.DBT_SEMANTIC_MODEL (
-  unique_id             VARCHAR NOT NULL PRIMARY KEY, -- 'semantic_model.<package>.<name>'
-  name                  VARCHAR NOT NULL,
-  package_name          VARCHAR NOT NULL,
-  model_unique_id       VARCHAR NOT NULL,            -- FK to AGENTS.DBT_MODEL.unique_id
-  node_relation_name    VARCHAR,                     -- rendered warehouse relation, if available
-  description           TEXT,
-  default_time_dimension VARCHAR,
-  primary_entity_name   VARCHAR,
-  label                 VARCHAR,
-  config                VARIANT,                     -- semantic-model-specific config
-  created_at            TIMESTAMP
-);
-```
-
-This is the anchor table for the semantic graph. If an agent needs to answer "what business object is this metric defined on?", it should start here and then traverse dimensions, entities, and measures.
-
-### `AGENTS.DBT_SEMANTIC_ENTITY`
-
-One row per entity on a semantic model. Entities are the join keys that connect semantic models.
-
-```sql
-CREATE TABLE AGENTS.DBT_SEMANTIC_ENTITY (
-  semantic_model_unique_id VARCHAR NOT NULL,
-  entity_name              VARCHAR NOT NULL,
-  entity_type              VARCHAR NOT NULL, -- 'primary', 'unique', 'foreign', 'natural'
-  expr                     VARCHAR,          -- source expression if name differs from column
-  role                     VARCHAR,          -- optional semantic role if dbt surfaces one
-  description              TEXT,
-  PRIMARY KEY (semantic_model_unique_id, entity_name)
-);
-```
-
-This table is the semantic analogue of `AGENTS.DBT_DEPENDENCY`: instead of DAG edges, it describes the join surface MetricFlow can use at query time.
-
-### `AGENTS.DBT_SEMANTIC_DIMENSION`
-
-One row per dimension exposed by a semantic model.
-
-```sql
-CREATE TABLE AGENTS.DBT_SEMANTIC_DIMENSION (
-  semantic_model_unique_id VARCHAR NOT NULL,
-  dimension_name           VARCHAR NOT NULL,
-  dimension_type           VARCHAR NOT NULL, -- 'categorical', 'time'
-  expr                     VARCHAR,
-  data_type                VARCHAR,
-  description              TEXT,
-  label                    VARCHAR,
-  type_params              VARIANT,          -- time granularity / validity params / etc.
-  is_partition             BOOLEAN,
-  PRIMARY KEY (semantic_model_unique_id, dimension_name)
-);
-```
-
-Time dimensions belong here, including the semantic model's default aggregation time dimension.
-
-### `AGENTS.DBT_SEMANTIC_MEASURE`
-
-One row per measure on a semantic model. Measures are the raw aggregations from which many metrics are built.
-
-```sql
-CREATE TABLE AGENTS.DBT_SEMANTIC_MEASURE (
-  semantic_model_unique_id   VARCHAR NOT NULL,
-  measure_name               VARCHAR NOT NULL,
-  agg                        VARCHAR NOT NULL, -- 'sum', 'count', 'count_distinct', 'avg', ...
-  expr                       VARCHAR,
-  data_type                  VARCHAR,
-  description                TEXT,
-  label                      VARCHAR,
-  agg_time_dimension         VARCHAR,
-  non_additive_dimension_name VARCHAR,
-  create_metric              BOOLEAN,
-  config                     VARIANT,
-  PRIMARY KEY (semantic_model_unique_id, measure_name)
-);
-```
-
-This lets agents distinguish between:
-- base semantic measures, which are directly aggregatable
-- user-facing metrics, which may wrap one or more measures with additional logic
-
-### `AGENTS.DBT_METRIC`
-
-One row per metric exposed by the Semantic Layer.
-
-```sql
-CREATE TABLE AGENTS.DBT_METRIC (
-  unique_id       VARCHAR NOT NULL PRIMARY KEY, -- 'metric.<package>.<name>'
-  name            VARCHAR NOT NULL,
-  package_name    VARCHAR NOT NULL,
-  metric_type     VARCHAR NOT NULL,             -- e.g. 'simple', 'ratio', 'derived', 'cumulative'
-  label           VARCHAR,
-  description     TEXT,
-  type_params     VARIANT,                      -- metric-type-specific configuration
-  filter_sql      TEXT,
-  time_grains     ARRAY,                        -- supported grains if materialized in artifact
-  dimensions      ARRAY,                        -- allowed dimensions if materialized in artifact
-  created_at      TIMESTAMP
-);
-```
-
-`type_params` is important here because dbt metric definitions vary by type. For example:
-- a simple metric points at a measure
-- a ratio metric has numerator/denominator inputs
-- a derived metric references other metrics
-- a cumulative metric carries windowing semantics
-
-### `AGENTS.DBT_METRIC_INPUT`
-
-One row per metric input, so agents can trace how a metric is assembled.
-
-```sql
-CREATE TABLE AGENTS.DBT_METRIC_INPUT (
-  metric_unique_id         VARCHAR NOT NULL,
-  input_order              INTEGER NOT NULL,
-  input_kind               VARCHAR NOT NULL, -- 'measure', 'metric'
-  semantic_model_unique_id VARCHAR,          -- set when input_kind = 'measure'
-  measure_name             VARCHAR,          -- set when input_kind = 'measure'
-  input_metric_unique_id   VARCHAR,          -- set when input_kind = 'metric'
-  role                     VARCHAR,          -- 'numerator', 'denominator', 'operand', etc.
-  params                   VARIANT,          -- alias/window/offset/filter per input
-  PRIMARY KEY (metric_unique_id, input_order)
-);
-```
-
-Without this table, an agent can list metrics but cannot explain them. With it, an agent can answer questions like "what does gross_margin depend on?" or "is revenue a direct sum or a derived metric?"
-
-### `AGENTS.DBT_SAVED_QUERY`
-
-One row per saved query. Saved queries package a set of metrics plus dimensions, filters, and grain into a reusable query definition.
-
-```sql
-CREATE TABLE AGENTS.DBT_SAVED_QUERY (
-  unique_id        VARCHAR NOT NULL PRIMARY KEY, -- 'saved_query.<package>.<name>'
-  name             VARCHAR NOT NULL,
-  package_name     VARCHAR NOT NULL,
-  description      TEXT,
-  label            VARCHAR,
-  query_params     VARIANT,                      -- exported grain, filters, limits, etc.
-  created_at       TIMESTAMP
-);
-```
-
-### `AGENTS.DBT_SAVED_QUERY_ITEM`
-
-One row per metric or dimension selected by a saved query.
-
-```sql
-CREATE TABLE AGENTS.DBT_SAVED_QUERY_ITEM (
-  saved_query_unique_id   VARCHAR NOT NULL,
-  item_order              INTEGER NOT NULL,
-  item_kind               VARCHAR NOT NULL, -- 'metric', 'dimension'
-  metric_unique_id        VARCHAR,
-  semantic_model_unique_id VARCHAR,
-  dimension_name          VARCHAR,
-  params                  VARIANT,
-  PRIMARY KEY (saved_query_unique_id, item_order)
-);
-```
-
-This keeps saved queries queryable without baking every semantic-layer concept into one opaque JSON blob.
-
-### Why represent it this way?
-
-This shape preserves the same design choices used elsewhere in the Agents Schema:
-- one table per stable concept
-- relational joins for the most common agent questions
-- `VARIANT` only where dbt's schema is genuinely polymorphic
-
-It also lets agents answer distinct classes of questions cleanly:
-- physical layer: "what warehouse relation does this come from?" via `AGENTS.DBT_MODEL`
-- semantic graph: "what can join to what?" via `AGENTS.DBT_SEMANTIC_ENTITY`
-- query surface: "what dimensions/measures exist?" via `AGENTS.DBT_SEMANTIC_DIMENSION` and `AGENTS.DBT_SEMANTIC_MEASURE`
-- governed business logic: "what is the canonical metric?" via `AGENTS.DBT_METRIC` and `AGENTS.DBT_METRIC_INPUT`
-- reusable consumption patterns: "what metric bundles are already curated?" via `AGENTS.DBT_SAVED_QUERY*`
-
-Example: trace a metric back to its underlying dbt model(s):
-
-```sql
-SELECT
-  m.name AS metric_name,
-  sm.name AS semantic_model_name,
-  dm.schema_name,
-  dm.name AS dbt_model_name,
-  mi.role,
-  mi.measure_name
-FROM AGENTS.DBT_METRIC m
-JOIN AGENTS.DBT_METRIC_INPUT mi
-  ON mi.metric_unique_id = m.unique_id
-JOIN AGENTS.DBT_SEMANTIC_MODEL sm
-  ON sm.unique_id = mi.semantic_model_unique_id
-JOIN AGENTS.DBT_MODEL dm
-  ON dm.unique_id = sm.model_unique_id
-WHERE m.unique_id = 'metric.analytics.revenue';
-```
-
-If you wanted to keep the first version smaller, the minimum viable addition would be just:
-- `AGENTS.DBT_SEMANTIC_MODEL`
-- `AGENTS.DBT_SEMANTIC_ENTITY`
-- `AGENTS.DBT_SEMANTIC_DIMENSION`
-- `AGENTS.DBT_SEMANTIC_MEASURE`
-- `AGENTS.DBT_METRIC`
-- `AGENTS.DBT_METRIC_INPUT`
-
-That covers the core semantic graph and metric definitions; saved queries can be added later.
-
----
-
-## Cross-Extension Queries
-
-One of the most valuable things agents can do is join across extensions. Example: finding raw source tables that feed a specific dbt model, then checking whether those sources' Fivetran connectors are healthy.
-
-```sql
--- Trace a dbt model back to its Fivetran connectors and check sync health
-WITH RECURSIVE upstream AS (
-  SELECT upstream_id AS node_id, upstream_type
-  FROM AGENTS.DBT_DEPENDENCY
-  WHERE downstream_id = 'model.analytics.fct_revenue'
-  UNION ALL
-  SELECT d.upstream_id, d.upstream_type
-  FROM AGENTS.DBT_DEPENDENCY d
-  JOIN upstream u ON d.downstream_id = u.node_id
-)
-SELECT
-  s.source_name,
-  s.schema_name,
-  c.connector_name,
-  c.connector_type,
-  c.status,
-  c.last_synced_at
-FROM upstream u
-JOIN AGENTS.DBT_SOURCE s      ON s.unique_id = u.node_id
-JOIN AGENTS.FIVETRAN_CONNECTOR c ON c.destination_schema = s.schema_name
-WHERE u.upstream_type = 'source';
 ```
 
 ---
@@ -699,7 +383,7 @@ WHERE u.upstream_type = 'source';
 ### Populating the tables
 
 Agents Schema tables are typically populated by:
-- **Vendor-run pipelines** (e.g. the Fivetran Platform Connector syncing to `AGENTS.FIVETRAN_*`)
+- **Vendor-run pipelines** that sync provider metadata into the warehouse
 - **CI/CD jobs** (e.g. a dbt post-deploy step that parses `manifest.json` and loads `AGENTS.DBT_*`)
 - **Platform engineering teams** maintaining custom provider tables
 
@@ -735,15 +419,4 @@ The following provider names are reserved by this specification:
 | `AGENTS.FIVETRAN_SYNC_LOG` | fivetran | Recent sync events, errors, and warnings |
 | `AGENTS.DBT_MODEL` | dbt | dbt models with documentation, owner, materialization |
 | `AGENTS.DBT_COLUMN` | dbt | Per-column documentation for dbt models |
-| `AGENTS.DBT_SOURCE` | dbt | dbt source declarations with freshness thresholds |
 | `AGENTS.DBT_DEPENDENCY` | dbt | DAG edges for upstream/downstream lineage |
-| `AGENTS.DBT_TEST` | dbt | Test definitions and which columns they cover |
-| `AGENTS.DBT_EXPOSURE` | dbt | Downstream consumers (dashboards, apps, ML models) |
-| `AGENTS.DBT_SEMANTIC_MODEL` | dbt | Semantic models defined on top of dbt models |
-| `AGENTS.DBT_SEMANTIC_ENTITY` | dbt | Joinable entities/keys for semantic models |
-| `AGENTS.DBT_SEMANTIC_DIMENSION` | dbt | Queryable semantic dimensions |
-| `AGENTS.DBT_SEMANTIC_MEASURE` | dbt | Base semantic measures and aggregation rules |
-| `AGENTS.DBT_METRIC` | dbt | User-facing governed metrics |
-| `AGENTS.DBT_METRIC_INPUT` | dbt | Metric composition and dependencies |
-| `AGENTS.DBT_SAVED_QUERY` | dbt | Reusable saved metric queries |
-| `AGENTS.DBT_SAVED_QUERY_ITEM` | dbt | Metrics/dimensions selected by saved queries |
