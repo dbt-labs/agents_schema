@@ -70,39 +70,38 @@ WAREHOUSE_CREDENTIALS
 ```
 
 Snowflake is the only supported destination today, with more destination
-support coming soon. The secret value is a JSON or YAML object. Choose one of
+support coming soon. The secret value is a YAML or JSON object. Choose one of
 the two auth methods:
 
 **Password auth:**
 
-```json
-{
-  "type": "snowflake",
-  "account": "abc123",
-  "user": "AGENTS_SCHEMA_BOT",
-  "warehouse": "COMPUTE_WH",
-  "database": "ANALYTICS",
-  "role": "TRANSFORMER",
-  "password": "secret"
-}
+```yaml
+type: snowflake
+account: abc123
+user: AGENTS_SCHEMA_BOT
+warehouse: COMPUTE_WH
+database: ANALYTICS
+role: TRANSFORMER
+password: secret
 ```
 
 **Key-pair auth:**
 
-```json
-{
-  "type": "snowflake",
-  "account": "abc123",
-  "user": "AGENTS_SCHEMA_BOT",
-  "warehouse": "COMPUTE_WH",
-  "database": "ANALYTICS",
-  "role": "TRANSFORMER",
-  "private_key_pem": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
-}
+```yaml
+type: snowflake
+account: abc123
+user: AGENTS_SCHEMA_BOT
+warehouse: COMPUTE_WH
+database: ANALYTICS
+role: TRANSFORMER
+private_key_pem: |
+  -----BEGIN PRIVATE KEY-----
+  MIIEvQIBADANBgkqh...
+  -----END PRIVATE KEY-----
 ```
 
 `role` is optional. Add `private_key_passphrase` to the key-pair object if the
-key is encrypted. YAML works with the same field names.
+key is encrypted. JSON works with the same field names.
 
 The destination object configures the warehouse and connection. The schema
 name is always `AGENTS`. The destination user needs permission to create or
