@@ -1,56 +1,47 @@
 # Agents Schema
 
-Agents Schema is a standard, in-warehouse metadata surface for agents. It gives
-tools, agents, and humans a well-known place to discover what data exists, who
-owns it, what produced it, and how it should be used.
+Agents need context to answer questions about warehouse data. Agents Schema puts
+that context in the warehouse itself, in a standard `AGENTS` schema, so agents
+can query metadata next to the data they are reasoning over. See
+[Why Agents Schema](#why-agents-schema) for more on the idea behind it and
+[SPEC.md](./SPEC.md) for the schema contract.
+
+This repository provides GitHub reusable workflows that ingest source metadata
+from your repository and publish it into `AGENTS`.
 
 ![Agents Schema overview](assets/agents-schema-overview.png)
 
-The first officially supported ingestion sources are:
-
-- dbt: reads `target/manifest.json` and writes `AGENTS.DBT_*` tables.
-- Looker: reads `*.lkml` files and writes `AGENTS.LOOKML_*` tables.
-
-This repository provides GitHub reusable workflows that ingest source metadata
-from a customer's repository and publish it into the warehouse. After the
-`AGENTS` schema is populated, agents can consume it directly with SQL, through
-skills, through specialized MCP servers, or through any other tool that can read
-from the warehouse.
-
-The full schema contract is defined in [SPEC.md](./SPEC.md).
-
-## Motivation
-
-Agents operating over a warehouse need context that is not captured in table
-schemas alone: what a table is for, who maintains it, what transformations
-produced it, what it costs to query, and how it relates to other tables. Today
-this information often lives in wikis, Slack threads, dashboards, and tribal
-knowledge. Agents Schema puts it in the warehouse itself, where agents can find
-it without leaving the query interface.
-
 ## Contents
 
-- [How It Works](#how-it-works)
-- [Prerequisites](#prerequisites)
-  - [Warehouse Credentials](#warehouse-credentials)
-- [Sync dbt](#sync-dbt)
-  - [Use an Existing Manifest](#use-an-existing-manifest)
-  - [Generate a Manifest with dbt Parse](#generate-a-manifest-with-dbt-parse)
-  - [Run a Custom dbt Parse Command](#run-a-custom-dbt-parse-command)
-- [Sync Looker](#sync-looker)
-- [Sync Multiple Sources](#sync-multiple-sources)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+- [Guides](#guides)
+  - [Sync dbt](#sync-dbt)
+  - [Sync Looker](#sync-looker)
+  - [Sync Multiple Sources](#sync-multiple-sources)
+- [Why Agents Schema](#why-agents-schema)
 - [Reference](#reference)
   - [CLI](#cli)
   - [Versioning](#versioning)
   - [Specification](#specification)
 
-## How It Works
+## Getting Started
 
-The ingestion flow is:
+Start by publishing one source into `AGENTS`, then point an agent at the
+warehouse and let it inspect the metadata directly. The fastest path is usually
+dbt: if your repo already produces `target/manifest.json`, the workflow only
+needs the dbt project path and your warehouse credentials.
 
-1. A customer repository calls one of this repo's reusable GitHub workflows.
-2. The workflow checks out the customer repository and reads source metadata,
-   such as dbt artifacts or LookML files.
+After the first run, your warehouse has queryable metadata tables such as
+`AGENTS.DBT_MODEL` and `AGENTS.DBT_COLUMN`. Agents can use those tables to
+understand which models exist, how they are documented, how they relate to the
+warehouse, and what context is available before writing or explaining queries.
+
+The workflow shape is:
+
+1. Your repository calls one of this repo's reusable GitHub workflows.
+2. The workflow checks out your repository and reads source metadata, such as
+   dbt artifacts or LookML files.
 3. The workflow runs the `agents-schema` CLI from this repository at the pinned
    release tag.
 4. The CLI writes normalized metadata into the warehouse under the fixed
@@ -58,34 +49,12 @@ The ingestion flow is:
 5. Agents and downstream tools query `AGENTS` to discover context close to the
    data itself.
 
-Once populated, a consumer can start from the warehouse and answer questions
-like:
+### Supported Metadata Sources
 
-- which curated tables, dbt models, or LookML objects exist?
-- which upstream system published this metadata?
-- how should a table, model, metric, or dashboard be interpreted?
-- who owns the data product?
-- what provider-specific metadata is available to query next?
+- dbt: reads `target/manifest.json` and writes `AGENTS.DBT_*` tables.
+- Looker: reads `*.lkml` files and writes `AGENTS.LOOKML_*` tables.
 
-This makes Agents Schema a shared discovery layer at the warehouse boundary. It
-is not an action interface, a replacement for source-native APIs, or the only
-metadata surface a specialized tool should use. Tools that need full-fidelity
-authoring context can still use source files, vendor APIs, or MCP servers; those
-same tools can also read `AGENTS` when they need a common, queryable view of
-published metadata.
-
-`AGENTS.ROOT` is the entry point for generic discovery. Specialized consumers
-can also query well-known extension tables directly when they already know the
-shape they need.
-
-Example workflows:
-
-- [examples/workflows/dbt.yml](./examples/workflows/dbt.yml): dbt manifest
-  already exists.
-- [examples/workflows/dbt-with-parse.yml](./examples/workflows/dbt-with-parse.yml):
-  workflow should run `dbt parse`.
-- [examples/workflows/dbt-looker.yml](./examples/workflows/dbt-looker.yml): dbt
-  and Looker in one workflow.
+More sources coming soon.
 
 ## Prerequisites
 
@@ -136,11 +105,13 @@ permission to create or replace tables in that schema.
 workflow needs to run dbt, the dbt adapter is selected from the dbt profile, not
 from these destination credentials.
 
-## Sync dbt
+## Guides
+
+### Sync dbt
 
 Use the dbt reusable workflow when the repository contains a dbt project.
 
-### Use an Existing Manifest
+#### Use an Existing Manifest
 
 If the repository already has `target/manifest.json`, the workflow only needs to
 know where the dbt project lives:
@@ -167,7 +138,7 @@ The workflow looks for:
 <dbt project>/target/manifest.json
 ```
 
-### Generate a Manifest with dbt Parse
+#### Generate a Manifest with dbt Parse
 
 If the manifest is missing, the workflow can run `dbt parse`. Add this optional
 secret:
@@ -209,7 +180,7 @@ $RUNNER_TEMP/agents-schema-dbt-profiles/profiles.yml
 The workflow reads the selected dbt profile output `type` and installs the
 matching dbt adapter. Today `snowflake` maps to `dbt-snowflake`.
 
-### Run a Custom dbt Parse Command
+#### Run a Custom dbt Parse Command
 
 For custom dbt setups, pass `dbt-parse-command`. If `DBT_PROFILES_YML` and
 `dbt-profile-name` are also present, the workflow sets `DBT_ADAPTER_PACKAGE`
@@ -236,7 +207,7 @@ jobs:
 If the manifest is missing and the workflow cannot run managed parse or a custom
 parse command, it fails with an explicit error.
 
-## Sync Looker
+### Sync Looker
 
 Use the Looker reusable workflow when the repository contains LookML files:
 
@@ -258,7 +229,7 @@ jobs:
 
 The workflow reads `*.lkml` files from `lookml-dir`.
 
-## Sync Multiple Sources
+### Sync Multiple Sources
 
 Use separate reusable workflows in the same GitHub Actions workflow:
 
@@ -287,6 +258,37 @@ jobs:
 These jobs do not need to depend on each other unless your repository has its
 own ordering requirement.
 
+## Why Agents Schema
+
+Agents operating over a warehouse need context that is not captured in table
+schemas alone: what a table is for, who maintains it, what transformations
+produced it, what it costs to query, and how it relates to other tables. Today
+this information often lives in wikis, Slack threads, dashboards, and tribal
+knowledge. Agents Schema puts it in the warehouse itself, where agents can find
+it without leaving the query interface.
+
+Agents Schema is primarily a discovery and orientation layer for agents working
+from inside a warehouse query surface. It gives agents a standard place to
+answer questions like what curated tables exist, which system published the
+metadata, what dbt model or LookML object represents a dataset, whether a
+source is stale, and who owns a data product.
+
+The schema is self-documenting. `AGENTS.ROOT` tells consumers which providers
+are present and explains what provider-contributed tables mean. Consumers can
+start there for generic discovery, or query well-known extension tables directly
+when they already know the shape they need.
+
+Agents Schema is not a replacement for specialized systems, source-native
+metadata APIs, or development-time tooling. A dbt MCP server helping an agent
+edit a dbt repository should still use dbt source files and artifacts directly.
+Agents Schema is the shared, queryable metadata surface for consumers that start
+from the warehouse and need context about data that already exists there.
+
+It is closest in spirit to `information_schema`, but extensible across many
+providers. Compared with MCP servers, Agents Schema is narrower: it publishes
+context inside the warehouse, while MCP servers can expose tools, actions, and
+source-specific workflows.
+
 ## Reference
 
 ### CLI
@@ -305,7 +307,7 @@ The CLI reads warehouse credentials from `WAREHOUSE_CREDENTIALS`.
 Release tags version the whole repository: reusable workflows, actions, CLI
 source, examples, README, and spec.
 
-Pin exact tags in customer workflows:
+Pin exact tags in your workflows:
 
 ```yaml
 uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.1
