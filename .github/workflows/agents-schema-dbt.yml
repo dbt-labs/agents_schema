@@ -6,8 +6,7 @@ on:
       dbt-project-dir:
         description: 'Path to the dbt project containing target/manifest.json'
         type: string
-        required: false
-        default: dbt_project
+        required: true
       dbt-profile-name:
         description: 'dbt profile name to use for managed dbt parse when target/manifest.json is missing'
         type: string

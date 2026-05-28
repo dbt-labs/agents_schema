@@ -6,8 +6,7 @@ on:
       lookml-dir:
         description: 'Path to a Looker project or directory containing *.lkml files'
         type: string
-        required: false
-        default: lookml
+        required: true
     secrets:
       WAREHOUSE_CREDENTIALS:
         required: true

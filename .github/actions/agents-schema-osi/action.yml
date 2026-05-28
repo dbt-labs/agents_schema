@@ -5,8 +5,7 @@ description: >
 inputs:
   osi-dir:
     description: 'Path to a directory containing *.osi.yaml files'
-    required: false
-    default: 'osi'
+    required: true
 runs:
   using: composite
   steps:

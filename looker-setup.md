@@ -58,7 +58,8 @@ jobs:
     secrets: inherit
 ```
 
-The workflow reads `*.lkml` files from `lookml-dir`.
+`lookml-dir` is required — set it to the directory that contains your `*.lkml`
+files. The example uses `lookml`; change it to match your repository.
 
 These jobs do not need to depend on each other unless your repository has its
 own ordering requirement.
