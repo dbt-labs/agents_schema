@@ -1,6 +1,6 @@
 [project]
 name = "agents-schema"
-version = "0.0.1"
+version = "0.0.5"
 description = "Populate an in-warehouse agents.* schema from dbt manifests, OSI YAML, and LookML."
 readme = "README.md"
 requires-python = ">=3.11"

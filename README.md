@@ -19,9 +19,10 @@ repo already produces `target/manifest.json`, the workflow only needs the dbt
 project path and your warehouse credentials.
 
 After the first run, your warehouse has queryable metadata tables such as
-`AGENTS.DBT_MODEL` and `AGENTS.DBT_COLUMN`. Agents can use those tables to
-understand which models exist, how they are documented, how they relate to the
-warehouse, and what context is available before writing or explaining queries.
+`AGENTS.DBT_MODEL`, `AGENTS.LOOKML_VIEW`, or `AGENTS.OSI_DATASET`. Agents can
+use those tables to understand which models and semantic objects exist, how
+they are documented, how they relate to the warehouse, and what context is
+available before writing or explaining queries.
 
 ## Contents
 
@@ -30,6 +31,7 @@ warehouse, and what context is available before writing or explaining queries.
 - [Guides](#guides)
   - [Sync dbt](#sync-dbt)
   - [Sync Looker](#sync-looker)
+  - [Sync OSI](#sync-osi)
   - [Sync Multiple Sources](#sync-multiple-sources)
 - [Why Agents Schema](#why-agents-schema)
   - [How it works](#how-it-works)
@@ -40,10 +42,40 @@ warehouse, and what context is available before writing or explaining queries.
 
 ## Getting Started
 
-There are two supported metadata providers. Pick one of them to get started quickly.
+There are three supported metadata sources. Pick one to get started quickly.
 
 - [dbt Setup Guide](dbt-setup.md)
 - [Looker Setup Guide](looker-setup.md)
+- [OSI Setup Guide](osi-setup.md)
+
+### Prerequisites
+
+Each workflow writes to your warehouse using a single GitHub Actions secret:
+`WAREHOUSE_CREDENTIALS`. The source-specific setup guides show the expected
+secret shape and the workflow YAML to copy.
+
+## Guides
+
+### Sync dbt
+
+Use [dbt Setup Guide](dbt-setup.md) when your repository contains a dbt project
+or an existing `target/manifest.json`.
+
+### Sync Looker
+
+Use [Looker Setup Guide](looker-setup.md) when your repository contains LookML
+files.
+
+### Sync OSI
+
+Use [OSI Setup Guide](osi-setup.md) when your repository contains Open Semantic
+Interchange `*.osi.yaml` files.
+
+### Sync Multiple Sources
+
+Use the reusable workflows together when one repository contains multiple
+metadata sources. See [examples/workflows/dbt-looker.yml](examples/workflows/dbt-looker.yml)
+and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.yml).
 
 ## Why Agents Schema
 
@@ -57,7 +89,8 @@ it without leaving the query interface.
 Agents Schema is a discovery layer for agents that already query your
 warehouse. It gives them a standard place to ask: what curated tables exist,
 which system published the metadata, what dbt model or LookML object backs a
-dataset, whether a source is stale, and who owns a data product.
+dataset, what OSI semantic model describes it, whether a source is stale, and
+who owns a data product.
 
 The schema is self-documenting. `AGENTS.ROOT` tells consumers which providers
 are present and explains what provider-contributed tables mean. Consumers can
@@ -79,7 +112,7 @@ source-specific workflows.
 
 1. A workflow in your repository invokes one of this repo's workflows.
 2. The workflow checks out your repository and reads source metadata such as
-   dbt artifacts or LookML files.
+   dbt artifacts, LookML files, or OSI YAML files.
 3. The workflow runs the `agents-schema` CLI at the pinned release tag.
 4. The CLI writes normalized metadata into the warehouse under the `AGENTS`
    schema.
@@ -95,6 +128,7 @@ The GitHub Actions call the CLI with explicit source arguments:
 ```bash
 agents-schema dbt --project-dir dbt_project
 agents-schema looker --lookml-dir lookml
+agents-schema osi --osi-dir osi
 ```
 
 The CLI reads warehouse credentials from `WAREHOUSE_CREDENTIALS`.
@@ -107,15 +141,11 @@ source, examples, README, and spec.
 Pin exact tags in your workflows:
 
 ```yaml
-uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.1
+uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.5
 ```
 
-To upgrade, change only the tag:
-
-```diff
-- uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.1
-+ uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.2
-```
+To upgrade, change only the tag in the `uses:` line. The current release tag is
+`v0.0.5`.
 
 ### Specification
 

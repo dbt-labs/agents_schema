@@ -27,7 +27,7 @@ The implementation writes unquoted identifiers, so Snowflake stores table and co
 
 `AGENTS.ROOT` is the intended provider registry for the Agents Schema. It gives generic consumers one place to discover which providers have published metadata and how to use their tables.
 
-The current dbt and LookML ingestion workflows write the source-specific tables documented below. They do not yet populate `AGENTS.ROOT`.
+The current dbt, LookML, and OSI ingestion workflows write the source-specific tables documented below. They do not yet populate `AGENTS.ROOT`.
 
 ```sql
 CREATE TABLE AGENTS.ROOT (
@@ -40,7 +40,7 @@ CREATE TABLE AGENTS.ROOT (
 
 | Column | Description |
 |---|---|
-| `provider` | A short, lowercase identifier for the metadata contributor, such as `dbt` or `lookml`. |
+| `provider` | A short, lowercase identifier for the metadata contributor, such as `dbt`, `lookml`, or `osi`. |
 | `key` | Provider-defined identifier, unique within the provider. For table documentation, the recommended convention is the unprefixed table name, such as `model` for `AGENTS.DBT_MODEL`. |
 | `description` | Free-form text describing the provider, table, convention, skill, or other context. |
 
@@ -61,6 +61,9 @@ dbt        dependency                Direct dbt DAG edges. See AGENTS.DBT_DEPEND
 lookml     overview                  # LookML\nSemantic metadata parsed from LookML files.
 lookml     view                      One row per LookML view. See AGENTS.LOOKML_VIEW.
 lookml     explore                   One row per LookML explore. See AGENTS.LOOKML_EXPLORE.
+osi        overview                  # OSI\nOpen Semantic Interchange metadata.
+osi        dataset                   One row per OSI dataset. See AGENTS.OSI_DATASET.
+osi        metric                    One row per OSI metric. See AGENTS.OSI_METRIC.
 acme_corp  skills/refund_workflow    # Refund Workflow\nWhen a user asks about refunds...
 acme_corp  costs                     # Query Costs\nUse this before running expensive joins.
 ```
@@ -75,6 +78,7 @@ The current package delivers one table family per metadata source:
 |---|---|
 | dbt | `AGENTS.DBT_MODEL`, `AGENTS.DBT_COLUMN`, `AGENTS.DBT_DEPENDENCY` |
 | LookML | `AGENTS.LOOKML_VIEW`, `AGENTS.LOOKML_DIMENSION`, `AGENTS.LOOKML_MEASURE`, `AGENTS.LOOKML_EXPLORE` |
+| OSI | `AGENTS.OSI_DATASET`, `AGENTS.OSI_FIELD`, `AGENTS.OSI_METRIC`, `AGENTS.OSI_RELATIONSHIP` |
 
 Each ingestion replaces its own table family with `CREATE OR REPLACE TABLE` and then inserts the rows parsed from the source metadata.
 
@@ -290,6 +294,108 @@ CREATE OR REPLACE TABLE AGENTS.LOOKML_EXPLORE (
 
 ---
 
+## Source: OSI
+
+The OSI ingestion scans direct `*.osi.yaml` files in the configured OSI directory and reads each file's top-level `semantic_model` object. It writes normalized dataset, field, metric, and relationship tables.
+
+Agents can use this extension to understand an Open Semantic Interchange model from inside the warehouse: which datasets exist, which fields and metrics are documented, and how datasets relate to each other.
+
+### `AGENTS.OSI_DATASET`
+
+One row per OSI dataset from `semantic_model.datasets`.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OSI_DATASET (
+  name         VARCHAR NOT NULL,
+  source_table VARCHAR NOT NULL,
+  primary_key  VARIANT,
+  description  TEXT,
+  ai_context   TEXT,
+  PRIMARY KEY (name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `name` | Dataset `name`. |
+| `source_table` | Dataset `source`; empty string when missing. |
+| `primary_key` | Dataset `primary_key`, serialized as JSON into a Snowflake `VARIANT`. |
+| `description` | Dataset `description`; empty string when missing. |
+| `ai_context` | Dataset `ai_context`; empty string when missing. |
+
+### `AGENTS.OSI_FIELD`
+
+One row per field from each OSI dataset.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OSI_FIELD (
+  dataset_name      VARCHAR NOT NULL,
+  field_name        VARCHAR NOT NULL,
+  label             VARCHAR,
+  description       TEXT,
+  ai_context        TEXT,
+  is_time_dimension BOOLEAN,
+  expression        TEXT,
+  PRIMARY KEY (dataset_name, field_name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `dataset_name` | Parent dataset `name`. |
+| `field_name` | Field `name`. |
+| `label` | Field `label`. |
+| `description` | Field `description`; empty string when missing. |
+| `ai_context` | Field `ai_context`; empty string when missing. |
+| `is_time_dimension` | `true` when `field.dimension.is_time` is truthy; otherwise `false`. |
+| `expression` | First expression from `field.expression.dialects[].expression`, when present. |
+
+### `AGENTS.OSI_METRIC`
+
+One row per OSI metric from `semantic_model.metrics`.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OSI_METRIC (
+  name        VARCHAR NOT NULL,
+  description TEXT,
+  ai_context  TEXT,
+  expression  TEXT,
+  PRIMARY KEY (name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `name` | Metric `name`. |
+| `description` | Metric `description`; empty string when missing. |
+| `ai_context` | Metric `ai_context`; empty string when missing. |
+| `expression` | First expression from `metric.expression.dialects[].expression`, when present. |
+
+### `AGENTS.OSI_RELATIONSHIP`
+
+One row per OSI relationship from `semantic_model.relationships`.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OSI_RELATIONSHIP (
+  name         VARCHAR NOT NULL,
+  from_dataset VARCHAR NOT NULL,
+  to_dataset   VARCHAR NOT NULL,
+  from_columns VARIANT NOT NULL,
+  to_columns   VARIANT NOT NULL,
+  PRIMARY KEY (name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `name` | Relationship `name`. |
+| `from_dataset` | Relationship `from`. |
+| `to_dataset` | Relationship `to`. |
+| `from_columns` | Relationship `from_columns`, serialized as JSON into a Snowflake `VARIANT`. |
+| `to_columns` | Relationship `to_columns`, serialized as JSON into a Snowflake `VARIANT`. |
+
+---
+
 ## Cross-Source Queries
 
 One of the most valuable things agents can do is join across delivered source tables. For example, an agent can discover a LookML view, identify the warehouse relation it references, and compare that to dbt model names and schemas:
@@ -321,7 +427,7 @@ Agents Schema tables can be populated in several ways:
 - **Scheduled workflows** that periodically refresh metadata from source systems or repositories
 - **Platform engineering jobs** that maintain custom provider tables for internal metadata, skills, query recipes, or operational context
 
-This repository currently provides source-specific GitHub reusable workflows for dbt and LookML ingestion. Those workflows are one implementation path, not a requirement that all Agents Schema metadata be produced through GitHub Actions.
+This repository currently provides source-specific GitHub reusable workflows for dbt, LookML, and OSI ingestion. Those workflows are one implementation path, not a requirement that all Agents Schema metadata be produced through GitHub Actions.
 
 Each source ingestion owns its table family and may replace those tables on each run. Consumers should treat these tables as generated metadata, not as hand-edited state.
 
@@ -338,6 +444,7 @@ The current source provider names are:
 |---|---|
 | `dbt` | `AGENTS.DBT_*` |
 | `lookml` | `AGENTS.LOOKML_*` |
+| `osi` | `AGENTS.OSI_*` |
 
 ---
 
@@ -345,7 +452,7 @@ The current source provider names are:
 
 | Table | Source | Purpose |
 |---|---|---|
-| `AGENTS.ROOT` | core | Intended provider registry; not currently populated by dbt or LookML workflows |
+| `AGENTS.ROOT` | core | Intended provider registry; not currently populated by dbt, LookML, or OSI workflows |
 | `AGENTS.DBT_MODEL` | dbt | dbt models with schema, materialization, documentation, path, and tags |
 | `AGENTS.DBT_COLUMN` | dbt | Documented dbt model columns |
 | `AGENTS.DBT_DEPENDENCY` | dbt | Direct dbt dependency edges |
@@ -353,3 +460,7 @@ The current source provider names are:
 | `AGENTS.LOOKML_DIMENSION` | LookML | LookML dimensions and dimension groups |
 | `AGENTS.LOOKML_MEASURE` | LookML | LookML measures |
 | `AGENTS.LOOKML_EXPLORE` | LookML | LookML explores |
+| `AGENTS.OSI_DATASET` | OSI | OSI datasets and dataset-level context |
+| `AGENTS.OSI_FIELD` | OSI | OSI dataset fields |
+| `AGENTS.OSI_METRIC` | OSI | OSI metrics |
+| `AGENTS.OSI_RELATIONSHIP` | OSI | OSI relationships between datasets |

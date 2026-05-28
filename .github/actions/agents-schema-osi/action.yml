@@ -1,12 +1,12 @@
-name: 'Agents Schema Looker'
+name: 'Agents Schema OSI'
 description: >
-  Ingests LookML metadata into AGENTS.LOOKML_* tables.
+  Ingests Open Semantic Interchange metadata into AGENTS.OSI_* tables.
 
 inputs:
-  lookml-dir:
-    description: 'Path to a Looker project or directory containing *.lkml files'
+  osi-dir:
+    description: 'Path to a directory containing *.osi.yaml files'
     required: false
-    default: 'lookml'
+    default: 'osi'
 runs:
   using: composite
   steps:
@@ -15,8 +15,8 @@ runs:
       with:
         python-version: '3.12'
 
-    - name: Run Looker ingestion
+    - name: Run OSI ingestion
       shell: bash
       run: |
         uvx --from "agents-schema @ git+https://github.com/fivetran/agents_schema.git@v0.0.5" \
-          agents-schema looker --lookml-dir "${{ inputs.lookml-dir }}"
+          agents-schema osi --osi-dir "${{ inputs.osi-dir }}"

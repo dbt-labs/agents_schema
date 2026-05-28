@@ -1,13 +1,13 @@
-name: Agents Schema Looker
+name: Agents Schema OSI
 
 on:
   workflow_call:
     inputs:
-      lookml-dir:
-        description: 'Path to a Looker project or directory containing *.lkml files'
+      osi-dir:
+        description: 'Path to a directory containing *.osi.yaml files'
         type: string
         required: false
-        default: lookml
+        default: osi
     secrets:
       WAREHOUSE_CREDENTIALS:
         required: true
@@ -20,9 +20,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Run Looker ingestion
-        uses: fivetran/agents_schema/.github/actions/agents-schema-looker@v0.0.5
+      - name: Run OSI ingestion
+        uses: fivetran/agents_schema/.github/actions/agents-schema-osi@v0.0.5
         with:
-          lookml-dir: ${{ inputs.lookml-dir }}
+          osi-dir: ${{ inputs.osi-dir }}
         env:
           WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}

@@ -60,7 +60,7 @@ runs:
             adapter_args+=(--target "$DBT_TARGET")
           fi
           DBT_ADAPTER_PACKAGE="$(
-            uvx --from "agents-schema @ git+https://github.com/fivetran/agents_schema.git@v0.0.2" \
+            uvx --from "agents-schema @ git+https://github.com/fivetran/agents_schema.git@v0.0.5" \
               agents-schema-dbt-adapter-package "${adapter_args[@]}"
           )"
           echo "Using dbt adapter package $DBT_ADAPTER_PACKAGE from DBT_PROFILES_YML"
@@ -113,5 +113,5 @@ runs:
     - name: Run dbt ingestion
       shell: bash
       run: |
-        uvx --from "agents-schema @ git+https://github.com/fivetran/agents_schema.git@v0.0.2" \
+        uvx --from "agents-schema @ git+https://github.com/fivetran/agents_schema.git@v0.0.5" \
           agents-schema dbt --project-dir "${{ inputs.dbt-project-dir }}"

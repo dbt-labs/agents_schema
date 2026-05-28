@@ -1,4 +1,4 @@
-name: Agents Schema dbt + Looker
+name: Agents Schema dbt + Looker + OSI
 
 on:
   workflow_dispatch:
@@ -16,4 +16,10 @@ jobs:
     uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.5
     with:
       lookml-dir: lookml
+    secrets: inherit
+
+  agents-schema-osi:
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-osi.yml@v0.0.5
+    with:
+      osi-dir: osi
     secrets: inherit

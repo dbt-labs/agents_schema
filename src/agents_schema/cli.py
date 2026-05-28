@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import __version__, dbt, lookml
+from . import __version__, dbt, lookml, osi
 from .config import ConfigError
 from .dbt_profiles import dbt_adapter_package_from_profiles_file
 from .destinations import warehouse_type_from_env
@@ -53,6 +53,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="path to a Looker project or directory containing *.lkml files",
     )
 
+    osi_parser = sub.add_parser(
+        "osi",
+        help="ingest Open Semantic Interchange YAML into AGENTS.OSI_*",
+    )
+    osi_parser.add_argument(
+        "--osi-dir",
+        required=True,
+        type=Path,
+        help="path to a directory containing *.osi.yaml files",
+    )
+
     return parser
 
 
@@ -63,6 +74,8 @@ def main(argv: list[str] | None = None) -> int:
             dbt.run(_config("dbt", args.project_dir))
         elif args.source_type == "looker":
             lookml.run(_config("looker", args.lookml_dir))
+        elif args.source_type == "osi":
+            osi.run(_config("osi", args.osi_dir))
         else:
             raise ConfigError(f"unsupported source type: {args.source_type}")
     except (ConfigError, FileNotFoundError) as e:

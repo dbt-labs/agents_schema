@@ -34,16 +34,13 @@ The destination object configures the warehouse and connection. The schema
 name is always `AGENTS`. The destination user needs permission to create or
 replace tables in that schema.
 
-`WAREHOUSE_CREDENTIALS` is only the destination for writing `AGENTS`. If the
-workflow needs to run dbt, the dbt adapter is selected from the dbt profile, not
-from these destination credentials.
+### Sync OSI
 
-### Sync Looker
-
-Use the Looker workflow when the repository contains LookML files:
+Use the OSI workflow when the repository contains Open Semantic Interchange
+YAML files:
 
 ```yaml
-name: Agents Schema Looker
+name: Agents Schema OSI
 
 on:
   workflow_dispatch:
@@ -51,14 +48,26 @@ on:
     branches: [main]
 
 jobs:
-  agents-schema-looker:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.5
+  agents-schema-osi:
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-osi.yml@v0.0.5
     with:
-      lookml-dir: lookml
+      osi-dir: osi
     secrets: inherit
 ```
 
-The workflow reads `*.lkml` files from `lookml-dir`.
+The workflow reads direct `*.osi.yaml` files from `osi-dir`. With the default
+input, place OSI files here:
 
-These jobs do not need to depend on each other unless your repository has its
-own ordering requirement.
+```text
+osi/*.osi.yaml
+```
+
+The workflow writes:
+
+- `AGENTS.OSI_DATASET`
+- `AGENTS.OSI_FIELD`
+- `AGENTS.OSI_METRIC`
+- `AGENTS.OSI_RELATIONSHIP`
+
+These jobs do not need to depend on dbt or Looker jobs unless your repository
+has its own ordering requirement.
