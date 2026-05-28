@@ -1,0 +1,22 @@
+name: 'Agents Schema Looker'
+description: >
+  Ingests LookML metadata into AGENTS.LOOKML_* tables in Snowflake.
+
+inputs:
+  lookml-dir:
+    description: 'Path to a Looker project or directory containing *.lkml files'
+    required: false
+    default: 'lookml'
+runs:
+  using: composite
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: '3.12'
+
+    - name: Run Looker ingestion
+      shell: bash
+      run: |
+        uvx --from "agents-schema @ git+https://github.com/fivetran/agents_schema.git@v0.0.1" \
+          agents-schema looker --lookml-dir "${{ inputs.lookml-dir }}"

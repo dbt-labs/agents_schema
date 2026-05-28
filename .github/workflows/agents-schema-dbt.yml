@@ -1,0 +1,37 @@
+name: Agents Schema dbt
+
+on:
+  workflow_call:
+    inputs:
+      dbt-project-dir:
+        description: 'Path to the dbt project containing target/manifest.json'
+        type: string
+        required: false
+        default: dbt_project
+      dbt-adapter:
+        description: 'dbt adapter package to install when creating a manifest'
+        type: string
+        required: false
+        default: dbt-snowflake
+    secrets:
+      WAREHOUSE_CREDENTIALS:
+        required: true
+      DBT_PROFILES_YML:
+        required: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run dbt ingestion
+        uses: fivetran/agents_schema/.github/actions/agents-schema-dbt@v0.0.1
+        with:
+          dbt-project-dir: ${{ inputs.dbt-project-dir }}
+          dbt-adapter: ${{ inputs.dbt-adapter }}
+        env:
+          WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
+          DBT_PROFILES_YML: ${{ secrets.DBT_PROFILES_YML }}

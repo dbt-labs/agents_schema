@@ -1,0 +1,28 @@
+name: Agents Schema Looker
+
+on:
+  workflow_call:
+    inputs:
+      lookml-dir:
+        description: 'Path to a Looker project or directory containing *.lkml files'
+        type: string
+        required: false
+        default: lookml
+    secrets:
+      WAREHOUSE_CREDENTIALS:
+        required: true
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run Looker ingestion
+        uses: fivetran/agents_schema/.github/actions/agents-schema-looker@v0.0.1
+        with:
+          lookml-dir: ${{ inputs.lookml-dir }}
+        env:
+          WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
