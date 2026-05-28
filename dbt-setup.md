@@ -40,7 +40,12 @@ from these destination credentials.
 
 ### Sync dbt
 
-Use the dbt workflow when the repository contains a dbt project.
+In your dbt project repository, set up a new GitHub Workflow from the Actions tab. 
+
+There are three cases:
+1. Use an Existing Manifest: If your project already has a manifest.json file, use this approach.
+2. Generate a Manifest with dbt Parse
+3. Run a Custom dbt Parse Command
 
 #### Use an Existing Manifest
 
