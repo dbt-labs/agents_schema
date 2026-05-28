@@ -122,7 +122,7 @@ on:
 
 jobs:
   agents-schema-dbt:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.1
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.4
     with:
       dbt-project-dir: dbt_project
     secrets: inherit
@@ -156,7 +156,7 @@ on:
 
 jobs:
   agents-schema-dbt:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.1
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.4
     with:
       dbt-project-dir: dbt_project
       dbt-profile-name: analytics
@@ -185,7 +185,7 @@ before running the custom command:
 ```yaml
 jobs:
   agents-schema-dbt:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.1
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.4
     with:
       dbt-project-dir: dbt_project
       dbt-profile-name: analytics
@@ -217,7 +217,7 @@ on:
 
 jobs:
   agents-schema-looker:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.1
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.4
     with:
       lookml-dir: lookml
     secrets: inherit
@@ -239,13 +239,13 @@ on:
 
 jobs:
   agents-schema-dbt:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.1
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.4
     with:
       dbt-project-dir: dbt_project
     secrets: inherit
 
   agents-schema-looker:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.1
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.4
     with:
       lookml-dir: lookml
     secrets: inherit
