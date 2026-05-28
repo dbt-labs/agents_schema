@@ -1,16 +1,17 @@
-### Prerequisites
+# OSI Setup
+
+## Prerequisites
+
+The workflow needs destination warehouse credentials so it can create and
+replace tables in the `AGENTS` schema.
 
 Create one required GitHub Actions secret in the repository that calls these
-workflows:
-
-```text
-WAREHOUSE_CREDENTIALS
-```
+workflows: `WAREHOUSE_CREDENTIALS`.
 
 Snowflake is the only supported destination today, with more destination
 support coming soon. We recommend key-pair authentication:
 
-**Key-pair auth:**
+**Example key-pair auth secret:**
 
 ```yaml
 type: snowflake
@@ -26,15 +27,11 @@ private_key_pem: |
 private_key_passphrase: your-passphrase   # only if the key is encrypted
 ```
 
-`role` is optional. An unencrypted key uses `-----BEGIN PRIVATE KEY-----` /
-`-----END PRIVATE KEY-----` markers (without `ENCRYPTED`) and omits
-`private_key_passphrase`. JSON works with the same field names.
+**Note:**
+- `role` is optional.
+- An unencrypted key uses `-----BEGIN PRIVATE KEY-----` / `-----END PRIVATE KEY-----` markers and omits `private_key_passphrase`.
 
-The destination object configures the warehouse and connection. The schema
-name is always `AGENTS`. The destination user needs permission to create or
-replace tables in that schema.
-
-### Sync OSI
+## Run the OSI Sync Workflow
 
 Use the OSI workflow when the repository contains Open Semantic Interchange
 YAML files:

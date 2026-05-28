@@ -1,16 +1,17 @@
-### Prerequisites
+# dbt Setup
+
+## Prerequisites
+
+The workflow needs destination warehouse credentials so it can create and
+replace tables in the `AGENTS` schema.
 
 Create one required GitHub Actions secret in the repository that calls these
-workflows:
-
-```text
-WAREHOUSE_CREDENTIALS
-```
+workflows: `WAREHOUSE_CREDENTIALS`.
 
 Snowflake is the only supported destination today, with more destination
 support coming soon. We recommend key-pair authentication:
 
-**Key-pair auth:**
+**Example key-pair auth secret:**
 
 ```yaml
 type: snowflake
@@ -26,28 +27,13 @@ private_key_pem: |
 private_key_passphrase: your-passphrase   # only if the key is encrypted
 ```
 
-`role` is optional. An unencrypted key uses `-----BEGIN PRIVATE KEY-----` /
-`-----END PRIVATE KEY-----` markers (without `ENCRYPTED`) and omits
-`private_key_passphrase`. JSON works with the same field names.
+**Note:**
+- `role` is optional.
+- An unencrypted key uses `-----BEGIN PRIVATE KEY-----` / `-----END PRIVATE KEY-----` markers and omits `private_key_passphrase`.
 
-The destination object configures the warehouse and connection. The schema
-name is always `AGENTS`. The destination user needs permission to create or
-replace tables in that schema.
-
-`WAREHOUSE_CREDENTIALS` is only the destination for writing `AGENTS`. If the
-workflow needs to run dbt, the dbt adapter is selected from the dbt profile, not
-from these destination credentials.
-
-### Sync dbt
+## Run the dbt Sync Workflow
 
 In your dbt project repository, set up a new GitHub Workflow from the Actions tab. 
-
-There are three cases:
-1. Use an Existing Manifest: If your project already has a manifest.json file, use this approach.
-2. Generate a Manifest with dbt Parse
-3. Run a Custom dbt Parse Command
-
-#### Use an Existing Manifest
 
 NOTE: Requires a dbt `manifest.json` file. If you don't have an existing manifest, produce it and check it into your dbt project's repository.
 
