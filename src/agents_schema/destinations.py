@@ -154,9 +154,10 @@ def _snowflake_connect_kwargs_from_secret(destination: dict[str, Any]) -> dict[s
     required = ["account", "user", "warehouse", "database"]
     missing = [name for name in required if not destination.get(name)]
     has_password = bool(destination.get("password"))
-    has_private_key = bool(destination.get("private_key_path"))
-    if not has_password and not has_private_key:
-        missing.append("password or private_key_path")
+    has_private_key_pem = bool(destination.get("private_key_pem"))
+    has_private_key_path = bool(destination.get("private_key_path"))
+    if not has_password and not has_private_key_pem and not has_private_key_path:
+        missing.append("password, private_key_pem, or private_key_path")
     if missing:
         raise ConfigError("WAREHOUSE_CREDENTIALS missing keys: " + ", ".join(missing))
 
@@ -168,21 +169,27 @@ def _snowflake_connect_kwargs_from_secret(destination: dict[str, Any]) -> dict[s
     }
     if role := destination.get("role"):
         kwargs["role"] = role
-    if has_private_key:
+    passphrase = destination.get("private_key_passphrase")
+    if has_private_key_pem:
         kwargs["private_key"] = _load_private_key(
-            Path(destination["private_key_path"]),
-            destination.get("private_key_passphrase"),
+            destination["private_key_pem"].encode(),
+            passphrase,
+        )
+    elif has_private_key_path:
+        kwargs["private_key"] = _load_private_key(
+            Path(destination["private_key_path"]).read_bytes(),
+            passphrase,
         )
     else:
         kwargs["password"] = destination["password"]
     return kwargs
 
 
-def _load_private_key(path: Path, passphrase: str | None) -> bytes:
+def _load_private_key(pem_bytes: bytes, passphrase: str | None) -> bytes:
     from cryptography.hazmat.primitives import serialization
 
     password = passphrase.encode() if passphrase else None
-    private_key = serialization.load_pem_private_key(path.read_bytes(), password=password)
+    private_key = serialization.load_pem_private_key(pem_bytes, password=password)
     return private_key.private_bytes(
         encoding=serialization.Encoding.DER,
         format=serialization.PrivateFormat.PKCS8,
