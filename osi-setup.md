@@ -51,7 +51,7 @@ jobs:
   agents-schema-osi:
     uses: fivetran/agents_schema/.github/workflows/agents-schema-osi.yml@v0.0.5
     with:
-      osi-dir: osi
+      osi-dir: osi  # change to the directory with your *.osi.yaml files
     secrets: inherit
 ```
 

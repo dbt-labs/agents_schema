@@ -54,7 +54,7 @@ jobs:
   agents-schema-looker:
     uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.5
     with:
-      lookml-dir: lookml
+      lookml-dir: lookml  # change to the directory with your *.lkml files
     secrets: inherit
 ```
 

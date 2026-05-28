@@ -63,7 +63,7 @@ jobs:
   agents-schema-dbt:
     uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.5
     with:
-      dbt-project-dir: dbt_project
+      dbt-project-dir: dbt_project  # change to your dbt project directory (contains dbt_project.yml)
     secrets: inherit
 ```
 
