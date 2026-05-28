@@ -1,309 +1,355 @@
 # Agents Schema
 
-**A standard for communicating metadata to agents in a lakehouse.**
+**A standard warehouse schema for metadata that agents need in order to work with data.**
 
-The Agents Schema is to lakehouses what `AGENTS.md` is to code repositories: a well-known location where tools, agents, and humans can discover what data exists, who owns it, and how to use it responsibly. See [README.md](./README.md) for motivation, positioning, and GitHub workflow usage.
+Agents Schema gives agents a predictable place to find context about warehouse data: what models exist, what fields mean, how semantic-layer objects are defined, and how those objects relate to each other. See [README.md](./README.md) for motivation, positioning, and GitHub workflow usage.
+
+This document describes the warehouse tables produced by this repository's current ingestion workflows. The SQL below is written in Snowflake form because Snowflake is the currently supported destination.
 
 ## Core: The `AGENTS` Schema
 
-All Agents Schema tables live in a schema named `AGENTS`. The schema name is fixed as `AGENTS`. This schema must be created by whoever administers the lakehouse. Write access should be limited to providers, read access should be granted as broadly as possible. Providers should not place highly sensitive information in the AGENTS schema.
+All Agents Schema tables live in a schema named `AGENTS`. The current writer creates the schema if it does not already exist.
+
+The implementation writes unquoted identifiers, so Snowflake stores table and column names in uppercase. The Python package defines them in lowercase internally, but the delivered warehouse objects are the uppercase `AGENTS.*` tables shown here.
+
+### Supported Types
+
+| Internal kind | Snowflake type | Notes |
+|---|---|---|
+| `varchar` | `VARCHAR` | String values. |
+| `text` | `TEXT` | Longer free-form text. |
+| `boolean` | `BOOLEAN` | Boolean values. |
+| `array` | `VARIANT` | Inserted as JSON via `PARSE_JSON`. |
 
 ---
 
 ## `AGENTS.ROOT`
 
-The single entry point for all metadata. Every provider that contributes metadata registers itself here.
+`AGENTS.ROOT` is the intended provider registry for the Agents Schema. It gives generic consumers one place to discover which providers have published metadata and how to use their tables.
 
-`AGENTS.ROOT` is what makes the Agents Schema self-documenting. A generic consumer should be able to start here, learn which providers have published metadata, and read descriptions of the tables and conventions those providers expose.
+The current dbt and LookML ingestion workflows write the source-specific tables documented below. They do not yet populate `AGENTS.ROOT`.
 
 ```sql
 CREATE TABLE AGENTS.ROOT (
-  provider    VARCHAR NOT NULL,  -- namespace, e.g. 'fivetran', 'dbt', 'acme_corp'
-  key         VARCHAR NOT NULL,  -- provider-defined section identifier
-  description TEXT    NOT NULL,  -- markdown text describing this entry
+  provider    VARCHAR NOT NULL,
+  key         VARCHAR NOT NULL,
+  description TEXT NOT NULL,
   PRIMARY KEY (provider, key)
 );
 ```
 
-### Columns
-
 | Column | Description |
 |---|---|
-| `provider` | A short, lowercase identifier for the metadata contributor. Typically a vendor name (`fivetran`, `dbt`) or an internal team name (`acme_data_platform`). Must match the prefix used in any `AGENTS.{PROVIDER}_*` tables contributed by this provider. |
-| `key` | A provider-defined identifier, unique within the provider. Treated as an opaque string by the spec. Two conventional shapes are common and can coexist: (1) the unprefixed name of a contributed table (e.g. `connector` for `AGENTS.FIVETRAN_CONNECTOR`), recommended whenever a row documents a specific table, and (2) a flat or slash-separated path used like a filesystem (e.g. `overview`, `conventions`, `skills/refund_workflow`). |
-| `description` | Free-form text. May describe the provider, document a specific table, capture conventions, hold a skill, or carry any other context useful to an agent or human reader. Markdown is the natural default since LLMs are common consumers, but the column is plain text and any shape works. |
+| `provider` | A short, lowercase identifier for the metadata contributor, such as `dbt` or `lookml`. |
+| `key` | Provider-defined identifier, unique within the provider. For table documentation, the recommended convention is the unprefixed table name, such as `model` for `AGENTS.DBT_MODEL`. |
+| `description` | Free-form text describing the provider, table, convention, skill, or other context. |
 
 ### What goes in `ROOT`
 
-A row in `AGENTS.ROOT` can hold any text a provider wants discoverable from inside the warehouse. The only hard rule is that `(provider, key)` is unique. Beyond that, providers are free to use rows however they like — for an overview, conventions, per-table notes, skills, query recipes, deprecation notices, or anything else worth publishing alongside the data. Markdown is a natural fit because consumers are often LLMs, but the column is plain text and any shape works.
+A row in `AGENTS.ROOT` can hold any text a provider wants discoverable from inside the warehouse. The only hard rule is that `(provider, key)` is unique. Beyond that, providers are free to use rows however they like: for an overview, conventions, per-table notes, skills, query recipes, deprecation notices, or anything else worth publishing alongside the data. Markdown is a natural fit because consumers are often LLMs, but the column is plain text and any shape works.
 
-It is strongly recommended that when a row is meant to document a specific contributed table, its key match the unprefixed table name (so `(fivetran, connector)` documents `AGENTS.FIVETRAN_CONNECTOR`). This isn't enforced, but following the convention keeps consumers — especially LLM agents — from getting confused about whether a row describes a table or is freeform context.
+It is strongly recommended that when a row is meant to document a specific contributed table, its key match the unprefixed table name. For example, `(dbt, model)` documents `AGENTS.DBT_MODEL`, and `(lookml, explore)` documents `AGENTS.LOOKML_EXPLORE`. This is not enforced, but following the convention keeps consumers, especially LLM agents, from getting confused about whether a row describes a table or is freeform context.
 
 ### Example rows
 
 ```
 provider   key                       description
 ---------  ------------------------  ------------------------------------------------
-fivetran   overview                  # Fivetran\nFivetran syncs data from SaaS sources...
-fivetran   conventions               All sync logs are retained 30 days.
-fivetran   connector                 One row per Fivetran connector. See AGENTS.FIVETRAN_CONNECTOR.
-fivetran   sync_log                  Recent sync events, errors, and warnings.
-dbt        overview                  # dbt\nTransformation layer. See AGENTS.DBT_MODEL...
-dbt        model                     One row per dbt model with documentation and owner.
+dbt        overview                  # dbt\nTransformation metadata from manifest.json.
+dbt        model                     One row per dbt model. See AGENTS.DBT_MODEL.
+dbt        dependency                Direct dbt DAG edges. See AGENTS.DBT_DEPENDENCY.
+lookml     overview                  # LookML\nSemantic metadata parsed from LookML files.
+lookml     view                      One row per LookML view. See AGENTS.LOOKML_VIEW.
+lookml     explore                   One row per LookML explore. See AGENTS.LOOKML_EXPLORE.
 acme_corp  skills/refund_workflow    # Refund Workflow\nWhen a user asks about refunds...
-acme_corp  skills/etl_failure        # ETL Failure\n1. Check AGENTS.FIVETRAN_SYNC_LOG...
-acme_corp  costs                     # Query Costs\nSee AGENTS.ACME_CORP_TABLE_COSTS.
+acme_corp  costs                     # Query Costs\nUse this before running expensive joins.
 ```
 
 ---
 
-## Provider-Contributed Tables
+## Delivered Source Tables
 
-Providers may contribute additional tables to the `AGENTS` schema. To prevent name conflicts, all such tables must follow this naming convention:
+The current package delivers one table family per metadata source:
 
-```
-AGENTS.{PROVIDER}_{TABLE_NAME}
-```
-
-The `PROVIDER` prefix must exactly match the `provider` value used in `AGENTS.ROOT`. Providers should register themselves in `AGENTS.ROOT` and should add a row per contributed table using the table-reference key shape described above.
-
-**Example:** If `provider = 'acme_corp'`, contributed tables must be named `AGENTS.ACME_CORP_*`.
-
----
-
-## Well-Known Extensions
-
-Well-known extensions are provider-contributed tables from specific vendors that tools may query directly — without reading `AGENTS.ROOT` first — because their schema is part of this specification. Providers should still register them in `AGENTS.ROOT`, but the schemas here are stable and publicly documented.
-
-This means there are two valid discovery paths:
-- generic discovery: start at `AGENTS.ROOT`, read provider descriptions, then inspect the referenced tables
-- shortcut discovery: if a tool already knows a well-known extension, it may query those tables directly
-
-The first path is the default and is what makes the Agents Schema self-describing. The second path exists for convenience and interoperability with tools that want to consume a stable schema without first reading provider-written descriptions.
-
----
-
-## Extension: `fivetran`
-
-The Fivetran extension surfaces metadata from the [Fivetran Platform Connector](https://fivetran.com/docs/logs/fivetran-platform): the connectors ingesting data, the destinations they write to, the structural schema of synced data, and recent sync health.
-
-Agents can use this extension to understand where raw data came from, when it was last updated, and whether any connectors are in a degraded state.
-
-### `AGENTS.FIVETRAN_CONNECTOR`
-
-One row per Fivetran connector (called a "connection" in the Fivetran UI).
-
-```sql
-CREATE TABLE AGENTS.FIVETRAN_CONNECTOR (
-  connector_id     VARCHAR NOT NULL PRIMARY KEY,
-  connector_name   VARCHAR NOT NULL,
-  connector_type   VARCHAR NOT NULL,  -- e.g. 'postgres', 'salesforce', 'stripe'
-  destination_id   VARCHAR NOT NULL,
-  destination_name VARCHAR NOT NULL,
-  destination_schema VARCHAR NOT NULL, -- the schema written to in the warehouse
-  status           VARCHAR NOT NULL,  -- 'ACTIVE', 'BROKEN', 'PAUSED', 'DELETED'
-  sync_frequency   INTEGER,           -- minutes between syncs, NULL if unscheduled
-  last_synced_at   TIMESTAMP,
-  created_at       TIMESTAMP NOT NULL,
-  description      TEXT               -- optional human-written notes
-);
-```
-
-| Column | Description |
+| Source | Tables |
 |---|---|
-| `connector_id` | Stable Fivetran-assigned identifier. |
-| `connector_type` | The source application type. Use this to understand the origin system. |
-| `destination_schema` | The schema in the warehouse where this connector writes its tables. Join to `AGENTS.FIVETRAN_TABLE.schema_name` to enumerate tables. |
-| `status` | `BROKEN` or `PAUSED` connectors may mean stale data downstream. |
-| `last_synced_at` | When the most recent successful sync completed. |
+| dbt | `AGENTS.DBT_MODEL`, `AGENTS.DBT_COLUMN`, `AGENTS.DBT_DEPENDENCY` |
+| LookML | `AGENTS.LOOKML_VIEW`, `AGENTS.LOOKML_DIMENSION`, `AGENTS.LOOKML_MEASURE`, `AGENTS.LOOKML_EXPLORE` |
 
-### `AGENTS.FIVETRAN_TABLE`
-
-One row per synced table, across all connectors.
-
-```sql
-CREATE TABLE AGENTS.FIVETRAN_TABLE (
-  connector_id  VARCHAR NOT NULL,
-  schema_name   VARCHAR NOT NULL,  -- warehouse schema (matches destination_schema)
-  table_name    VARCHAR NOT NULL,
-  enabled       BOOLEAN NOT NULL,  -- whether this table is included in syncs
-  row_count     BIGINT,            -- approximate, as of last sync
-  last_synced_at TIMESTAMP,
-  PRIMARY KEY (connector_id, schema_name, table_name)
-);
-```
-
-### `AGENTS.FIVETRAN_COLUMN`
-
-One row per synced column.
-
-```sql
-CREATE TABLE AGENTS.FIVETRAN_COLUMN (
-  connector_id    VARCHAR NOT NULL,
-  schema_name     VARCHAR NOT NULL,
-  table_name      VARCHAR NOT NULL,
-  column_name     VARCHAR NOT NULL,
-  data_type       VARCHAR,
-  is_primary_key  BOOLEAN NOT NULL DEFAULT FALSE,
-  enabled         BOOLEAN NOT NULL,
-  PRIMARY KEY (connector_id, schema_name, table_name, column_name)
-);
-```
-
-### `AGENTS.FIVETRAN_SYNC_LOG`
-
-Recent sync events — errors, warnings, and completions — for connector health monitoring. Agents should query this to understand whether data freshness issues are due to connector failures.
-
-```sql
-CREATE TABLE AGENTS.FIVETRAN_SYNC_LOG (
-  log_id        VARCHAR NOT NULL PRIMARY KEY,
-  connector_id  VARCHAR NOT NULL,
-  sync_id       VARCHAR,
-  occurred_at   TIMESTAMP NOT NULL,
-  event_type    VARCHAR NOT NULL,    -- 'INFO', 'WARNING', 'ERROR', 'SEVERE'
-  message       TEXT NOT NULL,
-  message_data  VARIANT              -- structured JSON payload for ERROR/SEVERE events
-);
-```
-
-| Column | Description |
-|---|---|
-| `event_type` | `WARNING` and `ERROR` entries indicate transient issues; `SEVERE` typically means the connector is broken and requires intervention. |
-| `message_data` | JSON blob with structured context. For schema change events, contains `schema_name` and `table_name`. |
-
-Suggested query for agents checking data freshness:
-
-```sql
-SELECT connector_name, status, last_synced_at,
-       DATEDIFF('hour', last_synced_at, CURRENT_TIMESTAMP) AS hours_since_sync
-FROM AGENTS.FIVETRAN_CONNECTOR
-WHERE status != 'PAUSED'
-ORDER BY hours_since_sync DESC NULLS FIRST;
-```
+Each ingestion replaces its own table family with `CREATE OR REPLACE TABLE` and then inserts the rows parsed from the source metadata.
 
 ---
 
-## Extension: `dbt`
+## Source: dbt
 
-The dbt extension provides a normalized, queryable representation of the information in dbt's `manifest.json`. It captures the transformation layer: what models exist, how they are documented, and how they depend on each other.
+The dbt ingestion reads a compiled dbt `manifest.json` and writes normalized model, column, and dependency tables. It captures the transformation layer that is useful from the warehouse: what models exist, how they are documented, and which upstream nodes they depend on.
 
-Agents can use this extension to understand what "curated" tables exist (as opposed to raw ingested data), trace column lineage, and find model owners.
+Agents can use this extension to understand what curated tables exist, inspect column documentation, and trace direct lineage from dbt's dependency graph.
 
 ### `AGENTS.DBT_MODEL`
 
-One row per dbt model. Corresponds to `nodes` entries in `manifest.json` where `resource_type = 'model'`.
+One row per dbt model from `manifest.json` entries where `resource_type = 'model'`.
 
 ```sql
-CREATE TABLE AGENTS.DBT_MODEL (
-  unique_id        VARCHAR NOT NULL PRIMARY KEY, -- 'model.<package>.<name>'
-  name             VARCHAR NOT NULL,
-  package_name     VARCHAR NOT NULL,
-  database_name    VARCHAR NOT NULL,  -- warehouse database
-  schema_name      VARCHAR NOT NULL,  -- warehouse schema
-  materialization  VARCHAR NOT NULL,  -- 'table', 'view', 'incremental', 'ephemeral'
-  description      TEXT,              -- from schema.yml
-  owner            VARCHAR,           -- from meta.owner or config.meta.owner
-  tags             ARRAY,             -- list of string tags
-  file_path        VARCHAR NOT NULL,  -- relative path to .sql file
-  access           VARCHAR,           -- 'public', 'protected', 'private' (dbt 1.7+)
-  contract_enforced BOOLEAN DEFAULT FALSE,
-  created_at       TIMESTAMP          -- manifest generation time
+CREATE OR REPLACE TABLE AGENTS.DBT_MODEL (
+  unique_id       VARCHAR NOT NULL,
+  name            VARCHAR NOT NULL,
+  schema_name     VARCHAR,
+  materialization VARCHAR,
+  description     TEXT,
+  file_path       VARCHAR,
+  tags            VARIANT,
+  PRIMARY KEY (unique_id)
 );
 ```
 
-| Column | Description |
+| Column | Source field |
 |---|---|
-| `unique_id` | Globally unique. Use this to join to other dbt extension tables. |
-| `materialization` | Ephemeral models have no warehouse object; agents should note this when suggesting queries. |
-| `description` | Free-text documentation from `schema.yml`. Often the richest signal about what a model represents. |
-| `owner` | Populated from `meta.owner` in `schema.yml`. Useful for routing questions about a model. |
-| `access` | dbt's access modifier — `public` models are intended for broad use; `private` models are internal to their package. |
+| `unique_id` | Manifest node key, for example `model.package.model_name`. |
+| `name` | `node.name`. |
+| `schema_name` | `node.schema`. |
+| `materialization` | `node.config.materialized`. |
+| `description` | `node.description`; empty string when missing. |
+| `file_path` | `node.original_file_path`. |
+| `tags` | `node.tags`, serialized as JSON into a Snowflake `VARIANT`. |
 
 ### `AGENTS.DBT_COLUMN`
 
-One row per documented column on a model. Normalized from the `columns` map on each node in `manifest.json`.
+One row per documented column on a dbt model.
 
 ```sql
-CREATE TABLE AGENTS.DBT_COLUMN (
-  model_unique_id  VARCHAR NOT NULL,  -- FK to AGENTS.DBT_MODEL.unique_id
-  column_name      VARCHAR NOT NULL,
-  data_type        VARCHAR,           -- declared type, may differ from warehouse DDL
-  description      TEXT,
-  tags             ARRAY,
-  meta             VARIANT,           -- arbitrary key-value pairs from schema.yml
-  PRIMARY KEY (model_unique_id, column_name)
+CREATE OR REPLACE TABLE AGENTS.DBT_COLUMN (
+  model_id    VARCHAR NOT NULL,
+  column_name VARCHAR NOT NULL,
+  data_type   VARCHAR,
+  description TEXT,
+  PRIMARY KEY (model_id, column_name)
 );
 ```
 
+| Column | Source field |
+|---|---|
+| `model_id` | Parent model `unique_id`. |
+| `column_name` | Key from `node.columns`. |
+| `data_type` | `column.data_type`; empty string when missing. |
+| `description` | `column.description`; empty string when missing. |
+
 ### `AGENTS.DBT_DEPENDENCY`
 
-The lineage graph: one row per directed edge in the DAG. Normalized from `parent_map` and `child_map` in `manifest.json`.
+One row per direct dependency from a dbt model's `depends_on.nodes`.
 
 ```sql
-CREATE TABLE AGENTS.DBT_DEPENDENCY (
-  upstream_id    VARCHAR NOT NULL,  -- unique_id of the upstream node
-  downstream_id  VARCHAR NOT NULL,  -- unique_id of the downstream node
-  upstream_type  VARCHAR NOT NULL,  -- 'model', 'source', 'seed', 'snapshot'
-  downstream_type VARCHAR NOT NULL,
+CREATE OR REPLACE TABLE AGENTS.DBT_DEPENDENCY (
+  upstream_id     VARCHAR NOT NULL,
+  downstream_id   VARCHAR NOT NULL,
+  upstream_type   VARCHAR,
+  downstream_type VARCHAR,
   PRIMARY KEY (upstream_id, downstream_id)
 );
 ```
 
-To find all models that depend (directly or indirectly) on a source, agents can walk this table recursively using a CTE. Example:
+| Column | Source field |
+|---|---|
+| `upstream_id` | Dependency unique ID from `node.depends_on.nodes`. |
+| `downstream_id` | Current model `unique_id`. |
+| `upstream_type` | Prefix before the first `.` in `upstream_id`, or `unknown` when no prefix exists. |
+| `downstream_type` | Always `model` in the current dbt ingestion. |
+
+To find all models that depend directly or indirectly on a source, agents can walk this table recursively:
 
 ```sql
 WITH RECURSIVE lineage AS (
-  SELECT downstream_id AS node_id FROM AGENTS.DBT_DEPENDENCY
+  SELECT downstream_id AS node_id
+  FROM AGENTS.DBT_DEPENDENCY
   WHERE upstream_id = 'source.my_project.raw.account'
+
   UNION ALL
-  SELECT d.downstream_id FROM AGENTS.DBT_DEPENDENCY d
+
+  SELECT d.downstream_id
+  FROM AGENTS.DBT_DEPENDENCY d
   JOIN lineage l ON d.upstream_id = l.node_id
 )
 SELECT DISTINCT m.name, m.schema_name, m.description
-FROM lineage JOIN AGENTS.DBT_MODEL m ON m.unique_id = lineage.node_id;
+FROM lineage
+JOIN AGENTS.DBT_MODEL m ON m.unique_id = lineage.node_id;
 ```
+
+---
+
+## Source: LookML
+
+The LookML ingestion scans `*.lkml` files and writes normalized view, dimension, measure, and explore tables. It parses top-level `view` and `explore` blocks, plus `dimension`, `dimension_group`, and `measure` blocks inside views.
+
+Agents can use this extension to understand the BI and semantic surface exposed through Looker: which explores exist, which views back them, what fields are available, and which fields include human-authored `description` or `ai_context`.
+
+### `AGENTS.LOOKML_VIEW`
+
+One row per LookML `view` block.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.LOOKML_VIEW (
+  name           VARCHAR NOT NULL,
+  sql_table_name VARCHAR,
+  label          VARCHAR,
+  description    TEXT,
+  ai_context     TEXT,
+  file_path      VARCHAR,
+  PRIMARY KEY (name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `name` | View block name. |
+| `sql_table_name` | View `sql_table_name`. |
+| `label` | View `label`. |
+| `description` | View `description`. |
+| `ai_context` | View `ai_context`. |
+| `file_path` | Relative path to the `.lkml` file from the configured LookML directory. |
+
+### `AGENTS.LOOKML_DIMENSION`
+
+One row per LookML `dimension` or `dimension_group` block inside a view.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.LOOKML_DIMENSION (
+  view_name   VARCHAR NOT NULL,
+  field_name  VARCHAR NOT NULL,
+  field_kind  VARCHAR NOT NULL,
+  type        VARCHAR,
+  sql         TEXT,
+  description TEXT,
+  ai_context  TEXT,
+  primary_key BOOLEAN,
+  PRIMARY KEY (view_name, field_name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `view_name` | Parent view name. |
+| `field_name` | Dimension or dimension group block name. |
+| `field_kind` | Either `dimension` or `dimension_group`. |
+| `type` | Field `type`. |
+| `sql` | Field `sql`, with LookML `;;` terminator removed. |
+| `description` | Field `description`. |
+| `ai_context` | Field `ai_context`. |
+| `primary_key` | Field `primary_key`, parsed as a boolean. |
+
+### `AGENTS.LOOKML_MEASURE`
+
+One row per LookML `measure` block inside a view.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.LOOKML_MEASURE (
+  view_name    VARCHAR NOT NULL,
+  measure_name VARCHAR NOT NULL,
+  type         VARCHAR,
+  sql          TEXT,
+  description  TEXT,
+  ai_context   TEXT,
+  filters      TEXT,
+  PRIMARY KEY (view_name, measure_name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `view_name` | Parent view name. |
+| `measure_name` | Measure block name. |
+| `type` | Measure `type`. |
+| `sql` | Measure `sql`, with LookML `;;` terminator removed. |
+| `description` | Measure `description`. |
+| `ai_context` | Measure `ai_context`. |
+| `filters` | Measure `filters`, stored as text by the current parser. |
+
+### `AGENTS.LOOKML_EXPLORE`
+
+One row per LookML `explore` block.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.LOOKML_EXPLORE (
+  name        VARCHAR NOT NULL,
+  from_view   VARCHAR,
+  label       VARCHAR,
+  description TEXT,
+  ai_context  TEXT,
+  file_path   VARCHAR,
+  PRIMARY KEY (name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `name` | Explore block name. |
+| `from_view` | Explore `from`; defaults to the explore name when `from` is missing. |
+| `label` | Explore `label`. |
+| `description` | Explore `description`. |
+| `ai_context` | Explore `ai_context`. |
+| `file_path` | Relative path to the `.lkml` file from the configured LookML directory. |
+
+---
+
+## Cross-Source Queries
+
+One of the most valuable things agents can do is join across delivered source tables. For example, an agent can discover a LookML view, identify the warehouse relation it references, and compare that to dbt model names and schemas:
+
+```sql
+SELECT
+  v.name AS lookml_view,
+  v.sql_table_name,
+  m.unique_id AS dbt_model_id,
+  m.name AS dbt_model,
+  m.schema_name,
+  m.description AS dbt_description
+FROM AGENTS.LOOKML_VIEW v
+LEFT JOIN AGENTS.DBT_MODEL m
+  ON LOWER(v.sql_table_name) LIKE '%' || LOWER(m.schema_name) || '.' || LOWER(m.name) || '%';
+```
+
+That join is intentionally heuristic because LookML `sql_table_name` is free-form LookML text. It is still useful as an orientation query for agents trying to connect BI-facing objects back to modeled warehouse tables.
 
 ---
 
 ## Conventions and Guidance for Implementors
 
-### Populating the tables
+### Populating the Tables
 
-Agents Schema tables are typically populated by:
+Agents Schema tables can be populated in several ways:
 - **Vendor-run pipelines** that sync provider metadata into the warehouse
-- **CI/CD jobs** (e.g. a dbt post-deploy step that parses `manifest.json` and loads `AGENTS.DBT_*`)
-- **Platform engineering teams** maintaining custom provider tables
+- **CI/CD jobs** that parse source artifacts and load `AGENTS.*` tables after project changes
+- **Scheduled workflows** that periodically refresh metadata from source systems or repositories
+- **Platform engineering jobs** that maintain custom provider tables for internal metadata, skills, query recipes, or operational context
 
-### Staleness
+This repository currently provides source-specific GitHub reusable workflows for dbt and LookML ingestion. Those workflows are one implementation path, not a requirement that all Agents Schema metadata be produced through GitHub Actions.
 
-Each extension table should ideally carry a `_synced_at` timestamp in a companion `AGENTS.{PROVIDER}_SYNC_STATUS` table or as a column on the table itself. Agents should check this before drawing conclusions about current state.
+Each source ingestion owns its table family and may replace those tables on each run. Consumers should treat these tables as generated metadata, not as hand-edited state.
 
 ### Permissions
 
-- `AGENTS.ROOT` and all extension tables should be readable by any warehouse principal that runs analytical queries.
-- Write access should be tightly controlled — only the owning system should insert or update rows.
+- `AGENTS.ROOT` and all delivered source tables should be readable by any warehouse principal that runs analytical or agentic queries.
+- Write access should be tightly controlled and limited to the workflows or service principals that publish Agents Schema metadata.
 
-### Reserved providers
+### Provider Names
 
-The following provider names are reserved by this specification:
+The current source provider names are:
 
-| Provider | Reserved for |
+| Provider | Tables |
 |---|---|
-| `fivetran` | Fivetran Platform Connector extension (this spec) |
-| `dbt` | dbt manifest extension (this spec) |
-| `agents_schema` | Future use by the Agents Schema specification itself |
+| `dbt` | `AGENTS.DBT_*` |
+| `lookml` | `AGENTS.LOOKML_*` |
 
 ---
 
-## Summary of All Tables
+## Summary of Current Tables
 
-| Table | Provider | Purpose |
+| Table | Source | Purpose |
 |---|---|---|
-| `AGENTS.ROOT` | *(core)* | Registry of all metadata providers and sections |
-| `AGENTS.FIVETRAN_CONNECTOR` | fivetran | One row per Fivetran connector |
-| `AGENTS.FIVETRAN_TABLE` | fivetran | Synced tables with row counts and freshness |
-| `AGENTS.FIVETRAN_COLUMN` | fivetran | Column-level schema for synced tables |
-| `AGENTS.FIVETRAN_SYNC_LOG` | fivetran | Recent sync events, errors, and warnings |
-| `AGENTS.DBT_MODEL` | dbt | dbt models with documentation, owner, materialization |
-| `AGENTS.DBT_COLUMN` | dbt | Per-column documentation for dbt models |
-| `AGENTS.DBT_DEPENDENCY` | dbt | DAG edges for upstream/downstream lineage |
+| `AGENTS.ROOT` | core | Intended provider registry; not currently populated by dbt or LookML workflows |
+| `AGENTS.DBT_MODEL` | dbt | dbt models with schema, materialization, documentation, path, and tags |
+| `AGENTS.DBT_COLUMN` | dbt | Documented dbt model columns |
+| `AGENTS.DBT_DEPENDENCY` | dbt | Direct dbt dependency edges |
+| `AGENTS.LOOKML_VIEW` | LookML | LookML views and view-level context |
+| `AGENTS.LOOKML_DIMENSION` | LookML | LookML dimensions and dimension groups |
+| `AGENTS.LOOKML_MEASURE` | LookML | LookML measures |
+| `AGENTS.LOOKML_EXPLORE` | LookML | LookML explores |
