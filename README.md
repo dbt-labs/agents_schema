@@ -95,13 +95,15 @@ warehouse: COMPUTE_WH
 database: ANALYTICS
 role: TRANSFORMER
 private_key_pem: |
-  -----BEGIN PRIVATE KEY-----
+  -----BEGIN ENCRYPTED PRIVATE KEY-----
   MIIEvQIBADANBgkqh...
-  -----END PRIVATE KEY-----
+  -----END ENCRYPTED PRIVATE KEY-----
+private_key_passphrase: your-passphrase   # only if the key is encrypted
 ```
 
-`role` is optional. Add `private_key_passphrase` to the key-pair object if the
-key is encrypted. JSON works with the same field names.
+`role` is optional. An unencrypted key uses `-----BEGIN PRIVATE KEY-----` /
+`-----END PRIVATE KEY-----` markers (without `ENCRYPTED`) and omits
+`private_key_passphrase`. JSON works with the same field names.
 
 The destination object configures the warehouse and connection. The schema
 name is always `AGENTS`. The destination user needs permission to create or
