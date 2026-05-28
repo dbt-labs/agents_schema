@@ -77,10 +77,10 @@ coming soon. For Snowflake, the secret value can be JSON:
   "type": "snowflake",
   "account": "abc123",
   "user": "AGENTS_SCHEMA_BOT",
-  "password": "secret",
   "warehouse": "COMPUTE_WH",
   "database": "ANALYTICS",
-  "role": "TRANSFORMER"
+  "role": "TRANSFORMER",
+  "password": "secret"
 }
 ```
 
@@ -90,29 +90,17 @@ or YAML:
 type: snowflake
 account: abc123
 user: AGENTS_SCHEMA_BOT
-password: secret
 warehouse: COMPUTE_WH
 database: ANALYTICS
 role: TRANSFORMER
+# Choose one auth method:
+password: secret
+# private_key_path: /path/to/rsa_key.p8
+# private_key_passphrase: optional
 ```
 
-For key-pair auth, replace `password` with `private_key_path` and optionally
-`private_key_passphrase`:
-
-```json
-{
-  "type": "snowflake",
-  "account": "abc123",
-  "user": "AGENTS_SCHEMA_BOT",
-  "private_key_path": "/path/to/rsa_key.p8",
-  "private_key_passphrase": "optional",
-  "warehouse": "COMPUTE_WH",
-  "database": "ANALYTICS",
-  "role": "TRANSFORMER"
-}
-```
-
-`role` is optional.
+For key-pair auth in JSON, replace `password` with `private_key_path` and
+optionally `private_key_passphrase`. `role` is optional.
 
 The destination object configures the warehouse and connection. The schema
 name is always `AGENTS`. The destination user needs permission to create or
