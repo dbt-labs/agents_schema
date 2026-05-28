@@ -6,20 +6,22 @@ can query metadata next to the data they are reasoning over. See
 [Why Agents Schema](#why-agents-schema) for more on the idea behind it and
 [SPEC.md](./SPEC.md) for the schema contract.
 
-This repository provides GitHub reusable workflows that ingest source metadata
-from your repository and publish it into `AGENTS`.
+This repository provides GitHub workflows that ingest source metadata from
+your repository and publish it into `AGENTS`.
 
 ![Agents Schema overview](assets/agents-schema-overview.png)
 
 ## Contents
 
 - [Getting Started](#getting-started)
+  - [Supported Metadata Sources](#supported-metadata-sources)
   - [Prerequisites](#prerequisites)
 - [Guides](#guides)
   - [Sync dbt](#sync-dbt)
   - [Sync Looker](#sync-looker)
   - [Sync Multiple Sources](#sync-multiple-sources)
 - [Why Agents Schema](#why-agents-schema)
+  - [How it works](#how-it-works)
 - [Reference](#reference)
   - [CLI](#cli)
   - [Versioning](#versioning)
@@ -39,18 +41,6 @@ After the first run, your warehouse has queryable metadata tables such as
 understand which models exist, how they are documented, how they relate to the
 warehouse, and what context is available before writing or explaining queries.
 
-The workflow shape is:
-
-1. Your repository calls one of this repo's reusable GitHub workflows.
-2. The workflow checks out your repository and reads source metadata, such as
-   dbt artifacts or LookML files.
-3. The workflow runs the `agents-schema` CLI from this repository at the pinned
-   release tag.
-4. The CLI writes normalized metadata into the warehouse under the fixed
-   `AGENTS` schema.
-5. Agents and downstream tools query `AGENTS` to discover context close to the
-   data itself.
-
 ### Supported Metadata Sources
 
 - dbt: reads `target/manifest.json` and writes `AGENTS.DBT_*` tables.
@@ -58,9 +48,7 @@ The workflow shape is:
 
 More sources coming soon.
 
-## Prerequisites
-
-### Warehouse Credentials
+### Prerequisites
 
 Create one required GitHub Actions secret in the repository that calls these
 workflows:
@@ -117,7 +105,7 @@ from these destination credentials.
 
 ### Sync dbt
 
-Use the dbt reusable workflow when the repository contains a dbt project.
+Use the dbt workflow when the repository contains a dbt project.
 
 #### Use an Existing Manifest
 
@@ -217,7 +205,7 @@ parse command, it fails with an explicit error.
 
 ### Sync Looker
 
-Use the Looker reusable workflow when the repository contains LookML files:
+Use the Looker workflow when the repository contains LookML files:
 
 ```yaml
 name: Agents Schema Looker
@@ -239,7 +227,7 @@ The workflow reads `*.lkml` files from `lookml-dir`.
 
 ### Sync Multiple Sources
 
-Use separate reusable workflows in the same GitHub Actions workflow:
+Run the workflows from the same workflow file:
 
 ```yaml
 name: Agents Schema dbt + Looker
@@ -295,6 +283,17 @@ It is closest in spirit to `information_schema`, but extensible across many
 providers. Compared with MCP servers, Agents Schema is narrower: it publishes
 context inside the warehouse, while MCP servers can expose tools, actions, and
 source-specific workflows.
+
+### How it works
+
+1. A workflow in your repository invokes one of this repo's workflows.
+2. The workflow checks out your repository and reads source metadata such as
+   dbt artifacts or LookML files.
+3. The workflow runs the `agents-schema` CLI at the pinned release tag.
+4. The CLI writes normalized metadata into the warehouse under the `AGENTS`
+   schema.
+5. Agents and downstream tools query `AGENTS` for context close to the data
+   itself.
 
 ## Reference
 
