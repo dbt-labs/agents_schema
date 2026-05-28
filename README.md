@@ -44,10 +44,6 @@ available before writing or explaining queries.
 
 There are three supported metadata sources. Pick one to get started quickly.
 
-- [dbt Setup Guide](dbt-setup.md)
-- [Looker Setup Guide](looker-setup.md)
-- [OSI Setup Guide](osi-setup.md)
-
 ### Prerequisites
 
 Each workflow writes to your warehouse using a single GitHub Actions secret:
