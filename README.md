@@ -27,10 +27,12 @@ from your repository and publish it into `AGENTS`.
 
 ## Getting Started
 
-Start by publishing one source into `AGENTS`, then point an agent at the
-warehouse and let it inspect the metadata directly. The fastest path is usually
-dbt: if your repo already produces `target/manifest.json`, the workflow only
-needs the dbt project path and your warehouse credentials.
+Run one of the workflows below to populate the `AGENTS` schema from a source
+you already have. Once it's populated, anything that already queries your
+warehouse can read those tables as ordinary SQL, including Cursor, Claude
+Code, notebooks, and internal agents. The fastest path is usually dbt: if your
+repo already produces `target/manifest.json`, the workflow only needs the dbt
+project path and your warehouse credentials.
 
 After the first run, your warehouse has queryable metadata tables such as
 `AGENTS.DBT_MODEL` and `AGENTS.DBT_COLUMN`. Agents can use those tables to
@@ -94,12 +96,27 @@ database: ANALYTICS
 role: TRANSFORMER
 ```
 
-`role` is optional. For key-pair auth, use `private_key_path` and optional
-`private_key_passphrase` instead of `password`.
+For key-pair auth, replace `password` with `private_key_path` and optionally
+`private_key_passphrase`:
 
-The destination object configures where Agents Schema writes. It does not
-rename the schema; ingestion writes to `AGENTS`. The destination user needs
-permission to create or replace tables in that schema.
+```json
+{
+  "type": "snowflake",
+  "account": "abc123",
+  "user": "AGENTS_SCHEMA_BOT",
+  "private_key_path": "/path/to/rsa_key.p8",
+  "private_key_passphrase": "optional",
+  "warehouse": "COMPUTE_WH",
+  "database": "ANALYTICS",
+  "role": "TRANSFORMER"
+}
+```
+
+`role` is optional.
+
+The destination object configures the warehouse and connection. The schema
+name is always `AGENTS`. The destination user needs permission to create or
+replace tables in that schema.
 
 `WAREHOUSE_CREDENTIALS` is only the destination for writing `AGENTS`. If the
 workflow needs to run dbt, the dbt adapter is selected from the dbt profile, not
@@ -267,11 +284,10 @@ this information often lives in wikis, Slack threads, dashboards, and tribal
 knowledge. Agents Schema puts it in the warehouse itself, where agents can find
 it without leaving the query interface.
 
-Agents Schema is primarily a discovery and orientation layer for agents working
-from inside a warehouse query surface. It gives agents a standard place to
-answer questions like what curated tables exist, which system published the
-metadata, what dbt model or LookML object represents a dataset, whether a
-source is stale, and who owns a data product.
+Agents Schema is a discovery layer for agents that already query your
+warehouse. It gives them a standard place to ask: what curated tables exist,
+which system published the metadata, what dbt model or LookML object backs a
+dataset, whether a source is stale, and who owns a data product.
 
 The schema is self-documenting. `AGENTS.ROOT` tells consumers which providers
 are present and explains what provider-contributed tables mean. Consumers can
