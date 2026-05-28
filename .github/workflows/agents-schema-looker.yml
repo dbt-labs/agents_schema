@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Looker ingestion
-        uses: fivetran/agents_schema/.github/actions/agents-schema-looker@v0.0.1
+        uses: fivetran/agents_schema/.github/actions/agents-schema-looker@v0.0.3
         with:
           lookml-dir: ${{ inputs.lookml-dir }}
         env:
