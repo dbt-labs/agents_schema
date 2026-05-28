@@ -5,8 +5,7 @@ description: >
 inputs:
   lookml-dir:
     description: 'Path to a Looker project or directory containing *.lkml files'
-    required: false
-    default: 'lookml'
+    required: true
 runs:
   using: composite
   steps:

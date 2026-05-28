@@ -6,8 +6,7 @@ on:
       osi-dir:
         description: 'Path to a directory containing *.osi.yaml files'
         type: string
-        required: false
-        default: osi
+        required: true
     secrets:
       WAREHOUSE_CREDENTIALS:
         required: true

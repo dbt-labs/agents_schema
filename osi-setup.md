@@ -55,8 +55,9 @@ jobs:
     secrets: inherit
 ```
 
-The workflow reads direct `*.osi.yaml` files from `osi-dir`. With the default
-input, place OSI files here:
+`osi-dir` is required — set it to the directory that contains your `*.osi.yaml`
+files. The example uses `osi`; change it to match your repository. With
+`osi-dir: osi`, place OSI files here:
 
 ```text
 osi/*.osi.yaml

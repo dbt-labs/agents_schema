@@ -67,6 +67,10 @@ jobs:
     secrets: inherit
 ```
 
+`dbt-project-dir` is required — set it to the path of your dbt project (the
+directory that contains `dbt_project.yml`). The example uses `dbt_project`;
+change it to match your repository.
+
 The workflow looks for:
 
 ```text
