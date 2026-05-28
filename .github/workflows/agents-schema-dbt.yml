@@ -8,11 +8,21 @@ on:
         type: string
         required: false
         default: dbt_project
-      dbt-adapter:
-        description: 'dbt adapter package to install when creating a manifest'
+      dbt-profile-name:
+        description: 'dbt profile name to use for managed dbt parse when target/manifest.json is missing'
         type: string
         required: false
-        default: dbt-snowflake
+        default: ''
+      dbt-target:
+        description: 'Optional dbt target to use for managed dbt parse'
+        type: string
+        required: false
+        default: ''
+      dbt-parse-command:
+        description: 'Optional custom command to create target/manifest.json when it is missing'
+        type: string
+        required: false
+        default: ''
     secrets:
       WAREHOUSE_CREDENTIALS:
         required: true
@@ -31,7 +41,9 @@ jobs:
         uses: fivetran/agents_schema/.github/actions/agents-schema-dbt@v0.0.1
         with:
           dbt-project-dir: ${{ inputs.dbt-project-dir }}
-          dbt-adapter: ${{ inputs.dbt-adapter }}
+          dbt-profile-name: ${{ inputs.dbt-profile-name }}
+          dbt-target: ${{ inputs.dbt-target }}
+          dbt-parse-command: ${{ inputs.dbt-parse-command }}
         env:
           WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
           DBT_PROFILES_YML: ${{ secrets.DBT_PROFILES_YML }}

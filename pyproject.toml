@@ -33,6 +33,7 @@ Issues = "https://github.com/fivetran/agents_schema/issues"
 
 [project.scripts]
 agents-schema = "agents_schema.cli:main"
+agents-schema-dbt-adapter-package = "agents_schema.cli:dbt_adapter_package_main"
 
 [build-system]
 requires = ["hatchling"]

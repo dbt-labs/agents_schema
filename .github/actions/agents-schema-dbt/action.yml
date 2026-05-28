@@ -1,17 +1,24 @@
 name: 'Agents Schema dbt'
 description: >
-  Creates a dbt manifest if needed, then ingests dbt metadata into AGENTS.DBT_*
-  tables in Snowflake.
+  Ingests dbt manifest metadata into AGENTS.DBT_* tables.
 
 inputs:
   dbt-project-dir:
     description: 'Path to the dbt project containing target/manifest.json'
     required: false
     default: 'dbt_project'
-  dbt-adapter:
-    description: 'dbt adapter package to install when creating a manifest'
+  dbt-profile-name:
+    description: 'dbt profile name to use for managed dbt parse when target/manifest.json is missing'
     required: false
-    default: 'dbt-snowflake'
+    default: ''
+  dbt-target:
+    description: 'Optional dbt target to use for managed dbt parse'
+    required: false
+    default: ''
+  dbt-parse-command:
+    description: 'Optional custom command to create target/manifest.json when it is missing'
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
@@ -20,12 +27,17 @@ runs:
       with:
         python-version: '3.12'
 
-    - name: Create dbt manifest if missing
+    - name: Prepare dbt manifest
       shell: bash
+      env:
+        DBT_PROFILE_NAME: ${{ inputs.dbt-profile-name }}
+        DBT_PARSE_COMMAND: ${{ inputs.dbt-parse-command }}
+        DBT_TARGET: ${{ inputs.dbt-target }}
       run: |
         project_dir="${{ inputs.dbt-project-dir }}"
         manifest_path="$project_dir/target/manifest.json"
-        profiles_dir="$project_dir"
+        profiles_dir="$RUNNER_TEMP/agents-schema-dbt-profiles"
+        profiles_path="$profiles_dir/profiles.yml"
 
         if [ -f "$manifest_path" ]; then
           echo "Using existing dbt manifest at $manifest_path"
@@ -33,27 +45,70 @@ runs:
         fi
 
         if [ -n "${DBT_PROFILES_YML:-}" ]; then
-          profiles_dir="$RUNNER_TEMP/agents-schema-dbt-profiles"
           mkdir -p "$profiles_dir"
-          printf '%s\n' "$DBT_PROFILES_YML" > "$profiles_dir/profiles.yml"
-        elif [ -f "$project_dir/profiles.yml" ]; then
-          profiles_dir="$project_dir"
+          printf '%s\n' "$DBT_PROFILES_YML" > "$profiles_path"
+          echo "Wrote DBT_PROFILES_YML to $profiles_path"
+        fi
+
+        if [ -n "${DBT_PROFILES_YML:-}" ] && [ -n "${DBT_PROFILE_NAME:-}" ]; then
+          export DBT_ADAPTER_PACKAGE
+          adapter_args=(
+            --profiles-yml "$profiles_path"
+            --profile-name "$DBT_PROFILE_NAME"
+          )
+          if [ -n "${DBT_TARGET:-}" ]; then
+            adapter_args+=(--target "$DBT_TARGET")
+          fi
+          DBT_ADAPTER_PACKAGE="$(
+            uvx --from "agents-schema @ git+https://github.com/fivetran/agents_schema.git@v0.0.1" \
+              agents-schema-dbt-adapter-package "${adapter_args[@]}"
+          )"
+          echo "Using dbt adapter package $DBT_ADAPTER_PACKAGE from DBT_PROFILES_YML"
+        fi
+
+        if [ -n "${DBT_PARSE_COMMAND:-}" ]; then
+          echo "Running custom dbt parse command"
+          eval "$DBT_PARSE_COMMAND"
+        elif [ -n "${DBT_PROFILES_YML:-}" ] && [ -n "${DBT_PROFILE_NAME:-}" ]; then
+          dbt_args=(
+            --project-dir "$project_dir"
+            --profiles-dir "$profiles_dir"
+            --profile "$DBT_PROFILE_NAME"
+          )
+          if [ -n "${DBT_TARGET:-}" ]; then
+            dbt_args+=(--target "$DBT_TARGET")
+          fi
+
+          if [ -f "$project_dir/packages.yml" ] || [ -f "$project_dir/dependencies.yml" ]; then
+            uvx --with "$DBT_ADAPTER_PACKAGE" dbt deps "${dbt_args[@]}"
+          fi
+          uvx --with "$DBT_ADAPTER_PACKAGE" dbt parse "${dbt_args[@]}" --no-partial-parse
         else
-          echo "dbt manifest not found at $manifest_path" >&2
-          echo "No DBT_PROFILES_YML secret was provided and no profiles.yml exists at $project_dir/profiles.yml" >&2
+          echo "::error title=Missing dbt manifest::No dbt manifest was found at $manifest_path." >&2
+          echo "Agents Schema can ingest dbt from an existing manifest, run managed dbt parse, or run a custom parse command." >&2
+          echo "Choose one:" >&2
+          echo "1. Create $manifest_path before this action runs." >&2
+          echo "2. Add DBT_PROFILES_YML and pass dbt-profile-name for managed dbt parse." >&2
+          echo "3. Pass dbt-parse-command for a custom manifest generation command." >&2
+
+          if [ -z "${DBT_PROFILES_YML:-}" ]; then
+            echo "Managed parse is unavailable because DBT_PROFILES_YML is missing." >&2
+          fi
+
+          if [ -z "${DBT_PROFILE_NAME:-}" ]; then
+            echo "Managed parse is unavailable because dbt-profile-name is missing." >&2
+          fi
+
+          echo "Example managed parse inputs: dbt-profile-name: analytics, dbt-target: prod" >&2
+          echo "Example custom dbt-parse-command:" >&2
+          echo "uvx --with <dbt-adapter-package> dbt parse --project-dir $project_dir --profiles-dir \"$profiles_dir\" --no-partial-parse" >&2
           exit 1
         fi
 
-        if [ -f "$project_dir/packages.yml" ] || [ -f "$project_dir/dependencies.yml" ]; then
-          uvx --with "${{ inputs.dbt-adapter }}" dbt deps \
-            --project-dir "$project_dir" \
-            --profiles-dir "$profiles_dir"
+        if [ ! -f "$manifest_path" ]; then
+          echo "dbt parse completed, but manifest was not created at $manifest_path" >&2
+          exit 1
         fi
-
-        uvx --with "${{ inputs.dbt-adapter }}" dbt parse \
-          --project-dir "$project_dir" \
-          --profiles-dir "$profiles_dir" \
-          --no-partial-parse
 
     - name: Run dbt ingestion
       shell: bash

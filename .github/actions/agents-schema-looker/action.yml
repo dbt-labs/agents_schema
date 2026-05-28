@@ -1,6 +1,6 @@
 name: 'Agents Schema Looker'
 description: >
-  Ingests LookML metadata into AGENTS.LOOKML_* tables in Snowflake.
+  Ingests LookML metadata into AGENTS.LOOKML_* tables.
 
 inputs:
   lookml-dir:

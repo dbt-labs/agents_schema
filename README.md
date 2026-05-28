@@ -24,7 +24,8 @@ Create one required GitHub Actions secret in the customer repository:
 WAREHOUSE_CREDENTIALS
 ```
 
-For Snowflake, the secret value can be JSON:
+Snowflake is the only supported destination today, with more destination support coming soon. For Snowflake, the secret
+value can be JSON:
 
 ```json
 {
@@ -54,21 +55,27 @@ role: TRANSFORMER
 `private_key_passphrase` instead of `password`.
 
 The destination object configures how to connect to the warehouse. It does not
-rename the schema; ingestion writes to `AGENTS`. The Snowflake user needs
+rename the schema; ingestion writes to `AGENTS`. The destination user needs
 permission to create or replace tables in that schema.
 
+`WAREHOUSE_CREDENTIALS` is only the destination for writing `AGENTS`. If the
+workflow needs to run dbt, the dbt adapter is selected from the dbt profile, not
+from these destination credentials.
+
 For dbt, add this optional secret if your repo does not check in a
-`profiles.yml` and the workflow needs to create a manifest:
+`target/manifest.json` and the workflow needs to run `dbt parse`:
 
 ```text
 DBT_PROFILES_YML
 ```
 
-The value is the full contents of `profiles.yml`.
+Create it as a repository or organization Actions secret. The value is the full
+contents of `profiles.yml`.
 
 ## dbt
 
-Customer workflow:
+If the customer repo already has `target/manifest.json`, the workflow only
+needs to know where the dbt project lives:
 
 ```yaml
 name: Agents Schema dbt
@@ -83,7 +90,6 @@ jobs:
     uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.1
     with:
       dbt-project-dir: dbt_project
-      dbt-adapter: dbt-snowflake
     secrets: inherit
 ```
 
@@ -93,10 +99,69 @@ The dbt workflow expects a manifest at:
 <dbt project>/target/manifest.json
 ```
 
-If the manifest is missing, the workflow creates it with `dbt parse`. To do
-that, it needs a dbt profile. It uses `DBT_PROFILES_YML` when that secret is
-present. Otherwise it looks for `profiles.yml` in `dbt-project-dir`. If neither
-exists, the workflow fails with an explicit error.
+If the manifest is missing, the workflow can run `dbt parse` when you provide
+enough dbt profile information. In that mode, these are required:
+
+- `DBT_PROFILES_YML` secret containing the full `profiles.yml`
+- `dbt-profile-name` input selecting the profile inside that file
+
+`dbt-target` is optional. If omitted, the workflow uses the profile's `target`;
+if the profile has only one output, it uses that output.
+
+```yaml
+name: Agents Schema dbt
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  agents-schema-dbt:
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.1
+    with:
+      dbt-project-dir: dbt_project
+      dbt-profile-name: analytics
+      dbt-target: prod
+    secrets: inherit
+```
+
+When `DBT_PROFILES_YML` is supplied, the workflow writes it to:
+
+```text
+$RUNNER_TEMP/agents-schema-dbt-profiles/profiles.yml
+```
+
+Managed parse uses that directory automatically. Custom parse commands should
+point to it with `--profiles-dir`.
+
+The workflow reads the selected dbt profile output `type` and installs the
+matching dbt adapter. Today `snowflake` maps to `dbt-snowflake`.
+
+For custom dbt setups, pass `dbt-parse-command` instead. If `DBT_PROFILES_YML`
+and `dbt-profile-name` are also present, the workflow sets
+`DBT_ADAPTER_PACKAGE` before running the custom command:
+
+```yaml
+jobs:
+  agents-schema-dbt:
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.1
+    with:
+      dbt-project-dir: dbt_project
+      dbt-profile-name: analytics
+      dbt-target: prod
+      dbt-parse-command: |
+        uvx --with "$DBT_ADAPTER_PACKAGE" dbt parse \
+          --project-dir dbt_project \
+          --profiles-dir "$RUNNER_TEMP/agents-schema-dbt-profiles" \
+          --profile analytics \
+          --target prod \
+          --no-partial-parse
+    secrets: inherit
+```
+
+If the manifest is missing and the workflow cannot run either managed parse or
+the custom command, it fails with an explicit error.
 
 ## dbt + Looker
 
@@ -115,7 +180,6 @@ jobs:
     uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.1
     with:
       dbt-project-dir: dbt_project
-      dbt-adapter: dbt-snowflake
     secrets: inherit
 
   agents-schema-looker:

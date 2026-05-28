@@ -10,7 +10,7 @@ from typing import Any, Iterable, Protocol
 
 import yaml
 
-from .config import ConfigError, warehouse_type
+from .config import ConfigError, SUPPORTED_WAREHOUSE_TYPES, warehouse_type
 
 INSERT_BATCH_SIZE = 1000
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
@@ -111,13 +111,33 @@ def open_destination(cfg: dict[str, Any]) -> Destination:
 
 
 def _snowflake_connect_kwargs(cfg: dict[str, Any]) -> dict[str, Any]:
+    destination = warehouse_credentials_from_env()
+    if destination.get("type") != "snowflake":
+        raise ConfigError("WAREHOUSE_CREDENTIALS.type must be snowflake")
+    return _snowflake_connect_kwargs_from_secret(destination)
+
+
+def warehouse_credentials_from_env() -> dict[str, Any]:
     raw = os.environ.get("WAREHOUSE_CREDENTIALS")
     if not raw:
         raise ConfigError("missing required WAREHOUSE_CREDENTIALS secret")
-    return _snowflake_connect_kwargs_from_secret(raw)
+    destination = _parse_warehouse_credentials(raw)
+    destination_type = destination.get("type")
+    if not isinstance(destination_type, str) or not destination_type:
+        raise ConfigError("WAREHOUSE_CREDENTIALS.type is required")
+    if destination_type not in SUPPORTED_WAREHOUSE_TYPES:
+        supported = ", ".join(sorted(SUPPORTED_WAREHOUSE_TYPES))
+        raise ConfigError(
+            f"unsupported WAREHOUSE_CREDENTIALS.type {destination_type!r}; supported types: {supported}"
+        )
+    return destination
 
 
-def _snowflake_connect_kwargs_from_secret(raw: str) -> dict[str, Any]:
+def warehouse_type_from_env() -> str:
+    return str(warehouse_credentials_from_env()["type"])
+
+
+def _parse_warehouse_credentials(raw: str) -> dict[str, Any]:
     try:
         destination = json.loads(raw)
     except json.JSONDecodeError:
@@ -127,9 +147,10 @@ def _snowflake_connect_kwargs_from_secret(raw: str) -> dict[str, Any]:
             raise ConfigError(f"WAREHOUSE_CREDENTIALS is not valid JSON or YAML: {e}") from e
     if not isinstance(destination, dict):
         raise ConfigError("WAREHOUSE_CREDENTIALS must be a JSON or YAML object")
-    if destination.get("type") != "snowflake":
-        raise ConfigError("WAREHOUSE_CREDENTIALS.type must be snowflake")
+    return destination
 
+
+def _snowflake_connect_kwargs_from_secret(destination: dict[str, Any]) -> dict[str, Any]:
     required = ["account", "user", "warehouse", "database"]
     missing = [name for name in required if not destination.get(name)]
     has_password = bool(destination.get("password"))
