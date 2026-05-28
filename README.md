@@ -11,10 +11,21 @@ your repository and publish it into `AGENTS`.
 
 ![Agents Schema overview](assets/agents-schema-overview.png)
 
+Run one of the workflows below to populate the `AGENTS` schema from a source
+you already have. Once it's populated, anything that already queries your
+warehouse can read those tables as ordinary SQL, including Cursor, Claude
+Code, notebooks, and internal agents. The fastest path is usually dbt: if your
+repo already produces `target/manifest.json`, the workflow only needs the dbt
+project path and your warehouse credentials.
+
+After the first run, your warehouse has queryable metadata tables such as
+`AGENTS.DBT_MODEL` and `AGENTS.DBT_COLUMN`. Agents can use those tables to
+understand which models exist, how they are documented, how they relate to the
+warehouse, and what context is available before writing or explaining queries.
+
 ## Contents
 
 - [Getting Started](#getting-started)
-  - [Supported Metadata Sources](#supported-metadata-sources)
   - [Prerequisites](#prerequisites)
 - [Guides](#guides)
   - [Sync dbt](#sync-dbt)
@@ -29,24 +40,9 @@ your repository and publish it into `AGENTS`.
 
 ## Getting Started
 
-Run one of the workflows below to populate the `AGENTS` schema from a source
-you already have. Once it's populated, anything that already queries your
-warehouse can read those tables as ordinary SQL, including Cursor, Claude
-Code, notebooks, and internal agents. The fastest path is usually dbt: if your
-repo already produces `target/manifest.json`, the workflow only needs the dbt
-project path and your warehouse credentials.
-
-After the first run, your warehouse has queryable metadata tables such as
-`AGENTS.DBT_MODEL` and `AGENTS.DBT_COLUMN`. Agents can use those tables to
-understand which models exist, how they are documented, how they relate to the
-warehouse, and what context is available before writing or explaining queries.
-
-### Supported Metadata Sources
-
-- dbt: reads `target/manifest.json` and writes `AGENTS.DBT_*` tables.
-- Looker: reads `*.lkml` files and writes `AGENTS.LOOKML_*` tables.
-
-More sources coming soon.
+There are two supported metadata providers. Pick one of them to get started quickly.
+- [dbt](#sync-dbt)
+- [Looker](#sync-looker)
 
 ### Prerequisites
 
@@ -58,20 +54,7 @@ WAREHOUSE_CREDENTIALS
 ```
 
 Snowflake is the only supported destination today, with more destination
-support coming soon. The secret value is a YAML or JSON object. Choose one of
-the two auth methods:
-
-**Password auth:**
-
-```yaml
-type: snowflake
-account: abc123
-user: AGENTS_SCHEMA_BOT
-warehouse: COMPUTE_WH
-database: ANALYTICS
-role: TRANSFORMER
-password: secret
-```
+support coming soon. We recommend key-pair authentication:
 
 **Key-pair auth:**
 
@@ -103,156 +86,8 @@ from these destination credentials.
 
 ## Guides
 
-### Sync dbt
-
-Use the dbt workflow when the repository contains a dbt project.
-
-#### Use an Existing Manifest
-
-If the repository already has `target/manifest.json`, the workflow only needs to
-know where the dbt project lives:
-
-```yaml
-name: Agents Schema dbt
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-
-jobs:
-  agents-schema-dbt:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.4
-    with:
-      dbt-project-dir: dbt_project
-    secrets: inherit
-```
-
-The workflow looks for:
-
-```text
-<dbt project>/target/manifest.json
-```
-
-#### Generate a Manifest with dbt Parse
-
-If the manifest is missing, the workflow can run `dbt parse`. Add this optional
-secret:
-
-```text
-DBT_PROFILES_YML
-```
-
-The value is the full contents of `profiles.yml`. Then pass the dbt profile
-name:
-
-```yaml
-name: Agents Schema dbt
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-
-jobs:
-  agents-schema-dbt:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.4
-    with:
-      dbt-project-dir: dbt_project
-      dbt-profile-name: analytics
-      dbt-target: prod
-    secrets: inherit
-```
-
-`dbt-target` is optional. If omitted, the workflow uses the profile's `target`;
-if the profile has only one output, it uses that output.
-
-When `DBT_PROFILES_YML` is supplied, the workflow writes it to:
-
-```text
-$RUNNER_TEMP/agents-schema-dbt-profiles/profiles.yml
-```
-
-The workflow reads the selected dbt profile output `type` and installs the
-matching dbt adapter. Today `snowflake` maps to `dbt-snowflake`.
-
-#### Run a Custom dbt Parse Command
-
-For custom dbt setups, pass `dbt-parse-command`. If `DBT_PROFILES_YML` and
-`dbt-profile-name` are also present, the workflow sets `DBT_ADAPTER_PACKAGE`
-before running the custom command:
-
-```yaml
-jobs:
-  agents-schema-dbt:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.4
-    with:
-      dbt-project-dir: dbt_project
-      dbt-profile-name: analytics
-      dbt-target: prod
-      dbt-parse-command: |
-        uvx --with "$DBT_ADAPTER_PACKAGE" dbt parse \
-          --project-dir dbt_project \
-          --profiles-dir "$RUNNER_TEMP/agents-schema-dbt-profiles" \
-          --profile analytics \
-          --target prod \
-          --no-partial-parse
-    secrets: inherit
-```
-
-If the manifest is missing and the workflow cannot run managed parse or a custom
-parse command, it fails with an explicit error.
-
-### Sync Looker
-
-Use the Looker workflow when the repository contains LookML files:
-
-```yaml
-name: Agents Schema Looker
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-
-jobs:
-  agents-schema-looker:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.4
-    with:
-      lookml-dir: lookml
-    secrets: inherit
-```
-
-The workflow reads `*.lkml` files from `lookml-dir`.
-
-### Sync Multiple Sources
-
-Run the workflows from the same workflow file:
-
-```yaml
-name: Agents Schema dbt + Looker
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-
-jobs:
-  agents-schema-dbt:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.4
-    with:
-      dbt-project-dir: dbt_project
-    secrets: inherit
-
-  agents-schema-looker:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.4
-    with:
-      lookml-dir: lookml
-    secrets: inherit
-```
-
-These jobs do not need to depend on each other unless your repository has its
-own ordering requirement.
+- [dbt Setup Guide](dbt-setup.md)
+- [Looker Setup Guide](looker-setup.md)
 
 ## Why Agents Schema
 
