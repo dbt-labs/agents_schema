@@ -50,12 +50,27 @@ More sources coming soon.
 
 ### Prerequisites
 
-Create one required GitHub Actions secret in the repository that calls these
-workflows:
+You need:
 
-```text
-WAREHOUSE_CREDENTIALS
-```
+- A repository on GitHub that contains your dbt project or LookML files.
+- A Snowflake user the workflows can connect with. The user needs permission
+  to create or replace tables in the `AGENTS` schema (the schema name is
+  fixed).
+
+#### Add the WAREHOUSE_CREDENTIALS secret
+
+The workflows read warehouse credentials from a repository secret named
+`WAREHOUSE_CREDENTIALS`. To create it:
+
+1. On GitHub, open the repository that will run the workflows.
+2. Click **Settings** at the top of the repository page.
+3. In the left sidebar, click **Secrets and variables** → **Actions**.
+4. On the **Secrets** tab, scroll to **Repository secrets** and click
+   **New repository secret**. (Use this, not the **Environments** tab —
+   the workflows expect a repository-level secret.)
+5. Set **Name** to `WAREHOUSE_CREDENTIALS`.
+6. Paste one of the YAML values below into **Secret**, then click
+   **Add secret**.
 
 Snowflake is the only supported destination today, with more destination
 support coming soon. The secret value is a YAML or JSON object. Choose one of
@@ -89,13 +104,20 @@ private_key_pem: |
 private_key_passphrase: your-passphrase   # only if the key is encrypted
 ```
 
+> **Pasting tip:** the `|` after `private_key_pem:` tells YAML to read the
+> next indented block as a multi-line string. Every line of the PEM must be
+> indented two spaces under it. If you copy the YAML directly from a file or
+> editor, the indentation is preserved automatically; if you retype it,
+> double-check the indent.
+
 `role` is optional. An unencrypted key uses `-----BEGIN PRIVATE KEY-----` /
 `-----END PRIVATE KEY-----` markers (without `ENCRYPTED`) and omits
 `private_key_passphrase`. JSON works with the same field names.
 
-The destination object configures the warehouse and connection. The schema
-name is always `AGENTS`. The destination user needs permission to create or
-replace tables in that schema.
+New to Snowflake key-pair authentication? See
+[Snowflake's key-pair authentication docs](https://docs.snowflake.com/en/user-guide/key-pair-auth)
+for generating a key pair and registering the public key with your Snowflake
+user.
 
 `WAREHOUSE_CREDENTIALS` is only the destination for writing `AGENTS`. If the
 workflow needs to run dbt, the dbt adapter is selected from the dbt profile, not
@@ -105,34 +127,67 @@ from these destination credentials.
 
 ### Sync dbt
 
-Use the dbt workflow when the repository contains a dbt project.
+Use this workflow when your repository contains a dbt project.
 
 #### Use an Existing Manifest
 
-If the repository already has `target/manifest.json`, the workflow only needs to
-know where the dbt project lives:
+The simplest setup. Your repository already has a committed
+`target/manifest.json` and the workflow just needs to know where the dbt
+project lives.
 
-```yaml
-name: Agents Schema dbt
+**1. Add the workflow file**
 
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
+1. On GitHub, open your repository.
+2. Click the **Actions** tab.
+3. If this is your first workflow, click **set up a workflow yourself**.
+   Otherwise click **New workflow** → **set up a workflow yourself**.
+4. Replace the file name at the top of the editor with
+   `agents-schema-dbt.yml`.
+5. Paste this into the editor (change `dbt_project` if your dbt project lives
+   elsewhere):
 
-jobs:
-  agents-schema-dbt:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.4
-    with:
-      dbt-project-dir: dbt_project
-    secrets: inherit
-```
+   ```yaml
+   name: Agents Schema dbt
 
-The workflow looks for:
+   on:
+     workflow_dispatch:
+     push:
+       branches: [main]
 
-```text
-<dbt project>/target/manifest.json
-```
+   jobs:
+     agents-schema-dbt:
+       uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.4
+       with:
+         dbt-project-dir: dbt_project
+       secrets: inherit
+   ```
+
+6. Click **Commit changes**, then **Commit changes** in the dialog. GitHub
+   creates the file at `.github/workflows/agents-schema-dbt.yml` on the
+   default branch.
+
+The workflow looks for `<dbt project>/target/manifest.json`.
+
+**2. Trigger the workflow**
+
+The two `on:` keys control when the workflow runs:
+
+- `workflow_dispatch` exposes a **Run workflow** button in the Actions tab.
+- `push: branches: [main]` runs it automatically on every push to `main`.
+
+To run it manually right now: **Actions** tab → click **Agents Schema dbt** in
+the left sidebar → **Run workflow** dropdown → **Run workflow**.
+
+**3. Verify it worked**
+
+- In the **Actions** tab, open the most recent run. A green checkmark means
+  it succeeded; click any step to expand its logs.
+- In Snowflake, confirm the tables exist:
+
+  ```sql
+  SELECT * FROM AGENTS.ROOT;
+  SELECT * FROM AGENTS.DBT_MODEL LIMIT 10;
+  ```
 
 #### Generate a Manifest with dbt Parse
 
@@ -205,29 +260,66 @@ parse command, it fails with an explicit error.
 
 ### Sync Looker
 
-Use the Looker workflow when the repository contains LookML files:
+Use this workflow when your repository contains LookML files.
 
-```yaml
-name: Agents Schema Looker
+**1. Add the workflow file**
 
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
+1. On GitHub, open your repository.
+2. Click the **Actions** tab.
+3. If this is your first workflow, click **set up a workflow yourself**.
+   Otherwise click **New workflow** → **set up a workflow yourself**.
+4. Replace the file name at the top of the editor with
+   `agents-schema-looker.yml`.
+5. Paste this into the editor (change `lookml` if your LookML files live
+   elsewhere):
 
-jobs:
-  agents-schema-looker:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.4
-    with:
-      lookml-dir: lookml
-    secrets: inherit
-```
+   ```yaml
+   name: Agents Schema Looker
+
+   on:
+     workflow_dispatch:
+     push:
+       branches: [main]
+
+   jobs:
+     agents-schema-looker:
+       uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.4
+       with:
+         lookml-dir: lookml
+       secrets: inherit
+   ```
+
+6. Click **Commit changes**, then **Commit changes** in the dialog. GitHub
+   creates the file at `.github/workflows/agents-schema-looker.yml` on the
+   default branch.
 
 The workflow reads `*.lkml` files from `lookml-dir`.
 
+**2. Trigger the workflow**
+
+Same as the dbt flow: `workflow_dispatch` adds a manual **Run workflow**
+button; `push: branches: [main]` runs it automatically on every push to
+`main`.
+
+To run it manually right now: **Actions** tab → click **Agents Schema Looker**
+in the left sidebar → **Run workflow** dropdown → **Run workflow**.
+
+**3. Verify it worked**
+
+- In the **Actions** tab, the most recent run should show a green checkmark.
+  Click any step to expand its logs.
+- In Snowflake:
+
+  ```sql
+  SELECT * FROM AGENTS.ROOT;
+  SELECT * FROM AGENTS.LOOKML_VIEW LIMIT 10;
+  ```
+
 ### Sync Multiple Sources
 
-Run the workflows from the same workflow file:
+To run both workflows from one file, follow the same "Add the workflow file"
+steps from [Sync dbt](#sync-dbt) but use this YAML and name the file
+something like `agents-schema.yml`:
 
 ```yaml
 name: Agents Schema dbt + Looker
@@ -252,7 +344,8 @@ jobs:
 ```
 
 These jobs do not need to depend on each other unless your repository has its
-own ordering requirement.
+own ordering requirement. The single `WAREHOUSE_CREDENTIALS` secret you
+created in [Prerequisites](#prerequisites) covers both.
 
 ## Why Agents Schema
 
