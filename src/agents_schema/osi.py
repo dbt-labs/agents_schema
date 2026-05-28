@@ -9,6 +9,7 @@ from pathlib import Path
 import yaml
 
 from .destinations import Column, Destination, TableSchema, open_destination
+from .root import upsert_provider_root
 
 __all__ = ["run"]
 
@@ -63,6 +64,7 @@ def run(cfg: dict) -> None:
     osi_dir = Path(cfg["metadata_connection"]["path"])
     models = _load_osi_files(osi_dir)
     with open_destination(cfg) as dest:
+        upsert_provider_root(dest, "osi")
         _create_tables(dest)
         _ingest(dest, models)
 

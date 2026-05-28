@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .destinations import Column, Destination, TableSchema, open_destination
+from .root import upsert_provider_root
 
 __all__ = ["run"]
 
@@ -47,6 +48,7 @@ def run(cfg: dict) -> None:
     manifest_path = Path(cfg["metadata_connection"]["path"]) / "target" / "manifest.json"
     manifest = _load_manifest(manifest_path)
     with open_destination(cfg) as dest:
+        upsert_provider_root(dest, "dbt")
         _create_tables(dest)
         _ingest(dest, manifest)
 

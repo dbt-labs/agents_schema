@@ -27,7 +27,7 @@ The implementation writes unquoted identifiers, so Snowflake stores table and co
 
 `AGENTS.ROOT` is the intended provider registry for the Agents Schema. It gives generic consumers one place to discover which providers have published metadata and how to use their tables.
 
-The current dbt, LookML, and OSI ingestion workflows write the source-specific tables documented below. They do not yet populate `AGENTS.ROOT`.
+The current dbt, LookML, and OSI ingestion workflows upsert their own provider rows into `AGENTS.ROOT` and write the source-specific tables documented below. Each workflow preserves `ROOT` rows from other providers.
 
 ```sql
 CREATE TABLE AGENTS.ROOT (
@@ -452,7 +452,7 @@ The current source provider names are:
 
 | Table | Source | Purpose |
 |---|---|---|
-| `AGENTS.ROOT` | core | Intended provider registry; not currently populated by dbt, LookML, or OSI workflows |
+| `AGENTS.ROOT` | core | Provider registry upserted by dbt, LookML, and OSI workflows |
 | `AGENTS.DBT_MODEL` | dbt | dbt models with schema, materialization, documentation, path, and tags |
 | `AGENTS.DBT_COLUMN` | dbt | Documented dbt model columns |
 | `AGENTS.DBT_DEPENDENCY` | dbt | Direct dbt dependency edges |

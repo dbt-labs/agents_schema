@@ -37,6 +37,7 @@ class TableSchema:
 
 class Destination(Protocol):
     def replace_table(self, table: TableSchema) -> None: ...
+    def upsert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None: ...
     def insert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None: ...
     def close(self) -> None: ...
     def __enter__(self) -> "Destination": ...
@@ -64,22 +65,36 @@ class SnowflakeDestination:
             cur.execute(f"CREATE SCHEMA IF NOT EXISTS {self._agents_schema}")
             cur.execute(_create_table_sql(table, self._agents_schema))
 
-    def insert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None:
-        rows = list(rows)
-        if not rows:
+    def upsert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None:
+        bind_rows = _bind_rows(table, rows)
+        if not bind_rows:
             return
-        bind_rows = []
-        for row in rows:
-            bind_row = []
-            for i, value in enumerate(row):
-                if i in table.array_indexes:
-                    bind_row.append(json.dumps(value or []))
-                else:
-                    bind_row.append(value)
-            bind_rows.append(tuple(bind_row))
+        with self._con.cursor() as cur:
+            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {self._agents_schema}")
+            cur.execute(_create_table_if_not_exists_sql(table, self._agents_schema))
+            for batch in _batched(bind_rows, INSERT_BATCH_SIZE):
+                cur.execute(_merge_sql(table, self._agents_schema, len(batch)), _flatten(batch))
+
+    def insert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None:
+        bind_rows = _bind_rows(table, rows)
+        if not bind_rows:
+            return
         with self._con.cursor() as cur:
             for batch in _batched(bind_rows, INSERT_BATCH_SIZE):
                 cur.execute(_insert_sql(table, self._agents_schema, len(batch)), _flatten(batch))
+
+
+def _bind_rows(table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
+    bind_rows = []
+    for row in rows:
+        bind_row = []
+        for i, value in enumerate(row):
+            if i in table.array_indexes:
+                bind_row.append(json.dumps(value or []))
+            else:
+                bind_row.append(value)
+        bind_rows.append(tuple(bind_row))
+    return bind_rows
 
 
 def _batched(rows: list[tuple[Any, ...]], size: int) -> Iterable[list[tuple[Any, ...]]]:
@@ -91,6 +106,36 @@ def _insert_sql(table: TableSchema, schema: str, row_count: int) -> str:
     row_select = "SELECT " + ",".join(_placeholder(table, i) for i in range(len(table.columns)))
     values_sql = " UNION ALL ".join(row_select for _ in range(row_count))
     return f"INSERT INTO {_table_name(table, schema)} {values_sql}"
+
+
+def _merge_sql(table: TableSchema, schema: str, row_count: int) -> str:
+    if not table.primary_key:
+        raise ConfigError("upsert requires a table primary key")
+    source_select = _source_select_sql(table, row_count)
+    match_sql = " AND ".join(
+        f"target.{_identifier(column)} = source.{_identifier(column)}" for column in table.primary_key
+    )
+    non_key_columns = [column.name for column in table.columns if column.name not in table.primary_key]
+    update_sql = ", ".join(
+        f"target.{_identifier(column)} = source.{_identifier(column)}" for column in non_key_columns
+    )
+    insert_columns = ", ".join(_identifier(column.name) for column in table.columns)
+    insert_values = ", ".join(f"source.{_identifier(column.name)}" for column in table.columns)
+    matched_sql = f"WHEN MATCHED THEN UPDATE SET {update_sql}\n" if update_sql else ""
+    return (
+        f"MERGE INTO {_table_name(table, schema)} AS target\n"
+        f"USING ({source_select}) AS source\n"
+        f"ON {match_sql}\n"
+        f"{matched_sql}"
+        f"WHEN NOT MATCHED THEN INSERT ({insert_columns}) VALUES ({insert_values})"
+    )
+
+
+def _source_select_sql(table: TableSchema, row_count: int) -> str:
+    row_select = "SELECT " + ", ".join(
+        f"{_placeholder(table, i)} AS {_identifier(column.name)}" for i, column in enumerate(table.columns)
+    )
+    return " UNION ALL ".join(row_select for _ in range(row_count))
 
 
 def _placeholder(table: TableSchema, index: int) -> str:
@@ -198,6 +243,14 @@ def _load_private_key(pem_bytes: bytes, passphrase: str | None) -> bytes:
 
 
 def _create_table_sql(table: TableSchema, schema: str) -> str:
+    return _create_table_statement_sql("CREATE OR REPLACE TABLE", table, schema)
+
+
+def _create_table_if_not_exists_sql(table: TableSchema, schema: str) -> str:
+    return _create_table_statement_sql("CREATE TABLE IF NOT EXISTS", table, schema)
+
+
+def _create_table_statement_sql(prefix: str, table: TableSchema, schema: str) -> str:
     definitions = []
     for column in table.columns:
         sql = f"{column.name} {_type_sql(column.kind)}"
@@ -207,7 +260,7 @@ def _create_table_sql(table: TableSchema, schema: str) -> str:
     if table.primary_key:
         definitions.append(f"PRIMARY KEY ({', '.join(table.primary_key)})")
     return (
-        f"CREATE OR REPLACE TABLE {_table_name(table, schema)} (\n    "
+        f"{prefix} {_table_name(table, schema)} (\n    "
         + ",\n    ".join(definitions)
         + "\n)"
     )

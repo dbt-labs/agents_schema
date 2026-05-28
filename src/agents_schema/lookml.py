@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .destinations import Column, Destination, TableSchema, open_destination
+from .root import upsert_provider_root
 
 __all__ = ["run"]
 
@@ -82,6 +83,7 @@ def run(cfg: dict) -> None:
     lookml_dir = Path(cfg["metadata_connection"]["path"])
     files = _load_lookml_files(lookml_dir)
     with open_destination(cfg) as dest:
+        upsert_provider_root(dest, "lookml")
         _create_tables(dest)
         _ingest(dest, files, lookml_dir)
 
