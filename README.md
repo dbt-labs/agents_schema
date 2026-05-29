@@ -86,7 +86,7 @@ not guesses. You need a `snow` CLI connection (run `snow connection add` if you 
 ```bash
 curl -fsSL --create-dirs \
   -o ~/.claude/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/fivetran/agents_schema/v0.0.5/examples/skills/agents-schema-analyst/SKILL.md
+  https://raw.githubusercontent.com/fivetran/agents_schema/v0.0.6/examples/skills/agents-schema-analyst/SKILL.md
 ```
 
 Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
@@ -96,7 +96,7 @@ Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
 ```bash
 curl -fsSL --create-dirs \
   -o ~/.codex/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/fivetran/agents_schema/v0.0.5/examples/skills/agents-schema-analyst/SKILL.md
+  https://raw.githubusercontent.com/fivetran/agents_schema/v0.0.6/examples/skills/agents-schema-analyst/SKILL.md
 ```
 
 Then ask: `$agents-schema-analyst "What is our total MRR this month?"`
@@ -165,11 +165,11 @@ source, examples, README, and spec.
 Pin exact tags in your workflows:
 
 ```yaml
-uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.5
+uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.6
 ```
 
 To upgrade, change only the tag in the `uses:` line. The current release tag is
-`v0.0.5`.
+`v0.0.6`.
 
 ### Specification
 
