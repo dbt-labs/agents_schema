@@ -33,6 +33,7 @@ available before writing or explaining queries.
   - [Sync Looker](#sync-looker)
   - [Sync OSI](#sync-osi)
   - [Sync Multiple Sources](#sync-multiple-sources)
+- [Query with an agent](#query-with-an-agent)
 - [Why Agents Schema](#why-agents-schema)
   - [How it works](#how-it-works)
 - [Reference](#reference)
@@ -72,6 +73,29 @@ Interchange `*.osi.yaml` files.
 Use the reusable workflows together when one repository contains multiple
 metadata sources. See [examples/workflows/dbt-looker.yml](examples/workflows/dbt-looker.yml)
 and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.yml).
+
+## Query with an agent
+
+Once `AGENTS` is populated, the
+[`agents-schema-analyst`](examples/skills/agents-schema-analyst/SKILL.md) skill lets an AI agent
+answer questions about your warehouse — grounded in your real metric definitions from `AGENTS.*`,
+not guesses. You need a `snow` CLI connection (run `snow connection add` if you don't have one).
+
+**Claude Code**
+
+```bash
+cp -r examples/skills/agents-schema-analyst ~/.claude/skills/
+```
+
+Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
+
+**Codex**
+
+```bash
+cp -r examples/skills/agents-schema-analyst ~/.codex/skills/
+```
+
+Then ask: `$agents-schema-analyst "What is our total MRR this month?"`
 
 ## Why Agents Schema
 
