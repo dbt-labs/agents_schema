@@ -417,33 +417,6 @@ That join is intentionally heuristic because LookML `sql_table_name` is free-for
 
 ---
 
-## Example: A Consumer Skill
-
-Agents Schema is a discovery layer for consumers that query the warehouse. The intended
-consumption pattern is:
-
-1. Read `AGENTS.ROOT` to learn which providers published metadata and to find any overview,
-   convention, or skill rows. Do not assume a given provider is present.
-2. Search the relevant provider tables (`AGENTS.OSI_METRIC`, `AGENTS.LOOKML_MEASURE`,
-   `AGENTS.DBT_MODEL`, …) for the concept in the question, reading `description` and
-   `ai_context` for the authoritative formula and query rules.
-3. Resolve the physical table from the metadata (`OSI_DATASET.source_table`,
-   `LOOKML_VIEW.sql_table_name`) and query the business data exactly as the metadata
-   specifies — without inventing formulas, tables, filters, or date rules.
-
-[`examples/skills/agents-schema-analyst/`](examples/skills/agents-schema-analyst/SKILL.md) is a
-working example of this pattern: a read-only skill for Claude Code and Codex that answers
-business questions over a Snowflake `AGENTS` schema through the Snowflake CLI (`snow`). It
-discovers everything at query time, so the same file works against any warehouse that follows
-this spec — copy it into a consumer's `.claude/skills/` (or `~/.codex/skills/`) and point
-`snow_cli_connection` at their connection.
-
-Because the skill carries no business-specific logic, the metadata itself steers the answer. A
-provider can publish steering directly into `AGENTS.ROOT` (see [What goes in ROOT](#what-goes-in-root))
-so consumers stay generic.
-
----
-
 ## Conventions and Guidance for Implementors
 
 ### Populating the Tables
