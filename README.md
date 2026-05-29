@@ -79,34 +79,37 @@ and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.ym
 Once `AGENTS` is populated, an AI coding agent can answer business questions against your
 warehouse — grounding each answer in your governed metric definitions instead of guessing. The
 [`agents-schema-analyst`](examples/skills/agents-schema-analyst/SKILL.md) skill does this for
-Claude Code and Codex through the Snowflake CLI. It is read-only and carries no business logic;
-it discovers metrics, tables, and rules from `AGENTS.*` at query time, so it works for any
-warehouse that follows this spec.
+Claude Code and Codex through the Snowflake CLI. It is read-only and discovers metrics, tables,
+and rules from `AGENTS.*` at query time, so it works for any warehouse that follows this spec.
 
-**Set it up once:**
+**1. Give the Snowflake CLI a connection.** The skill runs read-only `snow sql`. If you already
+have a `snow` connection (from dbt, another tool, or a prior setup), use it. Otherwise add one
+once:
 
-1. Install the Snowflake CLI and add a read-only connection to your warehouse:
+```bash
+uv tool install snowflake-cli      # if `snow` isn't installed
+snow connection add                # store a read-only connection, e.g. "agents"
+```
 
-   ```bash
-   uv tool install snowflake-cli
-   snow connection add        # name it, e.g. "agents"
-   ```
+**2. Add the skill.** Drop the folder where your agent looks for skills — it is picked up
+automatically, with no install or restart:
 
-2. Copy the skill into your agent's skills directory:
+```bash
+cp -r examples/skills/agents-schema-analyst ~/.claude/skills/   # personal (Codex: ~/.codex/skills/)
+```
 
-   ```bash
-   cp -r examples/skills/agents-schema-analyst ~/.claude/skills/   # Claude Code
-   # or ~/.codex/skills/ for Codex
-   ```
+To share it with your team, commit it to your repo's `.claude/skills/` instead — anyone running
+the agent in that repo gets it on `git pull`.
 
-3. *(Optional)* In your repo's `agents.yml`, point the skill at your connection and schema:
+**3. (Optional) Point the skill at your connection** in your repo's `agents.yml`; otherwise it
+uses your default `snow` connection and the `AGENTS` schema:
 
-   ```yaml
-   snow_cli_connection: agents     # defaults to your default snow connection
-   agents_schema_name: agents      # defaults to AGENTS
-   ```
+```yaml
+snow_cli_connection: agents
+agents_schema_name: agents
+```
 
-**Ask a question:**
+**4. Ask:**
 
 ```text
 /agents-schema-analyst What is our total MRR this month?      # Claude Code
