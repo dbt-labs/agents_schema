@@ -76,43 +76,17 @@ and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.ym
 
 ## Query with an agent
 
-Once `AGENTS` is populated, an AI agent can answer business questions against your warehouse —
-grounded in your real metric definitions instead of guessing. The
-[`agents-schema-analyst`](examples/skills/agents-schema-analyst/SKILL.md) skill does this for
-Claude Code and Codex: it reads the definitions from `AGENTS.*`, then runs a read-only query. It
-hard-codes nothing, so it works on any warehouse that follows this spec.
+Once `AGENTS` is populated, an AI agent can answer questions about your warehouse — grounded in
+your real metric definitions, not guesses. The
+[`agents-schema-analyst`](examples/skills/agents-schema-analyst/SKILL.md) skill reads those
+definitions from `AGENTS.*`, then runs a read-only query, in Claude Code or Codex.
 
-**1. Use a Snowflake CLI connection.** The skill queries Snowflake with `snow sql`. Use a
-connection you already have, or create one:
-
-```bash
-uv tool install snowflake-cli   # if the snow CLI isn't installed
-snow connection add             # skip if you already have a connection
-```
-
-**2. Add the skill.** Copy it into your skills folder — it is picked up automatically, no install
-or restart:
-
-```bash
-cp -r examples/skills/agents-schema-analyst ~/.claude/skills/   # Codex: ~/.codex/skills/
-```
-
-Working in a shared repo? Commit it to that repo's `.claude/skills/` so your whole team gets it.
-
-**3. (Optional) Tell the skill which connection to use** in your repo's `agents.yml`. Without it,
-the skill uses your default `snow` connection and the `AGENTS` schema:
-
-```yaml
-snow_cli_connection: agents
-agents_schema_name: agents
-```
-
-**4. Ask a question:**
-
-```text
-/agents-schema-analyst What is our total MRR this month?      # Claude Code
-$agents-schema-analyst What is our total MRR this month?      # Codex
-```
+1. **Connect to Snowflake** — use an existing `snow` CLI connection, or create one with
+   `snow connection add`.
+2. **Add the skill** — `cp -r examples/skills/agents-schema-analyst ~/.claude/skills/`
+   (Codex: `~/.codex/skills/`).
+3. **Ask** — `/agents-schema-analyst What is our total MRR this month?`
+   (Codex: `$agents-schema-analyst …`).
 
 ## Why Agents Schema
 
