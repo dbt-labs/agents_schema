@@ -76,17 +76,26 @@ and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.ym
 
 ## Query with an agent
 
-Once `AGENTS` is populated, an AI agent can answer questions about your warehouse — grounded in
-your real metric definitions, not guesses. The
-[`agents-schema-analyst`](examples/skills/agents-schema-analyst/SKILL.md) skill reads those
-definitions from `AGENTS.*`, then runs a read-only query, in Claude Code or Codex.
+Once `AGENTS` is populated, the
+[`agents-schema-analyst`](examples/skills/agents-schema-analyst/SKILL.md) skill lets an AI agent
+answer questions about your warehouse — grounded in your real metric definitions from `AGENTS.*`,
+not guesses. You need a `snow` CLI connection (run `snow connection add` if you don't have one).
 
-1. **Connect to Snowflake** — use an existing `snow` CLI connection, or create one with
-   `snow connection add`.
-2. **Add the skill** — `cp -r examples/skills/agents-schema-analyst ~/.claude/skills/`
-   (Codex: `~/.codex/skills/`).
-3. **Ask** — `/agents-schema-analyst What is our total MRR this month?`
-   (Codex: `$agents-schema-analyst …`).
+**Claude Code**
+
+```bash
+cp -r examples/skills/agents-schema-analyst ~/.claude/skills/
+```
+
+Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
+
+**Codex**
+
+```bash
+cp -r examples/skills/agents-schema-analyst ~/.codex/skills/
+```
+
+Then ask: `$agents-schema-analyst "What is our total MRR this month?"`
 
 ## Why Agents Schema
 
