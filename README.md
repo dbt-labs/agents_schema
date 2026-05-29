@@ -84,7 +84,9 @@ not guesses. You need a `snow` CLI connection (run `snow connection add` if you 
 **Claude Code**
 
 ```bash
-cp -r examples/skills/agents-schema-analyst ~/.claude/skills/
+mkdir -p ~/.claude/skills/agents-schema-analyst
+curl -fsSL https://raw.githubusercontent.com/fivetran/agents_schema/main/examples/skills/agents-schema-analyst/SKILL.md \
+  -o ~/.claude/skills/agents-schema-analyst/SKILL.md
 ```
 
 Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
@@ -92,7 +94,9 @@ Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
 **Codex**
 
 ```bash
-cp -r examples/skills/agents-schema-analyst ~/.codex/skills/
+mkdir -p ~/.codex/skills/agents-schema-analyst
+curl -fsSL https://raw.githubusercontent.com/fivetran/agents_schema/main/examples/skills/agents-schema-analyst/SKILL.md \
+  -o ~/.codex/skills/agents-schema-analyst/SKILL.md
 ```
 
 Then ask: `$agents-schema-analyst "What is our total MRR this month?"`
