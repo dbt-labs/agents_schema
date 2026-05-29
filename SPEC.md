@@ -33,7 +33,7 @@ The current dbt, LookML, and OSI ingestion workflows upsert their own provider r
 CREATE TABLE AGENTS.ROOT (
   provider    VARCHAR NOT NULL,
   key         VARCHAR NOT NULL,
-  description TEXT NOT NULL,
+  content     TEXT NOT NULL,
   PRIMARY KEY (provider, key)
 );
 ```
@@ -42,7 +42,7 @@ CREATE TABLE AGENTS.ROOT (
 |---|---|
 | `provider` | A short, lowercase identifier for the metadata contributor, such as `dbt`, `lookml`, or `osi`. |
 | `key` | Provider-defined identifier, unique within the provider. For table documentation, the recommended convention is the unprefixed table name, such as `model` for `AGENTS.DBT_MODEL`. |
-| `description` | Free-form text describing the provider, table, convention, skill, or other context. |
+| `content` | Free-form context about the provider, table, convention, skill, or anything else the provider wants discoverable. |
 
 ### What goes in `ROOT`
 
@@ -53,7 +53,7 @@ It is strongly recommended that when a row is meant to document a specific contr
 ### Example rows
 
 ```
-provider   key                       description
+provider   key                       content
 ---------  ------------------------  ------------------------------------------------
 dbt        overview                  # dbt\nTransformation metadata from manifest.json.
 dbt        model                     One row per dbt model. See AGENTS.DBT_MODEL.

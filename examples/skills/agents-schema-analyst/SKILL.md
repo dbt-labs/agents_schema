@@ -34,7 +34,7 @@ hard-coding them.
 
 1. **Discover what metadata exists — don't assume which providers are present.**
    ```sql
-   SELECT provider, key, description FROM AGENTS.ROOT ORDER BY provider, key;
+   SELECT provider, key, content FROM AGENTS.ROOT ORDER BY provider, key;
    ```
    This lists the providers that published metadata (`osi`, `lookml`, `dbt`, or custom) plus
    their overview/guidance rows. Only query tables for providers that actually appear here.
@@ -88,7 +88,7 @@ Identifiers are UPPERCASE in Snowflake. A given warehouse has only the families 
 
 | Table | Key columns |
 |---|---|
-| `AGENTS.ROOT` | `PROVIDER`, `KEY`, `DESCRIPTION` |
+| `AGENTS.ROOT` | `PROVIDER`, `KEY`, `CONTENT` |
 | `AGENTS.OSI_METRIC` | `NAME`, `DESCRIPTION`, `AI_CONTEXT`, `EXPRESSION` |
 | `AGENTS.OSI_DATASET` | `NAME`, `SOURCE_TABLE`, `PRIMARY_KEY`, `DESCRIPTION`, `AI_CONTEXT` |
 | `AGENTS.OSI_FIELD` | `DATASET_NAME`, `FIELD_NAME`, `DESCRIPTION`, `AI_CONTEXT`, `IS_TIME_DIMENSION`, `EXPRESSION` |

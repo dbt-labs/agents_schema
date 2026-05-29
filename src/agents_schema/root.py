@@ -10,7 +10,7 @@ ROOT = TableSchema(
     (
         Column("provider", "varchar", nullable=False),
         Column("key", "varchar", nullable=False),
-        Column("description", "text", nullable=False),
+        Column("content", "text", nullable=False),
     ),
     primary_key=("provider", "key"),
 )
@@ -40,5 +40,5 @@ ROOT_ENTRIES = {
 
 
 def upsert_provider_root(dest: Destination, provider: str) -> None:
-    rows = [(provider, key, description) for key, description in ROOT_ENTRIES[provider]]
+    rows = [(provider, key, content) for key, content in ROOT_ENTRIES[provider]]
     dest.upsert_rows(ROOT, rows)

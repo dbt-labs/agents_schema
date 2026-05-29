@@ -13,7 +13,7 @@ class DestinationSqlTests(unittest.TestCase):
             "CREATE TABLE IF NOT EXISTS agents.root (\n"
             "    provider VARCHAR NOT NULL,\n"
             "    key VARCHAR NOT NULL,\n"
-            "    description TEXT NOT NULL,\n"
+            "    content TEXT NOT NULL,\n"
             "    PRIMARY KEY (provider, key)\n"
             ")",
         )
@@ -23,15 +23,15 @@ class DestinationSqlTests(unittest.TestCase):
 
         self.assertIn("MERGE INTO agents.root AS target", sql)
         self.assertIn(
-            "USING (SELECT %s AS provider, %s AS key, %s AS description "
-            "UNION ALL SELECT %s AS provider, %s AS key, %s AS description) AS source",
+            "USING (SELECT %s AS provider, %s AS key, %s AS content "
+            "UNION ALL SELECT %s AS provider, %s AS key, %s AS content) AS source",
             sql,
         )
         self.assertIn("ON target.provider = source.provider AND target.key = source.key", sql)
-        self.assertIn("WHEN MATCHED THEN UPDATE SET target.description = source.description", sql)
+        self.assertIn("WHEN MATCHED THEN UPDATE SET target.content = source.content", sql)
         self.assertIn(
-            "WHEN NOT MATCHED THEN INSERT (provider, key, description) "
-            "VALUES (source.provider, source.key, source.description)",
+            "WHEN NOT MATCHED THEN INSERT (provider, key, content) "
+            "VALUES (source.provider, source.key, source.content)",
             sql,
         )
 
