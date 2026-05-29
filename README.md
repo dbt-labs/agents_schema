@@ -33,6 +33,7 @@ available before writing or explaining queries.
   - [Sync Looker](#sync-looker)
   - [Sync OSI](#sync-osi)
   - [Sync Multiple Sources](#sync-multiple-sources)
+- [Query with an agent](#query-with-an-agent)
 - [Why Agents Schema](#why-agents-schema)
   - [How it works](#how-it-works)
 - [Reference](#reference)
@@ -72,6 +73,48 @@ Interchange `*.osi.yaml` files.
 Use the reusable workflows together when one repository contains multiple
 metadata sources. See [examples/workflows/dbt-looker.yml](examples/workflows/dbt-looker.yml)
 and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.yml).
+
+## Query with an agent
+
+Once `AGENTS` is populated, an AI coding agent can answer business questions against your
+warehouse — grounding each answer in your governed metric definitions instead of guessing. The
+[`agents-schema-analyst`](examples/skills/agents-schema-analyst/SKILL.md) skill does this for
+Claude Code and Codex through the Snowflake CLI. It is read-only and carries no business logic;
+it discovers metrics, tables, and rules from `AGENTS.*` at query time, so it works for any
+warehouse that follows this spec.
+
+**Set it up once:**
+
+1. Install the Snowflake CLI and add a read-only connection to your warehouse:
+
+   ```bash
+   uv tool install snowflake-cli
+   snow connection add        # name it, e.g. "agents"
+   ```
+
+2. Copy the skill into your agent's skills directory:
+
+   ```bash
+   cp -r examples/skills/agents-schema-analyst ~/.claude/skills/   # Claude Code
+   # or ~/.codex/skills/ for Codex
+   ```
+
+3. *(Optional)* In your repo's `agents.yml`, point the skill at your connection and schema:
+
+   ```yaml
+   snow_cli_connection: agents     # defaults to your default snow connection
+   agents_schema_name: agents      # defaults to AGENTS
+   ```
+
+**Ask a question:**
+
+```text
+/agents-schema-analyst What is our total MRR this month?      # Claude Code
+$agents-schema-analyst What is our total MRR this month?      # Codex
+```
+
+The agent reads `AGENTS.*` for the right metric definition and source table, then runs a
+read-only query and returns the answer.
 
 ## Why Agents Schema
 
