@@ -76,48 +76,43 @@ and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.ym
 
 ## Query with an agent
 
-Once `AGENTS` is populated, an AI coding agent can answer business questions against your
-warehouse — grounding each answer in your governed metric definitions instead of guessing. The
+Once `AGENTS` is populated, an AI agent can answer business questions against your warehouse —
+grounded in your real metric definitions instead of guessing. The
 [`agents-schema-analyst`](examples/skills/agents-schema-analyst/SKILL.md) skill does this for
-Claude Code and Codex through the Snowflake CLI. It is read-only and discovers metrics, tables,
-and rules from `AGENTS.*` at query time, so it works for any warehouse that follows this spec.
+Claude Code and Codex: it reads the definitions from `AGENTS.*`, then runs a read-only query. It
+hard-codes nothing, so it works on any warehouse that follows this spec.
 
-**1. Give the Snowflake CLI a connection.** The skill runs read-only `snow sql`. If you already
-have a `snow` connection (from dbt, another tool, or a prior setup), use it. Otherwise add one
-once:
-
-```bash
-uv tool install snowflake-cli      # if `snow` isn't installed
-snow connection add                # store a read-only connection, e.g. "agents"
-```
-
-**2. Add the skill.** Drop the folder where your agent looks for skills — it is picked up
-automatically, with no install or restart:
+**1. Use a Snowflake CLI connection.** The skill queries Snowflake with `snow sql`. Use a
+connection you already have, or create one:
 
 ```bash
-cp -r examples/skills/agents-schema-analyst ~/.claude/skills/   # personal (Codex: ~/.codex/skills/)
+uv tool install snowflake-cli   # if the snow CLI isn't installed
+snow connection add             # skip if you already have a connection
 ```
 
-To share it with your team, commit it to your repo's `.claude/skills/` instead — anyone running
-the agent in that repo gets it on `git pull`.
+**2. Add the skill.** Copy it into your skills folder — it is picked up automatically, no install
+or restart:
 
-**3. (Optional) Point the skill at your connection** in your repo's `agents.yml`; otherwise it
-uses your default `snow` connection and the `AGENTS` schema:
+```bash
+cp -r examples/skills/agents-schema-analyst ~/.claude/skills/   # Codex: ~/.codex/skills/
+```
+
+Working in a shared repo? Commit it to that repo's `.claude/skills/` so your whole team gets it.
+
+**3. (Optional) Tell the skill which connection to use** in your repo's `agents.yml`. Without it,
+the skill uses your default `snow` connection and the `AGENTS` schema:
 
 ```yaml
 snow_cli_connection: agents
 agents_schema_name: agents
 ```
 
-**4. Ask:**
+**4. Ask a question:**
 
 ```text
 /agents-schema-analyst What is our total MRR this month?      # Claude Code
 $agents-schema-analyst What is our total MRR this month?      # Codex
 ```
-
-The agent reads `AGENTS.*` for the right metric definition and source table, then runs a
-read-only query and returns the answer.
 
 ## Why Agents Schema
 
