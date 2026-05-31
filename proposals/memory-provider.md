@@ -9,6 +9,14 @@ Add a general `memory` provider to Agents Schema for durable, agent-facing data 
 
 The provider is intentionally tool-agnostic. An internal platform job, semantic modeling tool, catalog process, agent workflow, or human-curated repository could all publish memories through the same provider contract.
 
+## When To Use Memory
+
+Memory is the **lightweight path** to anchored, agent-retrievable notes for deployments **without a semantic layer**. It attaches notes directly to physical warehouse objects (schema/table/column) plus logical metrics and relationships, so an agent can pull "the notes relevant to this column" with a simple join — without standing up and maintaining a full semantic model.
+
+If you already run an OSI semantic model, you usually do **not** need memory. OSI carries object-local `ai_context` on every dataset, field, and metric, and that is the natural home for the same notes — "this field is in cents" belongs on the OSI field. Memory overlaps that and is largely redundant for OSI-native teams. The honest scope: reach for memory when there is no semantic layer, or for notes about raw warehouse objects that a semantic model does not cover.
+
+Anchors target physical objects deliberately. A column anchor is reachable both from raw schema and — because OSI fields map down to columns — from an OSI-aware consumer; the reverse is not true. The only logical anchors are `metric` and `relationship`, for things that have no single physical column to point at.
+
 ## Motivation
 
 `AGENTS.ROOT` can already hold free-form context and query recipes, and several source providers expose object-local `ai_context`. Those are useful, but they do not give agents a structured way to retrieve "the memories relevant to this table, column, relationship, or metric."
@@ -69,7 +77,7 @@ memories:
     title: Stripe amounts
     content: Stripe amount columns are stored in cents; divide by 100 for dollar measures.
     source: memories.yaml
-    confidence: high
+    confidence: 0.9
     anchors:
       - anchor_id: invoice_amount_due
         anchor_type: column
@@ -106,7 +114,7 @@ CREATE OR REPLACE TABLE AGENTS.MEMORY (
   title VARCHAR,
   content TEXT NOT NULL,
   source VARCHAR,
-  confidence VARCHAR,
+  confidence FLOAT,
   PRIMARY KEY (memory_id)
 );
 
@@ -117,8 +125,14 @@ CREATE OR REPLACE TABLE AGENTS.MEMORY_ANCHOR (
   schema_name VARCHAR,
   table_name VARCHAR,
   column_name VARCHAR,
-  relationship_name VARCHAR,
   metric_id VARCHAR,
+  relationship_name VARCHAR,
+  from_schema VARCHAR,
+  from_table VARCHAR,
+  from_columns VARIANT,
+  to_schema VARCHAR,
+  to_table VARCHAR,
+  to_columns VARIANT,
   PRIMARY KEY (
     memory_id,
     anchor_id
@@ -126,7 +140,7 @@ CREATE OR REPLACE TABLE AGENTS.MEMORY_ANCHOR (
 );
 ```
 
-`anchor_id` is stable within `memory_id` and gives each anchor a real key independent of the locator shape. The locator columns intentionally stay small: enough to attach a memory to a table, column, relationship, or metric without modeling every future target type up front.
+`anchor_id` is stable within `memory_id` and gives each anchor a real key independent of the locator shape. `confidence` is a float in `[0, 1]` so consumers can threshold or rank. Column and table anchors use the `schema_name`/`table_name`/`column_name` locators; metric anchors use `metric_id`; relationship anchors carry the join inline via `from_*`/`to_*` (with positionally-paired `from_columns`/`to_columns` arrays for composite keys) plus an optional free-text `relationship_name`. Relationships are carried inline rather than referenced because memory must work when OSI is absent; when OSI is present, `relationship_name` can record the matching `OSI_RELATIONSHIP.name` as a best-effort, unenforced pointer. Ingestion rejects locators that do not belong to an anchor's type.
 
 ## Schema Graph
 
@@ -159,10 +173,10 @@ ticket_assignee_join      join_rule    Ticket assignee   For ticket owner report
 
 ```text
 AGENTS.MEMORY_ANCHOR
-memory_id                 anchor_id           anchor_type   schema_name  table_name  column_name   metric_id
-stripe_amounts_are_cents  invoice_amount_due  column        stripe       invoice     amount_due    null
-stripe_amounts_are_cents  revenue_metric      metric        null         null        null          revenue
-ticket_assignee_join      ticket_assignee_id  relationship  zendesk      ticket      assignee_id   null
+memory_id                 anchor_id           anchor_type   schema_name  table_name  column_name   metric_id  from_table  from_columns    to_table  to_columns
+stripe_amounts_are_cents  invoice_amount_due  column        stripe       invoice     amount_due    null       null        null            null      null
+stripe_amounts_are_cents  revenue_metric      metric        null         null        null          revenue    null        null            null      null
+ticket_assignee_join      ticket_to_user      relationship  null         null        null          null       ticket      ["assignee_id"] user      ["id"]
 ```
 
 ## Retrieval Examples
@@ -244,8 +258,16 @@ The same pattern applies to other tools: learn a durable rule, ask for approval,
 - Storing raw table schemas or column catalogs.
 - Becoming a general document store.
 
+## Resolved Decisions
+
+- **`confidence` is a `FLOAT` in `[0, 1]`**, not a free-form label, so consumers can threshold and rank.
+- **Provenance stays flat** on `AGENTS.MEMORY` (`source` + `confidence`) for v1. A separate `MEMORY_SOURCE` table (per-source confidence on a many-to-many edge) is deferred until multi-source provenance is a real need.
+- **Relationship anchors carry the join inline** (`from_*`/`to_*` with paired array columns) rather than referencing `OSI_RELATIONSHIP`, because memory must work without OSI. `relationship_name` is an optional best-effort pointer when OSI is present.
+- **Key naming follows the OSI parent/child convention**: `MEMORY.memory_id` is the entity key, referenced unchanged as `MEMORY_ANCHOR.memory_id`. `memory_kind` keeps its prefix to match `field_kind` / `upstream_type`.
+- **The CLI source ships now** as `agents-schema memory --memory-file memory.yml`.
+
 ## Open Questions
 
-- Should `memory_kind` be a constrained enum or tool-defined text?
-- Should the first implementation include a CLI source such as `agents-schema memory --memory-file memory.yml`?
-- Should `AGENTS.MEMORY` be in the core spec immediately or introduced as an optional provider table family first?
+- Should `memory_kind` be a constrained enum or remain tool-defined text? (Currently free text.)
+- Agent write-back of learned rules is out of scope for v1 (the CLI only reads a file); what is the reviewed write-back path when it lands?
+- Should `AGENTS.MEMORY` move into the core spec, or stay an optional provider table family?

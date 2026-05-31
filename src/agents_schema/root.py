@@ -40,7 +40,9 @@ ROOT_ENTRIES = {
         (
             "overview",
             "# Memory\nDurable semantic memories for agents: query rules, join caveats, units, "
-            "status meanings, and project-specific data guidance.",
+            "status meanings, and project-specific data guidance. A lightweight path to anchored, "
+            "agent-retrievable notes when there is no semantic layer; teams running OSI usually use "
+            "object-local ai_context instead.",
         ),
         ("memory", "One row per durable semantic memory. See AGENTS.MEMORY."),
         ("memory_anchor", "One row per retrieval anchor for a memory. See AGENTS.MEMORY_ANCHOR."),

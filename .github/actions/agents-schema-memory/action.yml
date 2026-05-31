@@ -1,0 +1,21 @@
+name: 'Agents Schema Memory'
+description: >
+  Ingests durable agent memories from a YAML file into AGENTS.MEMORY_* tables.
+
+inputs:
+  memory-file:
+    description: 'Path to a YAML file containing durable agent memories'
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: '3.12'
+
+    - name: Run memory ingestion
+      shell: bash
+      run: |
+        uvx --from "agents-schema==0.0.6" \
+          agents-schema memory --memory-file "${{ inputs.memory-file }}"

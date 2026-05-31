@@ -32,6 +32,7 @@ available before writing or explaining queries.
   - [Sync dbt](#sync-dbt)
   - [Sync Looker](#sync-looker)
   - [Sync OSI](#sync-osi)
+  - [Sync Memory](#sync-memory)
   - [Sync Multiple Sources](#sync-multiple-sources)
 - [Query with an agent](#query-with-an-agent)
 - [Why Agents Schema](#why-agents-schema)
@@ -67,6 +68,12 @@ files.
 
 Use [OSI Setup Guide](osi-setup.md) when your repository contains Open Semantic
 Interchange `*.osi.yaml` files.
+
+### Sync Memory
+
+Use [Memory Setup Guide](memory-setup.md) to publish durable, anchored agent
+notes from a YAML file when you do not run a semantic layer. (If you already use
+OSI, prefer object-local `ai_context` instead.)
 
 ### Sync Multiple Sources
 

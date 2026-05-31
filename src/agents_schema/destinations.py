@@ -282,6 +282,8 @@ def _type_sql(kind: str) -> str:
         return "VARIANT"
     if kind == "boolean":
         return "BOOLEAN"
+    if kind == "float":
+        return "FLOAT"
     if kind == "text":
         return "TEXT"
     if kind == "timestamp":

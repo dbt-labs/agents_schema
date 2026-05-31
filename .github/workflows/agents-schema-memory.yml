@@ -1,0 +1,27 @@
+name: Agents Schema Memory
+
+on:
+  workflow_call:
+    inputs:
+      memory-file:
+        description: 'Path to a YAML file containing durable agent memories'
+        type: string
+        required: true
+    secrets:
+      WAREHOUSE_CREDENTIALS:
+        required: true
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run memory ingestion
+        uses: fivetran/agents_schema/.github/actions/agents-schema-memory@v0.0.6
+        with:
+          memory-file: ${{ inputs.memory-file }}
+        env:
+          WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}

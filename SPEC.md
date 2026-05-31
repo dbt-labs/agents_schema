@@ -90,6 +90,12 @@ Each ingestion replaces its own table family with `CREATE OR REPLACE TABLE` and 
 
 The memory ingestion reads a YAML file of durable semantic memories and writes anchored records that agents can retrieve near relevant schema context. Memories are intended for query rules, join caveats, unit conversions, status meanings, grain warnings, and other project-specific guidance that should survive beyond a single agent session.
 
+### When to use memory
+
+Memory is the lightweight path to anchored, agent-retrievable notes for deployments **without a semantic layer**. It attaches notes directly to physical warehouse objects (schema/table/column) plus logical metrics and relationships, so an agent can pull "the notes relevant to this column" with a simple join — without standing up and maintaining a full semantic model.
+
+If you already run an OSI semantic model, you usually do **not** need memory: OSI carries object-local `ai_context` on every dataset, field, and metric, which is the natural home for the same notes (for example, "this field is in cents" belongs on the OSI field). Memory overlaps that and is largely redundant for OSI-native teams. Reach for memory when there is no semantic layer, or for notes about raw warehouse objects that OSI does not model. Anchors target physical objects on purpose: a column anchor is reachable both from raw schema and — because OSI fields map down to columns — from an OSI-aware consumer, while the reverse is not true.
+
 Memory can also summarize other providers. A process can scan richer provider tables such as LookML, dbt, OSI, catalog metadata, query history, or reviewed agent discoveries, then publish the compact facts worth carrying forward as memories with provenance back to the source material.
 
 ### YAML shape
@@ -103,13 +109,27 @@ memories:
     title: Stripe amounts
     content: Stripe amount columns are stored in cents; divide by 100 for dollar measures.
     source: memories.yaml
-    confidence: high
+    confidence: 0.9
     anchors:
       - anchor_id: invoice_amount_due
         anchor_type: column
         schema_name: stripe
         table_name: invoice
         column_name: amount_due
+
+  - memory_id: ticket_assignee_join
+    memory_kind: join_rule
+    content: For ticket owner reporting, join ticket.assignee_id to user.id.
+    anchors:
+      - anchor_id: ticket_to_user
+        anchor_type: relationship
+        relationship_name: ticket_to_user
+        from_schema: zendesk
+        from_table: ticket
+        from_columns: [assignee_id]
+        to_schema: zendesk
+        to_table: user
+        to_columns: [id]
 ```
 
 Tools may keep their own project memory file and import it into this canonical
@@ -140,7 +160,7 @@ becomes a row in `AGENTS.MEMORY_ANCHOR`.
 graph TD
   ROOT["AGENTS.ROOT<br/>provider = memory"] --> MEMORY["AGENTS.MEMORY<br/>memory_id"]
   MEMORY --> ANCHOR["AGENTS.MEMORY_ANCHOR<br/>memory_id, anchor_id"]
-  ANCHOR --> LOCATORS["Anchor locator columns<br/>schema_name/table_name/column_name<br/>relationship_name/metric_id"]
+  ANCHOR --> LOCATORS["Anchor locator columns<br/>schema_name/table_name/column_name · metric_id<br/>relationship_name + from_*/to_* join columns"]
 ```
 
 ### `AGENTS.MEMORY`
@@ -154,19 +174,19 @@ CREATE OR REPLACE TABLE AGENTS.MEMORY (
   title       VARCHAR,
   content     TEXT NOT NULL,
   source      VARCHAR,
-  confidence  VARCHAR,
+  confidence  FLOAT,
   PRIMARY KEY (memory_id)
 );
 ```
 
 | Column | Source field |
 |---|---|
-| `memory_id` | Stable identifier unique within `AGENTS.MEMORY`. |
+| `memory_id` | Stable identifier unique within `AGENTS.MEMORY`. Mirrors the OSI parent/child convention: this is the entity's own key, and `AGENTS.MEMORY_ANCHOR` references it under the same prefixed name. |
 | `memory_kind` | Tool-defined kind, such as `unit_rule`, `join_rule`, or `grain_warning`. |
 | `title` | Optional short human-readable title for prompt rendering and review. |
 | `content` | Durable guidance, caveat, or context the agent should remember. |
 | `source` | Optional source reference, such as a file path, URL, provider object id, or import job label. |
-| `confidence` | Optional tool-defined confidence label. |
+| `confidence` | Optional confidence in `[0, 1]`, so consumers can threshold or rank. |
 
 ### `AGENTS.MEMORY_ANCHOR`
 
@@ -180,8 +200,14 @@ CREATE OR REPLACE TABLE AGENTS.MEMORY_ANCHOR (
   schema_name       VARCHAR,
   table_name        VARCHAR,
   column_name       VARCHAR,
-  relationship_name VARCHAR,
   metric_id         VARCHAR,
+  relationship_name VARCHAR,
+  from_schema       VARCHAR,
+  from_table        VARCHAR,
+  from_columns      VARIANT,
+  to_schema         VARCHAR,
+  to_table          VARCHAR,
+  to_columns        VARIANT,
   PRIMARY KEY (
     memory_id,
     anchor_id
@@ -189,16 +215,24 @@ CREATE OR REPLACE TABLE AGENTS.MEMORY_ANCHOR (
 );
 ```
 
-| Column | Source field |
-|---|---|
-| `memory_id` | Copied from the parent memory. |
-| `anchor_id` | Memory-unique stable identifier for the anchor. |
-| `anchor_type` | Retrieval scope: `column`, `table`, `relationship`, or `metric`. |
-| `schema_name` | Schema name when known. |
-| `table_name` | Table-like object name when known. |
-| `column_name` | Column-like object name when known. |
-| `relationship_name` | Relationship identifier when known. |
-| `metric_id` | Metric identifier when known. |
+Each anchor type uses a specific subset of the locator columns; ingestion rejects locators that do not belong to the anchor's type.
+
+| Column | Used by | Source field |
+|---|---|---|
+| `memory_id` | all | Copied from the parent memory. |
+| `anchor_id` | all | Memory-unique stable identifier for the anchor. |
+| `anchor_type` | all | Retrieval scope: `column`, `table`, `relationship`, or `metric`. |
+| `schema_name` | column, table | Schema name when known. |
+| `table_name` | column, table | Table-like object name (required for `column` and `table`). |
+| `column_name` | column | Column-like object name (required for `column`). |
+| `metric_id` | metric | Metric identifier (required for `metric`). |
+| `relationship_name` | relationship | Optional free-text relationship label; not a foreign key. |
+| `from_schema` / `from_table` | relationship | Left side of the join (`from_table` required). |
+| `from_columns` | relationship | Left-side join columns, paired positionally with `to_columns`. |
+| `to_schema` / `to_table` | relationship | Right side of the join (`to_table` required). |
+| `to_columns` | relationship | Right-side join columns, paired positionally with `from_columns`. |
+
+Relationship anchors carry the join inline rather than referencing a canonical relationship, because memory does not depend on OSI being present. When OSI is available, `relationship_name` can record the matching `OSI_RELATIONSHIP.name` as a best-effort, unenforced pointer.
 
 ---
 

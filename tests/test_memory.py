@@ -101,6 +101,94 @@ class MemoryTests(unittest.TestCase):
             with self.assertRaisesRegex(ConfigError, "column anchors require table_name and column_name"):
                 memory.load_memory_file(path)
 
+    def test_load_memory_file_rejects_locator_not_allowed_for_type(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "memory.yml"
+            path.write_text(
+                textwrap.dedent(
+                    """
+                    memories:
+                      - memory_id: cross_wired
+                        memory_kind: metric_rule
+                        content: A metric anchor should not carry a table_name.
+                        anchors:
+                          - anchor_id: revenue
+                            anchor_type: metric
+                            metric_id: revenue
+                            table_name: invoice
+                    """
+                )
+            )
+
+            with self.assertRaisesRegex(ConfigError, "metric anchors do not use table_name"):
+                memory.load_memory_file(path)
+
+    def test_load_memory_file_rejects_confidence_out_of_range(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "memory.yml"
+            path.write_text(
+                textwrap.dedent(
+                    """
+                    memories:
+                      - memory_id: too_confident
+                        memory_kind: unit_rule
+                        content: Confidence must be 0..1.
+                        confidence: 2
+                    """
+                )
+            )
+
+            with self.assertRaisesRegex(ConfigError, "confidence must be between 0 and 1"):
+                memory.load_memory_file(path)
+
+    def test_load_memory_file_builds_relationship_anchor_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "memory.yml"
+            path.write_text(
+                textwrap.dedent(
+                    """
+                    memories:
+                      - memory_id: ticket_assignee_join
+                        memory_kind: join_rule
+                        content: Join ticket.assignee_id to user.id.
+                        anchors:
+                          - anchor_id: ticket_to_user
+                            anchor_type: relationship
+                            relationship_name: ticket_to_user
+                            from_schema: zendesk
+                            from_table: ticket
+                            from_columns: [assignee_id]
+                            to_schema: zendesk
+                            to_table: user
+                            to_columns: [id]
+                    """
+                )
+            )
+
+            _, anchors = memory.load_memory_file(path)
+
+        self.assertEqual(
+            anchors,
+            [
+                (
+                    "ticket_assignee_join",
+                    "ticket_to_user",
+                    "relationship",
+                    None,  # schema_name
+                    None,  # table_name
+                    None,  # column_name
+                    None,  # metric_id
+                    "ticket_to_user",
+                    "zendesk",
+                    "ticket",
+                    ["assignee_id"],
+                    "zendesk",
+                    "user",
+                    ["id"],
+                )
+            ],
+        )
+
     def test_load_memory_file_rejects_wrong_content_type(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "memory.yml"
@@ -130,7 +218,7 @@ class MemoryTests(unittest.TestCase):
                         title: Stripe amounts
                         content: Divide Stripe amount columns by 100 for dollars.
                         source: memories.yaml
-                        confidence: high
+                        confidence: 0.9
                         anchors:
                           - anchor_id: invoice_amount_due
                             anchor_type: column
@@ -152,7 +240,7 @@ class MemoryTests(unittest.TestCase):
                     "Stripe amounts",
                     "Divide Stripe amount columns by 100 for dollars.",
                     "memories.yaml",
-                    "high",
+                    0.9,
                 )
             ],
         )
@@ -163,11 +251,17 @@ class MemoryTests(unittest.TestCase):
                     "stripe_amounts_are_cents",
                     "invoice_amount_due",
                     "column",
-                    "stripe",
-                    "invoice",
-                    "amount_due",
-                    None,
-                    None,
+                    "stripe",  # schema_name
+                    "invoice",  # table_name
+                    "amount_due",  # column_name
+                    None,  # metric_id
+                    None,  # relationship_name
+                    None,  # from_schema
+                    None,  # from_table
+                    None,  # from_columns
+                    None,  # to_schema
+                    None,  # to_table
+                    None,  # to_columns
                 )
             ],
         )
@@ -184,11 +278,14 @@ class MemoryTests(unittest.TestCase):
                         memory_kind: join_rule
                         content: Join ticket.assignee_id to user.id.
                         anchors:
-                          - anchor_id: ticket_assignee_id
+                          - anchor_id: ticket_to_user
                             anchor_type: relationship
-                            schema_name: zendesk
-                            table_name: ticket
-                            column_name: assignee_id
+                            from_schema: zendesk
+                            from_table: ticket
+                            from_columns: [assignee_id]
+                            to_schema: zendesk
+                            to_table: user
+                            to_columns: [id]
                     """
                 )
             )
