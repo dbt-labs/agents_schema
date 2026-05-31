@@ -36,6 +36,15 @@ ROOT_ENTRIES = {
         ("metric", "One row per OSI metric. See AGENTS.OSI_METRIC."),
         ("relationship", "One row per OSI relationship. See AGENTS.OSI_RELATIONSHIP."),
     ),
+    "memory": (
+        (
+            "overview",
+            "# Memory\nDurable semantic memories for agents: query rules, join caveats, units, "
+            "status meanings, and project-specific data guidance.",
+        ),
+        ("memory", "One row per durable semantic memory. See AGENTS.MEMORY."),
+        ("memory_anchor", "One row per retrieval anchor for a memory. See AGENTS.MEMORY_ANCHOR."),
+    ),
 }
 
 

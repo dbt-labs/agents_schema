@@ -284,6 +284,8 @@ def _type_sql(kind: str) -> str:
         return "BOOLEAN"
     if kind == "text":
         return "TEXT"
+    if kind == "timestamp":
+        return "TIMESTAMP"
     if kind == "varchar":
         return "VARCHAR"
     raise ValueError(f"unsupported column kind: {kind}")

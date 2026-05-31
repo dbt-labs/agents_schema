@@ -32,6 +32,14 @@ class RootTests(unittest.TestCase):
         _, rows = dest.upserts[0]
         self.assertEqual({row[1] for row in rows}, {"overview", "dataset", "field", "metric", "relationship"})
 
+    def test_upsert_provider_root_has_memory_entries(self):
+        dest = FakeDestination()
+
+        upsert_provider_root(dest, "memory")
+
+        _, rows = dest.upserts[0]
+        self.assertEqual({row[1] for row in rows}, {"overview", "memory", "memory_anchor"})
+
 
 if __name__ == "__main__":
     unittest.main()

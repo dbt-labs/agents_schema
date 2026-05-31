@@ -1,6 +1,6 @@
 import unittest
 
-from agents_schema.destinations import _create_table_if_not_exists_sql, _merge_sql
+from agents_schema.destinations import Column, TableSchema, _create_table_if_not_exists_sql, _merge_sql
 from agents_schema.root import ROOT
 
 
@@ -34,6 +34,13 @@ class DestinationSqlTests(unittest.TestCase):
             "VALUES (source.provider, source.key, source.content)",
             sql,
         )
+
+    def test_create_table_supports_timestamp_columns(self):
+        table = TableSchema("agents.example", (Column("created_at", "timestamp"),))
+
+        sql = _create_table_if_not_exists_sql(table, "agents")
+
+        self.assertIn("created_at TIMESTAMP", sql)
 
 
 if __name__ == "__main__":

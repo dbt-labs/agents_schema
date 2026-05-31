@@ -43,7 +43,7 @@ available before writing or explaining queries.
 
 ## Getting Started
 
-There are three supported metadata sources. Pick one to get started quickly.
+There are several supported source types. Pick one to get started quickly.
 
 ### Prerequisites
 
@@ -153,6 +153,7 @@ The GitHub Actions call the CLI with explicit source arguments:
 agents-schema dbt --project-dir dbt_project
 agents-schema looker --lookml-dir lookml
 agents-schema osi --osi-dir osi
+agents-schema memory --memory-file memory.yml
 ```
 
 The CLI reads warehouse credentials from `WAREHOUSE_CREDENTIALS`.

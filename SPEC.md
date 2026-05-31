@@ -20,6 +20,7 @@ The implementation writes unquoted identifiers, so Snowflake stores table and co
 | `text` | `TEXT` | Longer free-form text. |
 | `boolean` | `BOOLEAN` | Boolean values. |
 | `array` | `VARIANT` | Inserted as JSON via `PARSE_JSON`. |
+| `timestamp` | `TIMESTAMP` | Timestamp values accepted by the warehouse. |
 
 ---
 
@@ -79,8 +80,125 @@ The current package delivers one table family per metadata source:
 | dbt | `AGENTS.DBT_MODEL`, `AGENTS.DBT_COLUMN`, `AGENTS.DBT_DEPENDENCY` |
 | LookML | `AGENTS.LOOKML_VIEW`, `AGENTS.LOOKML_DIMENSION`, `AGENTS.LOOKML_MEASURE`, `AGENTS.LOOKML_EXPLORE` |
 | OSI | `AGENTS.OSI_DATASET`, `AGENTS.OSI_FIELD`, `AGENTS.OSI_METRIC`, `AGENTS.OSI_RELATIONSHIP` |
+| Memory | `AGENTS.MEMORY`, `AGENTS.MEMORY_ANCHOR` |
 
 Each ingestion replaces its own table family with `CREATE OR REPLACE TABLE` and then inserts the rows parsed from the source metadata.
+
+---
+
+## Source: Memory
+
+The memory ingestion reads a YAML file of durable semantic memories and writes anchored records that agents can retrieve near relevant schema context. Memories are intended for query rules, join caveats, unit conversions, status meanings, grain warnings, and other project-specific guidance that should survive beyond a single agent session.
+
+Memory can also summarize other providers. A process can scan richer provider tables such as LookML, dbt, OSI, catalog metadata, query history, or reviewed agent discoveries, then publish the compact facts worth carrying forward as memories with provenance back to the source material.
+
+### YAML shape
+
+The CLI accepts this canonical list form:
+
+```yaml
+memories:
+  - memory_id: stripe_amounts_are_cents
+    memory_kind: unit_rule
+    title: Stripe amounts
+    content: Stripe amount columns are stored in cents; divide by 100 for dollar measures.
+    source: memories.yaml
+    confidence: high
+    anchors:
+      - anchor_id: invoice_amount_due
+        anchor_type: column
+        schema_name: stripe
+        table_name: invoice
+        column_name: amount_due
+```
+
+Tools may keep their own project memory file and import it into this canonical
+shape. For example, a Dataface project could keep a compact `memories.yaml`
+that is optimized for authors:
+
+```yaml
+memories:
+  stripe_amounts_are_cents:
+    kind: unit_rule
+    content: Stripe amount columns are stored in cents; divide by 100 for dollar measures.
+    applies_to:
+      columns:
+        - stripe.invoice.amount_due
+        - stripe.charge.amount
+      metrics:
+        - revenue
+```
+
+That file is not a second Agents Schema standard. It is an authoring shape a
+tool can map into the canonical rows: the memory key becomes `memory_id`, `kind`
+becomes `memory_kind`, `content` maps directly, and each `applies_to` entry
+becomes a row in `AGENTS.MEMORY_ANCHOR`.
+
+### Schema graph
+
+```mermaid
+graph TD
+  ROOT["AGENTS.ROOT<br/>provider = memory"] --> MEMORY["AGENTS.MEMORY<br/>memory_id"]
+  MEMORY --> ANCHOR["AGENTS.MEMORY_ANCHOR<br/>memory_id, anchor_id"]
+  ANCHOR --> LOCATORS["Anchor locator columns<br/>schema_name/table_name/column_name<br/>relationship_name/metric_id"]
+```
+
+### `AGENTS.MEMORY`
+
+One row per durable semantic memory.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.MEMORY (
+  memory_id   VARCHAR NOT NULL,
+  memory_kind VARCHAR NOT NULL,
+  title       VARCHAR,
+  content     TEXT NOT NULL,
+  source      VARCHAR,
+  confidence  VARCHAR,
+  PRIMARY KEY (memory_id)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `memory_id` | Stable identifier unique within `AGENTS.MEMORY`. |
+| `memory_kind` | Tool-defined kind, such as `unit_rule`, `join_rule`, or `grain_warning`. |
+| `title` | Optional short human-readable title for prompt rendering and review. |
+| `content` | Durable guidance, caveat, or context the agent should remember. |
+| `source` | Optional source reference, such as a file path, URL, provider object id, or import job label. |
+| `confidence` | Optional tool-defined confidence label. |
+
+### `AGENTS.MEMORY_ANCHOR`
+
+One row per retrieval anchor for a memory.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.MEMORY_ANCHOR (
+  memory_id         VARCHAR NOT NULL,
+  anchor_id         VARCHAR NOT NULL,
+  anchor_type       VARCHAR NOT NULL,
+  schema_name       VARCHAR,
+  table_name        VARCHAR,
+  column_name       VARCHAR,
+  relationship_name VARCHAR,
+  metric_id         VARCHAR,
+  PRIMARY KEY (
+    memory_id,
+    anchor_id
+  )
+);
+```
+
+| Column | Source field |
+|---|---|
+| `memory_id` | Copied from the parent memory. |
+| `anchor_id` | Memory-unique stable identifier for the anchor. |
+| `anchor_type` | Retrieval scope: `column`, `table`, `relationship`, or `metric`. |
+| `schema_name` | Schema name when known. |
+| `table_name` | Table-like object name when known. |
+| `column_name` | Column-like object name when known. |
+| `relationship_name` | Relationship identifier when known. |
+| `metric_id` | Metric identifier when known. |
 
 ---
 

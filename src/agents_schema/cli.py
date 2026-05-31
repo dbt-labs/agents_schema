@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import __version__, dbt, lookml, osi
+from . import __version__, dbt, lookml, memory, osi
 from .config import ConfigError
 from .dbt_profiles import dbt_adapter_package_from_profiles_file
 from .destinations import warehouse_type_from_env
@@ -64,6 +64,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="path to a directory containing *.osi.yaml files",
     )
 
+    memory_parser = sub.add_parser(
+        "memory",
+        help="ingest durable agent memories from YAML into AGENTS.MEMORY_*",
+    )
+    memory_parser.add_argument(
+        "--memory-file",
+        required=True,
+        type=Path,
+        help="path to a YAML file containing durable agent memories",
+    )
+
     return parser
 
 
@@ -76,6 +87,8 @@ def main(argv: list[str] | None = None) -> int:
             lookml.run(_config("looker", args.lookml_dir))
         elif args.source_type == "osi":
             osi.run(_config("osi", args.osi_dir))
+        elif args.source_type == "memory":
+            memory.run(_config("memory", args.memory_file))
         else:
             raise ConfigError(f"unsupported source type: {args.source_type}")
     except (ConfigError, FileNotFoundError) as e:
