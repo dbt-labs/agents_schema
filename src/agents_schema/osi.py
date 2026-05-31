@@ -10,6 +10,7 @@ import yaml
 
 from .destinations import Column, Destination, TableSchema, open_destination
 from .root import upsert_provider_root
+from .views import create_context_views
 
 __all__ = ["run"]
 
@@ -67,6 +68,7 @@ def run(cfg: dict) -> None:
         upsert_provider_root(dest, "osi")
         _create_tables(dest)
         _ingest(dest, models)
+        create_context_views(dest)
 
 
 def _load_osi_files(osi_dir: Path) -> list[dict]:

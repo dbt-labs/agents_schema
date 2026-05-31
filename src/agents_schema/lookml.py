@@ -8,6 +8,7 @@ from typing import Any, Iterable
 
 from .destinations import Column, Destination, TableSchema, open_destination
 from .root import upsert_provider_root
+from .views import create_context_views
 
 __all__ = ["run"]
 
@@ -86,6 +87,7 @@ def run(cfg: dict) -> None:
         upsert_provider_root(dest, "lookml")
         _create_tables(dest)
         _ingest(dest, files, lookml_dir)
+        create_context_views(dest)
 
 
 def _load_lookml_files(lookml_dir: Path) -> list[Path]:

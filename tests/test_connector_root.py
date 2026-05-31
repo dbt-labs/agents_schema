@@ -8,6 +8,16 @@ class FakeDestination:
     def __init__(self):
         self.calls = []
 
+    def existing_table_names(self):
+        return {
+            call[1].removeprefix("agents.")
+            for call in self.calls
+            if call[0] == "replace"
+        }
+
+    def replace_view(self, name, sql):
+        self.calls.append(("view", name, sql))
+
     def upsert_rows(self, table, rows):
         self.calls.append(("upsert", table.name, list(rows)))
 
@@ -44,6 +54,9 @@ class ConnectorRootTests(unittest.TestCase):
         self.assertEqual(dest.calls[0][0], "upsert")
         self.assertEqual({row[0] for row in dest.calls[0][2]}, {"dbt"})
         self.assertEqual([call[0] for call in dest.calls[1:4]], ["replace", "replace", "replace"])
+        self.assertEqual(dest.calls[4][0], "upsert")
+        self.assertEqual({row[0] for row in dest.calls[4][2]}, {"core"})
+        self.assertEqual([call[0] for call in dest.calls[5:10]], ["view", "view", "view", "view", "view"])
 
     def test_lookml_run_upserts_root_before_source_tables(self):
         dest = FakeDestination()
@@ -59,6 +72,9 @@ class ConnectorRootTests(unittest.TestCase):
         self.assertEqual(dest.calls[0][0], "upsert")
         self.assertEqual({row[0] for row in dest.calls[0][2]}, {"lookml"})
         self.assertEqual([call[0] for call in dest.calls[1:5]], ["replace", "replace", "replace", "replace"])
+        self.assertEqual(dest.calls[5][0], "upsert")
+        self.assertEqual({row[0] for row in dest.calls[5][2]}, {"core"})
+        self.assertEqual([call[0] for call in dest.calls[6:11]], ["view", "view", "view", "view", "view"])
 
     def test_osi_run_upserts_root_before_source_tables(self):
         dest = FakeDestination()
@@ -74,6 +90,9 @@ class ConnectorRootTests(unittest.TestCase):
         self.assertEqual(dest.calls[0][0], "upsert")
         self.assertEqual({row[0] for row in dest.calls[0][2]}, {"osi"})
         self.assertEqual([call[0] for call in dest.calls[1:5]], ["replace", "replace", "replace", "replace"])
+        self.assertEqual(dest.calls[5][0], "upsert")
+        self.assertEqual({row[0] for row in dest.calls[5][2]}, {"core"})
+        self.assertEqual([call[0] for call in dest.calls[6:11]], ["view", "view", "view", "view", "view"])
 
 
 if __name__ == "__main__":

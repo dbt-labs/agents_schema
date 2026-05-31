@@ -37,6 +37,8 @@ class TableSchema:
 
 class Destination(Protocol):
     def replace_table(self, table: TableSchema) -> None: ...
+    def replace_view(self, name: str, sql: str) -> None: ...
+    def existing_table_names(self) -> set[str]: ...
     def upsert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None: ...
     def insert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None: ...
     def close(self) -> None: ...
@@ -64,6 +66,22 @@ class SnowflakeDestination:
         with self._con.cursor() as cur:
             cur.execute(f"CREATE SCHEMA IF NOT EXISTS {self._agents_schema}")
             cur.execute(_create_table_sql(table, self._agents_schema))
+
+    def replace_view(self, name: str, sql: str) -> None:
+        with self._con.cursor() as cur:
+            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {self._agents_schema}")
+            cur.execute(_create_view_sql(name, sql, self._agents_schema))
+
+    def existing_table_names(self) -> set[str]:
+        with self._con.cursor() as cur:
+            cur.execute(
+                "SELECT LOWER(table_name) "
+                "FROM information_schema.tables "
+                "WHERE table_schema = UPPER(%s) "
+                "AND table_type = 'BASE TABLE'",
+                (self._agents_schema,),
+            )
+            return {str(row[0]) for row in cur.fetchall()}
 
     def upsert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None:
         bind_rows = _bind_rows(table, rows)
@@ -248,6 +266,10 @@ def _create_table_sql(table: TableSchema, schema: str) -> str:
 
 def _create_table_if_not_exists_sql(table: TableSchema, schema: str) -> str:
     return _create_table_statement_sql("CREATE TABLE IF NOT EXISTS", table, schema)
+
+
+def _create_view_sql(name: str, sql: str, schema: str) -> str:
+    return f"CREATE OR REPLACE VIEW {schema}.{_identifier(name)} AS\n{sql}"
 
 
 def _create_table_statement_sql(prefix: str, table: TableSchema, schema: str) -> str:

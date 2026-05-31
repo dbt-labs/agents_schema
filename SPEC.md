@@ -82,6 +82,116 @@ The current package delivers one table family per metadata source:
 
 Each ingestion replaces its own table family with `CREATE OR REPLACE TABLE` and then inserts the rows parsed from the source metadata.
 
+Each ingestion also refreshes provider-normalized views and generic context views over whichever provider tables currently exist. These views are intended to be familiar drop-in starting points for agents that would otherwise reach for `INFORMATION_SCHEMA.TABLES` or `INFORMATION_SCHEMA.COLUMNS`, while preserving source-provider references for deeper inspection.
+
+The generic views are documented in `AGENTS.ROOT` under the `core` provider.
+
+| View | Purpose |
+|---|---|
+| `AGENTS.TABLES` | `INFORMATION_SCHEMA.TABLES` enriched with matching provider table context. |
+| `AGENTS.COLUMNS` | Column/field-like analytical objects from provider tables. |
+| `AGENTS.RELATIONSHIPS` | Lineage and semantic relationship edges from provider tables. |
+| `AGENTS.METRICS` | Metric/measure-like semantic objects from provider tables. |
+| `AGENTS.ENTITIES` | Reserved entity-oriented view; empty until a provider contributes entity metadata. |
+
+---
+
+## Generic Context Views
+
+The generic views are compatibility-oriented: the leading columns mirror common information-schema concepts where possible, and later columns add provider-derived context that has cross-provider meaning. Provider-normalized views are staging inputs, not new sources of truth.
+
+Provider-owned normalized views feed the generic views:
+
+| Generic view | Provider-normalized inputs |
+|---|---|
+| `AGENTS.TABLES` | `INFORMATION_SCHEMA.TABLES` left joined to `AGENTS.DBT_TABLES`, `AGENTS.LOOKML_TABLES`, `AGENTS.OSI_TABLES` |
+| `AGENTS.COLUMNS` | `AGENTS.DBT_COLUMNS`, `AGENTS.LOOKML_COLUMNS`, `AGENTS.OSI_COLUMNS` |
+| `AGENTS.RELATIONSHIPS` | `AGENTS.DBT_RELATIONSHIPS`, `AGENTS.OSI_RELATIONSHIPS` |
+| `AGENTS.METRICS` | `AGENTS.LOOKML_METRICS`, `AGENTS.OSI_METRICS` |
+
+A provider participates in `AGENTS.TABLES` by publishing a matching provider-normalized `*_TABLES` view. `AGENTS.TABLES` uses `INFORMATION_SCHEMA.TABLES` as its row spine and left joins every provider-normalized table view by `table_catalog`, `table_schema`, and `table_name`. Provider-specific detail stays in source tables such as `AGENTS.LOOKML_DIMENSION`; the merged view exposes provider-prefixed context columns for the common fields worth carrying forward.
+
+### `AGENTS.TABLES`
+
+```sql
+CREATE OR REPLACE VIEW AGENTS.TABLES AS ...
+```
+
+| Column | Description |
+|---|---|
+| `table_catalog` through `comment` | Native columns from Snowflake `INFORMATION_SCHEMA.TABLES`. |
+| `<provider>_display_name` | Provider label for the matched table, such as `dbt_display_name`. |
+| `<provider>_description` | Provider description for the matched table. |
+| `<provider>_ai_context` | Provider AI context for the matched table. |
+| `<provider>_source_object_id` | Provider-specific object identifier. |
+| `<provider>_source_path` | Source file path when available. |
+| `<provider>_materialization` | Provider materialization when available. |
+| `<provider>_tags` | Provider tags when available. |
+| `memories_count` | Sum of provider memory counts; reserved for memory-provider integration. |
+| `warnings_count` | Sum of provider warning counts; reserved for memory-provider integration. |
+
+### `AGENTS.COLUMNS`
+
+| Column | Description |
+|---|---|
+| `table_catalog` | Catalog/database name when known. |
+| `table_schema` | Schema name when known. |
+| `table_name` | Parent table-like object name. |
+| `column_name` | Column/field-like object name. |
+| `ordinal_position` | Ordinal position when known. |
+| `data_type` | Provider data type when known. |
+| `is_nullable` | Nullability when known. |
+| `display_name` | Human-facing label when available. |
+| `description` | Provider description. |
+| `ai_context` | Provider AI context when available. |
+| `semantic_type` | Provider semantic field kind when available. |
+| `is_time_dimension` | Whether the field is marked as time-like. |
+| `expression` | Provider expression or SQL when available. |
+| `source_provider` | Provider that contributed the row. |
+| `source_object_id` | Provider-specific object identifier. |
+| `memories_count` | Reserved for memory-provider integration. |
+| `warnings_count` | Reserved for memory-provider integration. |
+
+### `AGENTS.RELATIONSHIPS`
+
+| Column | Description |
+|---|---|
+| `relationship_name` | Relationship or lineage edge name. |
+| `from_catalog` | Source catalog/database when known. |
+| `from_schema` | Source schema when known. |
+| `from_table` | Source table/object. |
+| `from_column` | Source column(s) when known. |
+| `to_catalog` | Destination catalog/database when known. |
+| `to_schema` | Destination schema when known. |
+| `to_table` | Destination table/object. |
+| `to_column` | Destination column(s) when known. |
+| `relationship_type` | Relationship type, such as `lineage` or `semantic_relationship`. |
+| `multiplicity` | Multiplicity when known. |
+| `source_provider` | Provider that contributed the row. |
+| `source_object_id` | Provider-specific object identifier. |
+| `memories_count` | Reserved for memory-provider integration. |
+| `warnings_count` | Reserved for memory-provider integration. |
+
+### `AGENTS.METRICS`
+
+| Column | Description |
+|---|---|
+| `metric_name` | Metric or measure name. |
+| `display_name` | Human-facing label when available. |
+| `description` | Provider description. |
+| `ai_context` | Provider AI context when available. |
+| `expression` | Metric expression or SQL when available. |
+| `source_provider` | Provider that contributed the row. |
+| `source_object_id` | Provider-specific object identifier. |
+| `dataset_name` | Parent dataset when available. |
+| `view_name` | Parent LookML view when available. |
+| `memories_count` | Reserved for memory-provider integration. |
+| `warnings_count` | Reserved for memory-provider integration. |
+
+### `AGENTS.ENTITIES`
+
+`AGENTS.ENTITIES` is currently an empty typed view reserved for providers that contribute canonical entity metadata in a future release.
+
 ---
 
 ## Source: dbt
@@ -446,6 +556,12 @@ The current source provider names are:
 | `lookml` | `AGENTS.LOOKML_*` |
 | `osi` | `AGENTS.OSI_*` |
 
+The current core provider name is:
+
+| Provider | Objects |
+|---|---|
+| `core` | `AGENTS.ROOT`, `AGENTS.TABLES`, `AGENTS.COLUMNS`, `AGENTS.RELATIONSHIPS`, `AGENTS.METRICS`, `AGENTS.ENTITIES` |
+
 ---
 
 ## Summary of Current Tables
@@ -453,6 +569,11 @@ The current source provider names are:
 | Table | Source | Purpose |
 |---|---|---|
 | `AGENTS.ROOT` | core | Provider registry upserted by dbt, LookML, and OSI workflows |
+| `AGENTS.TABLES` | core | Generic table/object context view |
+| `AGENTS.COLUMNS` | core | Generic column/field context view |
+| `AGENTS.RELATIONSHIPS` | core | Generic relationship and lineage context view |
+| `AGENTS.METRICS` | core | Generic metric and measure context view |
+| `AGENTS.ENTITIES` | core | Reserved generic entity context view |
 | `AGENTS.DBT_MODEL` | dbt | dbt models with schema, materialization, documentation, path, and tags |
 | `AGENTS.DBT_COLUMN` | dbt | Documented dbt model columns |
 | `AGENTS.DBT_DEPENDENCY` | dbt | Direct dbt dependency edges |

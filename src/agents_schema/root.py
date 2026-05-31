@@ -16,11 +16,23 @@ ROOT = TableSchema(
 )
 
 ROOT_ENTRIES = {
+    "core": (
+        ("overview", "# Core\nShared Agents Schema registry and generic context views."),
+        ("root", "Provider registry. See AGENTS.ROOT."),
+        ("tables", "Information-schema-like table/object context view enriched from provider *_TABLES views."),
+        ("columns", "Information-schema-like column/field context view unioned from provider *_COLUMNS views."),
+        ("relationships", "Relationship and lineage context view unioned from provider *_RELATIONSHIPS views."),
+        ("metrics", "Metric and measure context view unioned from provider *_METRICS views."),
+        ("entities", "Entity context view. Reserved until a provider contributes entity metadata. See AGENTS.ENTITIES."),
+    ),
     "dbt": (
         ("overview", "# dbt\nTransformation metadata from dbt manifest.json."),
         ("model", "One row per dbt model. See AGENTS.DBT_MODEL."),
         ("column", "One row per documented dbt model column. See AGENTS.DBT_COLUMN."),
         ("dependency", "Direct dbt DAG edges. See AGENTS.DBT_DEPENDENCY."),
+        ("tables", "Provider-normalized table context view. See AGENTS.DBT_TABLES."),
+        ("columns", "Provider-normalized column context view. See AGENTS.DBT_COLUMNS."),
+        ("relationships", "Provider-normalized relationship context view. See AGENTS.DBT_RELATIONSHIPS."),
     ),
     "lookml": (
         ("overview", "# LookML\nSemantic metadata parsed from LookML files."),
@@ -28,6 +40,9 @@ ROOT_ENTRIES = {
         ("dimension", "One row per LookML dimension or dimension group. See AGENTS.LOOKML_DIMENSION."),
         ("measure", "One row per LookML measure. See AGENTS.LOOKML_MEASURE."),
         ("explore", "One row per LookML explore. See AGENTS.LOOKML_EXPLORE."),
+        ("tables", "Provider-normalized table context view. See AGENTS.LOOKML_TABLES."),
+        ("columns", "Provider-normalized column context view. See AGENTS.LOOKML_COLUMNS."),
+        ("metrics", "Provider-normalized metric context view. See AGENTS.LOOKML_METRICS."),
     ),
     "osi": (
         ("overview", "# OSI\nOpen Semantic Interchange metadata parsed from *.osi.yaml files."),
@@ -35,6 +50,10 @@ ROOT_ENTRIES = {
         ("field", "One row per OSI dataset field. See AGENTS.OSI_FIELD."),
         ("metric", "One row per OSI metric. See AGENTS.OSI_METRIC."),
         ("relationship", "One row per OSI relationship. See AGENTS.OSI_RELATIONSHIP."),
+        ("tables", "Provider-normalized table context view. See AGENTS.OSI_TABLES."),
+        ("columns", "Provider-normalized column context view. See AGENTS.OSI_COLUMNS."),
+        ("relationships", "Provider-normalized relationship context view. See AGENTS.OSI_RELATIONSHIPS."),
+        ("metrics", "Provider-normalized metric context view. See AGENTS.OSI_METRICS."),
     ),
 }
 

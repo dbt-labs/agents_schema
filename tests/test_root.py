@@ -22,7 +22,10 @@ class RootTests(unittest.TestCase):
         self.assertIs(table, ROOT)
         self.assertTrue(rows)
         self.assertEqual({row[0] for row in rows}, {"dbt"})
-        self.assertEqual({row[1] for row in rows}, {"overview", "model", "column", "dependency"})
+        self.assertEqual(
+            {row[1] for row in rows},
+            {"overview", "model", "column", "dependency", "tables", "columns", "relationships"},
+        )
 
     def test_upsert_provider_root_has_osi_entries(self):
         dest = FakeDestination()
@@ -30,7 +33,21 @@ class RootTests(unittest.TestCase):
         upsert_provider_root(dest, "osi")
 
         _, rows = dest.upserts[0]
-        self.assertEqual({row[1] for row in rows}, {"overview", "dataset", "field", "metric", "relationship"})
+        self.assertEqual(
+            {row[1] for row in rows},
+            {"overview", "dataset", "field", "metric", "relationship", "tables", "columns", "relationships", "metrics"},
+        )
+
+    def test_upsert_provider_root_has_core_view_entries(self):
+        dest = FakeDestination()
+
+        upsert_provider_root(dest, "core")
+
+        _, rows = dest.upserts[0]
+        self.assertEqual(
+            {row[1] for row in rows},
+            {"overview", "root", "tables", "columns", "relationships", "metrics", "entities"},
+        )
 
 
 if __name__ == "__main__":

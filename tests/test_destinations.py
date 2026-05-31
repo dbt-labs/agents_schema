@@ -1,6 +1,6 @@
 import unittest
 
-from agents_schema.destinations import _create_table_if_not_exists_sql, _merge_sql
+from agents_schema.destinations import _create_table_if_not_exists_sql, _create_view_sql, _merge_sql
 from agents_schema.root import ROOT
 
 
@@ -34,6 +34,11 @@ class DestinationSqlTests(unittest.TestCase):
             "VALUES (source.provider, source.key, source.content)",
             sql,
         )
+
+    def test_create_view_sql_validates_view_name_and_wraps_query(self):
+        sql = _create_view_sql("tables", "SELECT 1 AS value", "agents")
+
+        self.assertEqual(sql, "CREATE OR REPLACE VIEW agents.tables AS\nSELECT 1 AS value")
 
 
 if __name__ == "__main__":
