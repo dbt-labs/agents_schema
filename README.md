@@ -128,8 +128,13 @@ Agents Schema is the shared, queryable metadata surface for consumers that start
 from the warehouse and need context about data that already exists there.
 
 It is closest in spirit to `information_schema`, but extensible across many
-providers. Compared with MCP servers, Agents Schema is narrower: it publishes
-context inside the warehouse, while MCP servers can expose tools, actions, and
+providers. In fact `AGENTS.TABLES` and `AGENTS.COLUMNS` are drop-in enriched
+versions of `INFORMATION_SCHEMA.TABLES`/`COLUMNS`: the native columns plus
+provider-prefixed context (`dbt_description`, `lookml_ai_context`, …). Because
+`INFORMATION_SCHEMA` is per-database, these views cover the database that holds
+the `AGENTS` schema — point the workflows at the database your data lives in.
+Compared with MCP servers, Agents Schema is narrower: it publishes context
+inside the warehouse, while MCP servers can expose tools, actions, and
 source-specific workflows.
 
 ### How it works

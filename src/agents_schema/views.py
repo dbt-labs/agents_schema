@@ -95,6 +95,9 @@ def _merge_view(
         for alias in (_provider_alias(name, suffix) for name in views)
     ]
     joins = "\n".join(_merge_join(name, _provider_alias(name, suffix), identity, merge_columns) for name in views)
+    # Every enrichment column is `<provider>_` prefixed, so `t.*` (the native
+    # spine columns) can never collide with appended columns. Keep that prefix
+    # if more enrichment is added later.
     enrichment = (",\n  " + ",\n  ".join(selects)) if selects else ""
     return f"SELECT\n  t.*{enrichment}\nFROM {spine} t\n{joins}"
 
@@ -121,6 +124,10 @@ def _merge_join(view_name: str, alias: str, identity: tuple[str, ...], merge_col
 
 
 def _merge_on(alias: str, column: str) -> str:
+    # Enrichment attaches by case-folded object name, not a guaranteed-unique
+    # key. A provider row with NULL table_catalog matches the spine in any
+    # catalog; since the spine is single-database, that is effectively
+    # schema+name (plus column) identity.
     if column == "table_catalog":
         return f"({alias}.{column} IS NULL OR LOWER(t.{column}) = LOWER({alias}.{column}))"
     return f"LOWER(t.{column}) = LOWER({alias}.{column})"
@@ -281,7 +288,7 @@ def _lookml_columns_sql(existing: set[str]) -> str:
   d.description,
   d.ai_context,
   d.field_kind AS semantic_type,
-  d.field_kind = 'dimension_group' AS is_time_dimension,
+  d.field_kind = 'dimension_group' AND COALESCE(d.type, 'time') = 'time' AS is_time_dimension,
   d.sql AS expression,
   'lookml' AS source_provider,
   d.view_name || '.' || d.field_name AS source_object_id

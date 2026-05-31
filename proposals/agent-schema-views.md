@@ -351,14 +351,22 @@ That layer should have tests that pin:
 
 The hard part is not defining view columns; it is merging provider records.
 
-Recommended first version:
+**v1 approach (implemented):** merge by object identity onto the native
+`INFORMATION_SCHEMA` spine, with each provider's columns appended under a
+`<provider>_` prefix. Providers therefore never collide — there is no
+cross-provider "which source wins" decision, because each keeps its own
+namespaced columns. Within a single provider, rows are aggregated to one row
+per identity before the join so duplicate provider rows cannot multiply native
+rows.
 
-- do not aggressively merge objects from different providers
-- emit one row per provider object
-- preserve `source_provider` and `source_object_id`
-- let agents decide which source to trust when duplicates exist
+The earlier sketch below considered the alternative of emitting one row per
+provider object (a union) and letting agents pick a source. v1 chose prefixed
+merge instead, since it preserves the one-row-per-object grain that makes the
+views information-schema-swappable. A coalesced single `description`/`ai_context`
+with a trust order remains a possible future option.
 
-Later versions can add canonicalization if Agents Schema gains stable warehouse object identifiers.
+- preserve `source_provider` and `<provider>_source_object_id` for drill-down
+- later versions can add canonicalization if Agents Schema gains stable warehouse object identifiers
 
 ## Resolved Decisions (v1)
 
