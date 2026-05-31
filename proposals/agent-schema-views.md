@@ -15,7 +15,17 @@ AGENTS.METRICS
 AGENTS.ENTITIES
 ```
 
-The goal is to make Agents Schema instantly swappable for common `INFORMATION_SCHEMA` exploration patterns while adding richer context. Anywhere an agent would normally ask `INFORMATION_SCHEMA.TABLES` or `INFORMATION_SCHEMA.COLUMNS`, it should be able to ask `AGENTS.TABLES` or `AGENTS.COLUMNS` instead and get the familiar shape plus dbt descriptions, LookML/OSI semantic metadata, memory counts, warnings, source provider references, and eventually profiling or usage context.
+The goal is to make Agents Schema instantly swappable for common `INFORMATION_SCHEMA` exploration patterns while adding richer context. Anywhere an agent would normally ask `INFORMATION_SCHEMA.TABLES` or `INFORMATION_SCHEMA.COLUMNS`, it should be able to ask `AGENTS.TABLES` or `AGENTS.COLUMNS` instead and get the familiar shape plus dbt descriptions, LookML/OSI semantic metadata, source provider references, and eventually profiling or usage context.
+
+## v1 Scope (Implemented)
+
+The shipped v1 is deliberately narrower than the full proposal below, which is retained as the longer-term design sketch.
+
+- **Only the surfaces `INFORMATION_SCHEMA` already has — `AGENTS.TABLES` and `AGENTS.COLUMNS`.** `RELATIONSHIPS`, `METRICS`, and `ENTITIES` are deferred. They are *new* object types that semantic providers like OSI already model in their own tables; adding generic versions now would make this a competing semantic model rather than an information-schema extension. The information-schema-faithful home for relationships is the `REFERENTIAL_CONSTRAINTS` / `KEY_COLUMN_USAGE` family, which is the intended future shape rather than a custom `AGENTS.RELATIONSHIPS` view.
+- **Native spine via `SELECT t.*`.** `AGENTS.TABLES`/`COLUMNS` select `t.*` from `INFORMATION_SCHEMA.TABLES`/`COLUMNS` and inherit whatever native columns the account exposes. No native column list is hardcoded.
+- **Generic identity merge.** Each provider's `*_TABLES`/`*_COLUMNS` view is left joined by object identity (catalog/schema/table, plus column for columns), with its enrichment columns appended under a `<provider>_` prefix. The set of providers is discovered, not hardcoded. Within a provider, rows are aggregated to one per identity to prevent fanout.
+- **No hardcoded memory counts.** Memory participation is purely additive: when a memory provider later publishes its own `*_TABLES`/`*_COLUMNS` view exposing counts, those columns appear automatically. The core views contain no memory-specific logic.
+- **Fail-soft.** View creation runs at the end of each provider ingestion but never fails the ingestion; a view error warns and is skipped.
 
 ## Motivation
 
@@ -350,10 +360,16 @@ Recommended first version:
 
 Later versions can add canonicalization if Agents Schema gains stable warehouse object identifiers.
 
+## Resolved Decisions (v1)
+
+- **Warehouse views, refreshed per ingestion** (fail-soft), not CLI-materialized tables.
+- **Native objects are the spine.** `TABLES`/`COLUMNS` start from `INFORMATION_SCHEMA` and enrich; they are not provider-only unions.
+- **Memory counts are omitted until the memory provider ships its own view.** No reserved-but-zero columns.
+- **Measures live in the deferred `METRICS` surface, not `COLUMNS`.** v1 columns are physical/field-like only.
+- **dbt, LookML, and OSI all participate in v1** (LookML/OSI `sql_table_name`/`source_table` are parsed into identity).
+
 ## Open Questions
 
-- Should views be materialized by the CLI or created as warehouse views?
-- Should the first implementation include only dbt/OSI and leave LookML table parsing out?
-- Should `TABLES`/`COLUMNS` include native warehouse objects, or only objects contributed by source providers?
-- Should memory counts require the memory provider, or should views omit those columns until memory ships?
-- Should `AGENTS.COLUMNS` include measures, or should measures live only in `AGENTS.METRICS`?
+- When relationships land, confirm the `REFERENTIAL_CONSTRAINTS` / `KEY_COLUMN_USAGE` shape over a custom view, including how unenforced/OSI relationships are represented when the native constraint views are empty.
+- Cross-database coverage: `INFORMATION_SCHEMA` is per-database, so `AGENTS.TABLES`/`COLUMNS` only cover the database holding `AGENTS`. Should multi-database deployments use `SNOWFLAKE.ACCOUNT_USAGE` (account-wide, latent) as an alternate spine?
+- Should provider enrichment be prefixed columns (current) or also offer a coalesced single `description`/`ai_context` with a trust order?
