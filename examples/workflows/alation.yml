@@ -1,0 +1,13 @@
+name: Agents Schema Alation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  agents-schema-alation:
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-alation.yml@v0.0.6
+    with:
+      metadata-path: metadata/alation-export.json
+    secrets: inherit

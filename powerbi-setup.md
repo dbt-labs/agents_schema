@@ -1,4 +1,4 @@
-# Looker Setup
+# Power BI Setup
 
 ## Prerequisites
 
@@ -31,12 +31,12 @@ private_key_passphrase: your-passphrase   # only if the key is encrypted
 - `role` is optional.
 - An unencrypted key uses `-----BEGIN PRIVATE KEY-----` / `-----END PRIVATE KEY-----` markers and omits `private_key_passphrase`.
 
-## Run the Looker Sync Workflow
+## Run the Power BI Sync Workflow
 
-Use the Looker workflow when the repository contains LookML files:
+Use the Power BI workflow when your repository contains a Fabric / Power BI scanner export.
 
 ```yaml
-name: Agents Schema Looker
+name: Agents Schema Power BI
 
 on:
   workflow_dispatch:
@@ -44,15 +44,28 @@ on:
     branches: [main]
 
 jobs:
-  agents-schema-looker:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.6
+  agents-schema-powerbi:
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-powerbi.yml@v0.0.6
     with:
-      lookml-dir: lookml
+      metadata-path: metadata/powerbi-scan.json
     secrets: inherit
 ```
 
-`lookml-dir` is required — set it to the directory that contains your `*.lkml`
-files. The example uses `lookml`; change it to match your repository.
+`metadata-path` is required; set it to a file or directory containing JSON or YAML export files from the Fabric / Power BI scanner APIs.
+The example uses `metadata/powerbi-scan.json`; change it to match your repository.
+
+The CLI accepts a single `.json`, `.yaml`, or `.yml` file, or a directory tree
+containing those files.
+
+The workflow writes:
+
+- `AGENTS.POWERBI_WORKSPACE`
+- `AGENTS.POWERBI_SEMANTIC_MODEL`
+- `AGENTS.POWERBI_TABLE`
+- `AGENTS.POWERBI_COLUMN`
+- `AGENTS.POWERBI_MEASURE`
+- `AGENTS.POWERBI_REPORT`
+- `AGENTS.POWERBI_LINEAGE`
 
 This job does not need to depend on other Agents Schema jobs unless your repository has its
 own ordering requirement.

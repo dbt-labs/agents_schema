@@ -1,4 +1,4 @@
-# Looker Setup
+# Cube Setup
 
 ## Prerequisites
 
@@ -31,12 +31,12 @@ private_key_passphrase: your-passphrase   # only if the key is encrypted
 - `role` is optional.
 - An unencrypted key uses `-----BEGIN PRIVATE KEY-----` / `-----END PRIVATE KEY-----` markers and omits `private_key_passphrase`.
 
-## Run the Looker Sync Workflow
+## Run the Cube Sync Workflow
 
-Use the Looker workflow when the repository contains LookML files:
+Use the Cube workflow when your repository contains Cube semantic metadata exports.
 
 ```yaml
-name: Agents Schema Looker
+name: Agents Schema Cube
 
 on:
   workflow_dispatch:
@@ -44,15 +44,26 @@ on:
     branches: [main]
 
 jobs:
-  agents-schema-looker:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.6
+  agents-schema-cube:
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-cube.yml@v0.0.6
     with:
-      lookml-dir: lookml
+      metadata-path: metadata/cube-meta.json
     secrets: inherit
 ```
 
-`lookml-dir` is required — set it to the directory that contains your `*.lkml`
-files. The example uses `lookml`; change it to match your repository.
+`metadata-path` is required; set it to a file or directory containing JSON or YAML exports from Cube /v1/meta or equivalent metadata output.
+The example uses `metadata/cube-meta.json`; change it to match your repository.
+
+The CLI accepts a single `.json`, `.yaml`, or `.yml` file, or a directory tree
+containing those files.
+
+The workflow writes:
+
+- `AGENTS.CUBE_CUBE`
+- `AGENTS.CUBE_MEASURE`
+- `AGENTS.CUBE_DIMENSION`
+- `AGENTS.CUBE_SEGMENT`
+- `AGENTS.CUBE_JOIN`
 
 This job does not need to depend on other Agents Schema jobs unless your repository has its
 own ordering requirement.

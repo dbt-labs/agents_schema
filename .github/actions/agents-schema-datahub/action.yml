@@ -1,0 +1,21 @@
+name: 'Agents Schema DataHub'
+description: >
+  Ingests DataHub metadata into AGENTS.DATAHUB_* tables.
+
+inputs:
+  metadata-path:
+    description: 'Path to a DataHub metadata export file or directory'
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: '3.12'
+
+    - name: Run DataHub ingestion
+      shell: bash
+      run: |
+        uvx --from "agents-schema==0.0.6" \
+          agents-schema datahub --metadata-path "${{ inputs.metadata-path }}"

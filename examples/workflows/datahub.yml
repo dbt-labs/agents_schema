@@ -1,0 +1,13 @@
+name: Agents Schema DataHub
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  agents-schema-datahub:
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-datahub.yml@v0.0.6
+    with:
+      metadata-path: metadata/datahub-export.json
+    secrets: inherit

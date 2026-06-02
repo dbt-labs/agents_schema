@@ -1,0 +1,27 @@
+name: Agents Schema Collibra
+
+on:
+  workflow_call:
+    inputs:
+      metadata-path:
+        description: 'Path to a Collibra API export file or directory'
+        type: string
+        required: true
+    secrets:
+      WAREHOUSE_CREDENTIALS:
+        required: true
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run Collibra ingestion
+        uses: fivetran/agents_schema/.github/actions/agents-schema-collibra@v0.0.6
+        with:
+          metadata-path: ${{ inputs.metadata-path }}
+        env:
+          WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}

@@ -1,4 +1,4 @@
-# Looker Setup
+# Tableau Setup
 
 ## Prerequisites
 
@@ -31,12 +31,12 @@ private_key_passphrase: your-passphrase   # only if the key is encrypted
 - `role` is optional.
 - An unencrypted key uses `-----BEGIN PRIVATE KEY-----` / `-----END PRIVATE KEY-----` markers and omits `private_key_passphrase`.
 
-## Run the Looker Sync Workflow
+## Run the Tableau Sync Workflow
 
-Use the Looker workflow when the repository contains LookML files:
+Use the Tableau workflow when your repository contains a Tableau Metadata API export.
 
 ```yaml
-name: Agents Schema Looker
+name: Agents Schema Tableau
 
 on:
   workflow_dispatch:
@@ -44,15 +44,26 @@ on:
     branches: [main]
 
 jobs:
-  agents-schema-looker:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.6
+  agents-schema-tableau:
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-tableau.yml@v0.0.6
     with:
-      lookml-dir: lookml
+      metadata-path: metadata/tableau-metadata.json
     secrets: inherit
 ```
 
-`lookml-dir` is required — set it to the directory that contains your `*.lkml`
-files. The example uses `lookml`; change it to match your repository.
+`metadata-path` is required; set it to a file or directory containing JSON or YAML export files from Tableau Metadata API queries.
+The example uses `metadata/tableau-metadata.json`; change it to match your repository.
+
+The CLI accepts a single `.json`, `.yaml`, or `.yml` file, or a directory tree
+containing those files.
+
+The workflow writes:
+
+- `AGENTS.TABLEAU_WORKBOOK`
+- `AGENTS.TABLEAU_DATASOURCE`
+- `AGENTS.TABLEAU_FIELD`
+- `AGENTS.TABLEAU_DASHBOARD`
+- `AGENTS.TABLEAU_LINEAGE`
 
 This job does not need to depend on other Agents Schema jobs unless your repository has its
 own ordering requirement.

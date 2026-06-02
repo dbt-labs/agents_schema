@@ -1,0 +1,21 @@
+name: 'Agents Schema Metabase'
+description: >
+  Ingests Metabase metadata into AGENTS.METABASE_* tables.
+
+inputs:
+  metadata-path:
+    description: 'Path to a Metabase API export file or directory'
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: '3.12'
+
+    - name: Run Metabase ingestion
+      shell: bash
+      run: |
+        uvx --from "agents-schema==0.0.6" \
+          agents-schema metabase --metadata-path "${{ inputs.metadata-path }}"

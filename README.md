@@ -19,7 +19,8 @@ repo already produces `target/manifest.json`, the workflow only needs the dbt
 project path and your warehouse credentials.
 
 After the first run, your warehouse has queryable metadata tables such as
-`AGENTS.DBT_MODEL`, `AGENTS.LOOKML_VIEW`, or `AGENTS.OSI_DATASET`. Agents can
+`AGENTS.DBT_MODEL`, `AGENTS.LOOKML_VIEW`, `AGENTS.OSI_DATASET`,
+`AGENTS.POWERBI_MEASURE`, or `AGENTS.DATAHUB_ENTITY`. Agents can
 use those tables to understand which models and semantic objects exist, how
 they are documented, how they relate to the warehouse, and what context is
 available before writing or explaining queries.
@@ -29,9 +30,7 @@ available before writing or explaining queries.
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
 - [Guides](#guides)
-  - [Sync dbt](#sync-dbt)
-  - [Sync Looker](#sync-looker)
-  - [Sync OSI](#sync-osi)
+  - [Supported Sources](#supported-sources)
   - [Sync Multiple Sources](#sync-multiple-sources)
 - [Query with an agent](#query-with-an-agent)
 - [Why Agents Schema](#why-agents-schema)
@@ -43,7 +42,7 @@ available before writing or explaining queries.
 
 ## Getting Started
 
-There are three first-class metadata sources with setup guides. Pick one to get started quickly.
+There are thirteen supported metadata sources with setup guides and reusable workflows. Pick one to get started quickly.
 
 ### Prerequisites
 
@@ -53,51 +52,34 @@ secret shape and the workflow YAML to copy.
 
 ## Guides
 
-### Sync dbt
+### Supported Sources
 
-Use [dbt Setup Guide](dbt-setup.md) when your repository contains a dbt project
-or an existing `target/manifest.json`.
+Each supported source has a setup guide, reusable GitHub workflow, composite
+action, example workflow, CLI command, and `AGENTS.ROOT` provider entries.
 
-### Sync Looker
-
-Use [Looker Setup Guide](looker-setup.md) when your repository contains LookML
-files.
-
-### Sync OSI
-
-Use [OSI Setup Guide](osi-setup.md) when your repository contains Open Semantic
-Interchange `*.osi.yaml` files.
+| Source | Setup guide | Example workflow | Use when you have |
+|---|---|---|---|
+| dbt | [dbt-setup.md](dbt-setup.md) | [dbt.yml](examples/workflows/dbt.yml) | dbt project or an existing `target/manifest.json` |
+| Looker | [looker-setup.md](looker-setup.md) | [looker.yml](examples/workflows/looker.yml) | LookML files |
+| OSI | [osi-setup.md](osi-setup.md) | [osi.yml](examples/workflows/osi.yml) | Open Semantic Interchange `*.osi.yaml` files |
+| Power BI | [powerbi-setup.md](powerbi-setup.md) | [powerbi.yml](examples/workflows/powerbi.yml) | Fabric / Power BI scanner metadata exports |
+| Tableau | [tableau-setup.md](tableau-setup.md) | [tableau.yml](examples/workflows/tableau.yml) | Tableau Metadata API exports |
+| dbt Semantic Layer | [dbt-semantic-setup.md](dbt-semantic-setup.md) | [dbt-semantic.yml](examples/workflows/dbt-semantic.yml) | dbt `semantic_manifest.json` files |
+| DataHub | [datahub-setup.md](datahub-setup.md) | [datahub.yml](examples/workflows/datahub.yml) | DataHub entity or search exports |
+| OpenMetadata | [openmetadata-setup.md](openmetadata-setup.md) | [openmetadata.yml](examples/workflows/openmetadata.yml) | OpenMetadata API exports |
+| Atlan | [atlan-setup.md](atlan-setup.md) | [atlan.yml](examples/workflows/atlan.yml) | Atlan asset exports |
+| Alation | [alation-setup.md](alation-setup.md) | [alation.yml](examples/workflows/alation.yml) | Alation API exports |
+| Collibra | [collibra-setup.md](collibra-setup.md) | [collibra.yml](examples/workflows/collibra.yml) | Collibra API exports |
+| Metabase | [metabase-setup.md](metabase-setup.md) | [metabase.yml](examples/workflows/metabase.yml) | Metabase API exports |
+| Cube | [cube-setup.md](cube-setup.md) | [cube.yml](examples/workflows/cube.yml) | Cube `/v1/meta` exports |
 
 ### Sync Multiple Sources
 
 Use the reusable workflows together when one repository contains multiple
 metadata sources. See [examples/workflows/dbt-looker.yml](examples/workflows/dbt-looker.yml)
 and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.yml).
-
-### Sync Additional Metadata Exports
-
-The CLI also supports local JSON/YAML metadata exports from common BI,
-semantic-layer, and catalog systems. These connectors are designed for scanner
-or API export files that can be checked out, generated in CI, or downloaded
-before running `agents-schema`.
-
-```bash
-agents-schema powerbi --metadata-path powerbi-scan.json
-agents-schema tableau --metadata-path tableau-metadata.json
-agents-schema dbt-semantic --semantic-manifest semantic_manifest.json
-agents-schema datahub --metadata-path datahub-export.json
-agents-schema openmetadata --metadata-path openmetadata-export.json
-agents-schema atlan --metadata-path atlan-assets.json
-agents-schema alation --metadata-path alation-export.json
-agents-schema collibra --metadata-path collibra-assets.json
-agents-schema metabase --metadata-path metabase-export.json
-agents-schema cube --metadata-path cube-meta.json
-```
-
-Each command accepts either a single export file or a directory containing
-`.json`, `.yaml`, or `.yml` files. The first versions of these connectors target
-offline exports rather than calling vendor APIs directly, so they can be tested
-locally and used in CI without storing SaaS API tokens in this package.
+You can combine any of the supported source workflows in the same way when your
+repository contains multiple metadata exports.
 
 ## Query with an agent
 
@@ -161,7 +143,7 @@ source-specific workflows.
 
 1. A workflow in your repository invokes one of this repo's workflows.
 2. The workflow checks out your repository and reads source metadata such as
-   dbt artifacts, LookML files, or OSI YAML files.
+   dbt artifacts, LookML files, OSI YAML files, or JSON/YAML metadata exports.
 3. The workflow runs the `agents-schema` CLI at the pinned release tag.
 4. The CLI writes normalized metadata into the warehouse under the `AGENTS`
    schema.

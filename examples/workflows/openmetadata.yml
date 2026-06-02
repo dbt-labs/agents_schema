@@ -1,0 +1,13 @@
+name: Agents Schema OpenMetadata
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  agents-schema-openmetadata:
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-openmetadata.yml@v0.0.6
+    with:
+      metadata-path: metadata/openmetadata-export.json
+    secrets: inherit

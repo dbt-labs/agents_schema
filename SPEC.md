@@ -27,7 +27,7 @@ The implementation writes unquoted identifiers, so Snowflake stores table and co
 
 `AGENTS.ROOT` is the intended provider registry for the Agents Schema. It gives generic consumers one place to discover which providers have published metadata and how to use their tables.
 
-The current dbt, LookML, and OSI ingestion workflows upsert their own provider rows into `AGENTS.ROOT` and write the source-specific tables documented below. Each workflow preserves `ROOT` rows from other providers.
+The current ingestion workflows upsert their own provider rows into `AGENTS.ROOT` and write the source-specific tables documented below. Each workflow preserves `ROOT` rows from other providers.
 
 ```sql
 CREATE TABLE AGENTS.ROOT (
@@ -443,7 +443,7 @@ Agents Schema tables can be populated in several ways:
 - **Scheduled workflows** that periodically refresh metadata from source systems or repositories
 - **Platform engineering jobs** that maintain custom provider tables for internal metadata, skills, query recipes, or operational context
 
-This repository currently provides source-specific GitHub reusable workflows for dbt, LookML, and OSI ingestion. Those workflows are one implementation path, not a requirement that all Agents Schema metadata be produced through GitHub Actions.
+This repository currently provides source-specific GitHub reusable workflows for every delivered source family listed above. Those workflows are one implementation path, not a requirement that all Agents Schema metadata be produced through GitHub Actions.
 
 Each source ingestion owns its table family and may replace those tables on each run. Consumers should treat these tables as generated metadata, not as hand-edited state.
 
@@ -478,7 +478,7 @@ The current source provider names are:
 
 | Table | Source | Purpose |
 |---|---|---|
-| `AGENTS.ROOT` | core | Provider registry upserted by dbt, LookML, and OSI workflows |
+| `AGENTS.ROOT` | core | Provider registry upserted by source ingestion workflows |
 | `AGENTS.DBT_MODEL` | dbt | dbt models with schema, materialization, documentation, path, and tags |
 | `AGENTS.DBT_COLUMN` | dbt | Documented dbt model columns |
 | `AGENTS.DBT_DEPENDENCY` | dbt | Direct dbt dependency edges |

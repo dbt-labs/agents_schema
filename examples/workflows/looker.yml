@@ -1,0 +1,13 @@
+name: Agents Schema Looker
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  agents-schema-looker:
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.6
+    with:
+      lookml-dir: lookml
+    secrets: inherit
