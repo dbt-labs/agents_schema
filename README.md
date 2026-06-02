@@ -43,7 +43,7 @@ available before writing or explaining queries.
 
 ## Getting Started
 
-There are three supported metadata sources. Pick one to get started quickly.
+There are three first-class metadata sources with setup guides. Pick one to get started quickly.
 
 ### Prerequisites
 
@@ -73,6 +73,31 @@ Interchange `*.osi.yaml` files.
 Use the reusable workflows together when one repository contains multiple
 metadata sources. See [examples/workflows/dbt-looker.yml](examples/workflows/dbt-looker.yml)
 and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.yml).
+
+### Sync Additional Metadata Exports
+
+The CLI also supports local JSON/YAML metadata exports from common BI,
+semantic-layer, and catalog systems. These connectors are designed for scanner
+or API export files that can be checked out, generated in CI, or downloaded
+before running `agents-schema`.
+
+```bash
+agents-schema powerbi --metadata-path powerbi-scan.json
+agents-schema tableau --metadata-path tableau-metadata.json
+agents-schema dbt-semantic --semantic-manifest semantic_manifest.json
+agents-schema datahub --metadata-path datahub-export.json
+agents-schema openmetadata --metadata-path openmetadata-export.json
+agents-schema atlan --metadata-path atlan-assets.json
+agents-schema alation --metadata-path alation-export.json
+agents-schema collibra --metadata-path collibra-assets.json
+agents-schema metabase --metadata-path metabase-export.json
+agents-schema cube --metadata-path cube-meta.json
+```
+
+Each command accepts either a single export file or a directory containing
+`.json`, `.yaml`, or `.yml` files. The first versions of these connectors target
+offline exports rather than calling vendor APIs directly, so they can be tested
+locally and used in CI without storing SaaS API tokens in this package.
 
 ## Query with an agent
 
@@ -153,6 +178,16 @@ The GitHub Actions call the CLI with explicit source arguments:
 agents-schema dbt --project-dir dbt_project
 agents-schema looker --lookml-dir lookml
 agents-schema osi --osi-dir osi
+agents-schema powerbi --metadata-path powerbi-scan.json
+agents-schema tableau --metadata-path tableau-metadata.json
+agents-schema dbt-semantic --semantic-manifest semantic_manifest.json
+agents-schema datahub --metadata-path datahub-export.json
+agents-schema openmetadata --metadata-path openmetadata-export.json
+agents-schema atlan --metadata-path atlan-assets.json
+agents-schema alation --metadata-path alation-export.json
+agents-schema collibra --metadata-path collibra-assets.json
+agents-schema metabase --metadata-path metabase-export.json
+agents-schema cube --metadata-path cube-meta.json
 ```
 
 The CLI reads warehouse credentials from `WAREHOUSE_CREDENTIALS`.

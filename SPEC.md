@@ -79,8 +79,24 @@ The current package delivers one table family per metadata source:
 | dbt | `AGENTS.DBT_MODEL`, `AGENTS.DBT_COLUMN`, `AGENTS.DBT_DEPENDENCY` |
 | LookML | `AGENTS.LOOKML_VIEW`, `AGENTS.LOOKML_DIMENSION`, `AGENTS.LOOKML_MEASURE`, `AGENTS.LOOKML_EXPLORE` |
 | OSI | `AGENTS.OSI_DATASET`, `AGENTS.OSI_FIELD`, `AGENTS.OSI_METRIC`, `AGENTS.OSI_RELATIONSHIP` |
+| Power BI | `AGENTS.POWERBI_WORKSPACE`, `AGENTS.POWERBI_SEMANTIC_MODEL`, `AGENTS.POWERBI_TABLE`, `AGENTS.POWERBI_COLUMN`, `AGENTS.POWERBI_MEASURE`, `AGENTS.POWERBI_REPORT`, `AGENTS.POWERBI_LINEAGE` |
+| Tableau | `AGENTS.TABLEAU_WORKBOOK`, `AGENTS.TABLEAU_DATASOURCE`, `AGENTS.TABLEAU_FIELD`, `AGENTS.TABLEAU_DASHBOARD`, `AGENTS.TABLEAU_LINEAGE` |
+| dbt Semantic Layer | `AGENTS.DBT_SEMANTIC_MODEL`, `AGENTS.DBT_SEMANTIC_ENTITY`, `AGENTS.DBT_SEMANTIC_DIMENSION`, `AGENTS.DBT_SEMANTIC_MEASURE`, `AGENTS.DBT_SEMANTIC_METRIC` |
+| DataHub | `AGENTS.DATAHUB_ENTITY`, `AGENTS.DATAHUB_FIELD`, `AGENTS.DATAHUB_OWNER`, `AGENTS.DATAHUB_LINEAGE` |
+| OpenMetadata | `AGENTS.OPENMETADATA_ENTITY`, `AGENTS.OPENMETADATA_FIELD`, `AGENTS.OPENMETADATA_LINEAGE` |
+| Atlan | `AGENTS.ATLAN_ASSET`, `AGENTS.ATLAN_FIELD`, `AGENTS.ATLAN_LINEAGE` |
+| Alation | `AGENTS.ALATION_DATA_SOURCE`, `AGENTS.ALATION_TABLE`, `AGENTS.ALATION_COLUMN`, `AGENTS.ALATION_GLOSSARY_TERM` |
+| Collibra | `AGENTS.COLLIBRA_ASSET`, `AGENTS.COLLIBRA_ATTRIBUTE`, `AGENTS.COLLIBRA_RELATION`, `AGENTS.COLLIBRA_RESPONSIBILITY` |
+| Metabase | `AGENTS.METABASE_DATABASE`, `AGENTS.METABASE_TABLE`, `AGENTS.METABASE_FIELD`, `AGENTS.METABASE_CARD`, `AGENTS.METABASE_DASHBOARD` |
+| Cube | `AGENTS.CUBE_CUBE`, `AGENTS.CUBE_MEASURE`, `AGENTS.CUBE_DIMENSION`, `AGENTS.CUBE_SEGMENT`, `AGENTS.CUBE_JOIN` |
 
 Each ingestion replaces its own table family with `CREATE OR REPLACE TABLE` and then inserts the rows parsed from the source metadata.
+
+The Power BI, Tableau, dbt Semantic Layer, DataHub, OpenMetadata, Atlan, Alation,
+Collibra, Metabase, and Cube connectors ingest local JSON/YAML exports from the
+source API or scanner output. They preserve source-native identifiers and common
+agent-useful context such as names, descriptions, fields, metrics, ownership,
+and lineage where those values are present in the export.
 
 ---
 
@@ -445,6 +461,16 @@ The current source provider names are:
 | `dbt` | `AGENTS.DBT_*` |
 | `lookml` | `AGENTS.LOOKML_*` |
 | `osi` | `AGENTS.OSI_*` |
+| `powerbi` | `AGENTS.POWERBI_*` |
+| `tableau` | `AGENTS.TABLEAU_*` |
+| `dbt_semantic` | `AGENTS.DBT_SEMANTIC_*` |
+| `datahub` | `AGENTS.DATAHUB_*` |
+| `openmetadata` | `AGENTS.OPENMETADATA_*` |
+| `atlan` | `AGENTS.ATLAN_*` |
+| `alation` | `AGENTS.ALATION_*` |
+| `collibra` | `AGENTS.COLLIBRA_*` |
+| `metabase` | `AGENTS.METABASE_*` |
+| `cube` | `AGENTS.CUBE_*` |
 
 ---
 
@@ -464,3 +490,13 @@ The current source provider names are:
 | `AGENTS.OSI_FIELD` | OSI | OSI dataset fields |
 | `AGENTS.OSI_METRIC` | OSI | OSI metrics |
 | `AGENTS.OSI_RELATIONSHIP` | OSI | OSI relationships between datasets |
+| `AGENTS.POWERBI_*` | Power BI | Workspaces, semantic models, model fields/measures, reports, and lineage |
+| `AGENTS.TABLEAU_*` | Tableau | Workbooks, datasources, fields, dashboards, and lineage |
+| `AGENTS.DBT_SEMANTIC_*` | dbt Semantic Layer | Semantic models, entities, dimensions, measures, and metrics |
+| `AGENTS.DATAHUB_*` | DataHub | Catalog entities, schema fields, ownership, and lineage |
+| `AGENTS.OPENMETADATA_*` | OpenMetadata | Catalog entities, fields, and lineage |
+| `AGENTS.ATLAN_*` | Atlan | Catalog assets, fields, and lineage |
+| `AGENTS.ALATION_*` | Alation | Data sources, tables, columns, and glossary terms |
+| `AGENTS.COLLIBRA_*` | Collibra | Assets, attributes, relations, and responsibilities |
+| `AGENTS.METABASE_*` | Metabase | Databases, tables, fields, cards, and dashboards |
+| `AGENTS.CUBE_*` | Cube | Cubes, measures, dimensions, segments, and joins |
