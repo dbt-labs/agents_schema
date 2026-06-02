@@ -207,7 +207,7 @@ class MetadataConnectorTests(unittest.TestCase):
                 dest = FakeDestination()
 
                 with (
-                    patch("agents_schema.metadata_connectors.open_destination", return_value=DestinationContext(dest)),
+                    patch("agents_schema.metadata_helpers.open_destination", return_value=DestinationContext(dest)),
                     patch("builtins.print"),
                 ):
                     metadata_connectors.run(provider, {"metadata_connection": {"path": str(path)}})
