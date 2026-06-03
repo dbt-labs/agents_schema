@@ -1,24 +1,15 @@
 """Power BI connector: writes agents.powerbi* from metadata exports."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
-from .destinations import Column, TableSchema
-from .metadata_helpers import (
-    _bool,
-    _description,
-    _dicts,
-    _identifier,
-    _name,
-    _owner_name,
-    _pick,
-    _platform,
-    _records,
-    _rows,
-    _summarize,
-    _text,
-    run_connector,
-)
+import yaml
+
+from .config import ConfigError
+from .destinations import Column, Destination, TableSchema, open_destination
+from .root import upsert_provider_root
 
 __all__ = ["run"]
 
@@ -99,25 +90,168 @@ POWERBI_LINEAGE = TableSchema(
     primary_key=("upstream_id", "downstream_id"),
 )
 
-TABLES = (POWERBI_WORKSPACE, POWERBI_SEMANTIC_MODEL, POWERBI_TABLE, POWERBI_COLUMN, POWERBI_MEASURE, POWERBI_REPORT, POWERBI_LINEAGE)
-SUMMARY = _summarize("powerbi:", ((POWERBI_SEMANTIC_MODEL, "models"), (POWERBI_MEASURE, "measures"), (POWERBI_REPORT, "reports")))
+POWERBI_TABLES = (
+    POWERBI_WORKSPACE,
+    POWERBI_SEMANTIC_MODEL,
+    POWERBI_TABLE,
+    POWERBI_COLUMN,
+    POWERBI_MEASURE,
+    POWERBI_REPORT,
+    POWERBI_LINEAGE,
+)
+SUPPORTED_METADATA_SUFFIXES = {".json", ".yaml", ".yml"}
 
 
 def run(cfg: dict[str, Any]) -> None:
-    run_connector(cfg, "powerbi", TABLES, _powerbi_parse, SUMMARY)
+    metadata_path = Path(cfg["metadata_connection"]["path"])
+    documents = _load_metadata_documents(metadata_path)
+    rows_by_table = _powerbi_parse(documents)
+
+    with open_destination(cfg) as dest:
+        upsert_provider_root(dest, "powerbi")
+        _create_tables(dest)
+        _ingest_rows(dest, rows_by_table)
+
+    print(
+        f"  powerbi: {len(rows_by_table[POWERBI_SEMANTIC_MODEL])} models, "
+        f"{len(rows_by_table[POWERBI_MEASURE])} measures, "
+        f"{len(rows_by_table[POWERBI_REPORT])} reports"
+    )
+
+
+def _load_metadata_documents(path: Path) -> list[Any]:
+    if path.is_file():
+        return [_load_metadata_file(path)]
+    if not path.exists():
+        raise FileNotFoundError(f"metadata path not found: {path}")
+    if not path.is_dir():
+        raise ConfigError(f"metadata path must be a file or directory: {path}")
+
+    files = sorted(p for p in path.rglob("*") if p.suffix.lower() in SUPPORTED_METADATA_SUFFIXES)
+    if not files:
+        suffixes = ", ".join(sorted(SUPPORTED_METADATA_SUFFIXES))
+        raise FileNotFoundError(f"no metadata export files ({suffixes}) found in {path}")
+    return [_load_metadata_file(file_path) for file_path in files]
+
+
+def _load_metadata_file(path: Path) -> Any:
+    suffix = path.suffix.lower()
+    if suffix == ".json":
+        try:
+            return json.loads(path.read_text())
+        except json.JSONDecodeError as e:
+            raise ConfigError(f"{path} is not valid JSON: {e}") from e
+    if suffix in {".yaml", ".yml"}:
+        try:
+            return yaml.safe_load(path.read_text())
+        except yaml.YAMLError as e:
+            raise ConfigError(f"{path} is not valid YAML: {e}") from e
+    raise ConfigError(f"unsupported metadata file type for {path}")
+
+
+def _create_tables(dest: Destination) -> None:
+    for table in POWERBI_TABLES:
+        dest.replace_table(table)
+
+
+def _ingest_rows(dest: Destination, rows_by_table: dict[TableSchema, list[tuple[Any, ...]]]) -> None:
+    for table, rows in rows_by_table.items():
+        if rows:
+            dest.insert_rows(table, rows)
+
+
+def _as_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return [value]
+
+
+def _dicts(value: Any) -> list[dict[str, Any]]:
+    return [item for item in _as_list(value) if isinstance(item, dict)]
+
+
+def _pick(obj: dict[str, Any], *names: str, default: Any = None) -> Any:
+    for name in names:
+        value = obj.get(name)
+        if value not in (None, ""):
+            return value
+    return default
+
+
+def _text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        for key in ("description", "plainText", "value", "text", "name"):
+            if key in value:
+                return _text(value[key])
+        return str(value)
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value if item is not None)
+    return str(value)
+
+
+def _identifier(obj: dict[str, Any], *names: str) -> str | None:
+    value = _pick(obj, *names)
+    if value is None and "id" in obj:
+        value = obj["id"]
+    return _text(value)
+
+
+def _name(obj: dict[str, Any]) -> str | None:
+    return _text(_pick(obj, "name", "displayName", "display_name", "title", "label"))
+
+
+def _description(obj: dict[str, Any]) -> str | None:
+    return _text(_pick(obj, "description", "businessDescription", "userDescription", "comment"))
+
+
+def _bool(obj: dict[str, Any], *names: str) -> bool:
+    value = _pick(obj, *names, default=False)
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() in {"1", "true", "yes"}
+
+
+def _records(documents: list[Any], *keys: str) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    for document in documents:
+        found.extend(_find_records(document, keys))
+    return found
+
+
+def _find_records(value: Any, keys: tuple[str, ...]) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if not isinstance(value, dict):
+        return []
+
+    for key in keys:
+        candidate = value.get(key)
+        if isinstance(candidate, list):
+            return [item for item in candidate if isinstance(item, dict)]
+        if isinstance(candidate, dict):
+            nested = _find_records(candidate, keys)
+            if nested:
+                return nested
+
+    if isinstance(value.get("data"), dict):
+        nested = _find_records(value["data"], keys)
+        if nested:
+            return nested
+    if isinstance(value.get("results"), list):
+        return [item for item in value["results"] if isinstance(item, dict)]
+    if isinstance(value.get("entities"), list):
+        return [item for item in value["entities"] if isinstance(item, dict)]
+    return [value]
 
 
 def _powerbi_parse(documents: list[Any]) -> dict[TableSchema, list[tuple[Any, ...]]]:
-    tables = (
-        POWERBI_WORKSPACE,
-        POWERBI_SEMANTIC_MODEL,
-        POWERBI_TABLE,
-        POWERBI_COLUMN,
-        POWERBI_MEASURE,
-        POWERBI_REPORT,
-        POWERBI_LINEAGE,
-    )
-    rows = _rows(tables)
+    rows = {table: [] for table in POWERBI_TABLES}
     for workspace in _records(documents, "workspaces"):
         workspace_id = _identifier(workspace, "id", "workspaceId")
         if not workspace_id:

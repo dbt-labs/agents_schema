@@ -1,6 +1,5 @@
 import unittest
 
-from agents_schema.metadata_connectors import SUPPORTED_PROVIDERS
 from agents_schema.root import ROOT, upsert_provider_root
 
 
@@ -33,17 +32,16 @@ class RootTests(unittest.TestCase):
         _, rows = dest.upserts[0]
         self.assertEqual({row[1] for row in rows}, {"overview", "dataset", "field", "metric", "relationship"})
 
-    def test_all_metadata_connectors_publish_root_entries(self):
-        for provider in SUPPORTED_PROVIDERS:
-            with self.subTest(provider=provider):
-                dest = FakeDestination()
+    def test_upsert_provider_root_has_powerbi_entries(self):
+        dest = FakeDestination()
 
-                upsert_provider_root(dest, provider)
+        upsert_provider_root(dest, "powerbi")
 
-                _, rows = dest.upserts[0]
-                self.assertTrue(rows)
-                self.assertEqual({row[0] for row in rows}, {provider})
-                self.assertIn("overview", {row[1] for row in rows})
+        _, rows = dest.upserts[0]
+        self.assertEqual(
+            {row[1] for row in rows},
+            {"overview", "workspace", "semantic_model", "measure", "report", "lineage"},
+        )
 
 
 if __name__ == "__main__":

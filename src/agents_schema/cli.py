@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import __version__, dbt, lookml, metadata_connectors, osi
+from . import __version__, dbt, lookml, osi, powerbi
 from .config import ConfigError
 from .dbt_profiles import dbt_adapter_package_from_profiles_file
 from .destinations import warehouse_type_from_env
@@ -88,8 +88,8 @@ def main(argv: list[str] | None = None) -> int:
             lookml.run(_config("looker", args.lookml_dir))
         elif args.source_type == "osi":
             osi.run(_config("osi", args.osi_dir))
-        elif args.source_type in metadata_connectors.SUPPORTED_PROVIDERS:
-            metadata_connectors.run(args.source_type, _config(args.source_type, args.metadata_path))
+        elif args.source_type == "powerbi":
+            powerbi.run(_config("powerbi", args.metadata_path))
         else:
             raise ConfigError(f"unsupported source type: {args.source_type}")
     except (ConfigError, FileNotFoundError) as e:

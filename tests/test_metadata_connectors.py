@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agents_schema import metadata_connectors
+from agents_schema import powerbi
 
 
 class FakeDestination:
@@ -64,10 +64,10 @@ class MetadataConnectorTests(unittest.TestCase):
             dest = FakeDestination()
 
             with (
-                patch("agents_schema.metadata_helpers.open_destination", return_value=DestinationContext(dest)),
-                patch("builtins.print"),
-            ):
-                metadata_connectors.run("powerbi", {"metadata_connection": {"path": str(path)}})
+                    patch("agents_schema.powerbi.open_destination", return_value=DestinationContext(dest)),
+                    patch("builtins.print"),
+                ):
+                    powerbi.run({"metadata_connection": {"path": str(path)}})
 
             self.assertEqual(dest.calls[0][0], "upsert")
             self.assertEqual({row[0] for row in dest.calls[0][2]}, {"powerbi"})
