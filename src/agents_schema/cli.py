@@ -64,30 +64,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="path to a directory containing *.osi.yaml files",
     )
 
-    metadata_sources = {
-        "powerbi": ("--metadata-path", "path to a Fabric / Power BI scanner metadata export file or directory"),
-        "tableau": ("--metadata-path", "path to a Tableau Metadata API export file or directory"),
-        "dbt-semantic": ("--semantic-manifest", "path to semantic_manifest.json or a directory of semantic metadata exports"),
-        "datahub": ("--metadata-path", "path to a DataHub metadata export file or directory"),
-        "openmetadata": ("--metadata-path", "path to an OpenMetadata API export file or directory"),
-        "atlan": ("--metadata-path", "path to an Atlan asset export file or directory"),
-        "alation": ("--metadata-path", "path to an Alation API export file or directory"),
-        "collibra": ("--metadata-path", "path to a Collibra API export file or directory"),
-        "metabase": ("--metadata-path", "path to a Metabase API export file or directory"),
-        "cube": ("--metadata-path", "path to a Cube /v1/meta export file or directory"),
-    }
-    for source_name, (arg_name, help_text) in metadata_sources.items():
-        metadata_parser = sub.add_parser(
-            source_name,
-            help=f"ingest {source_name} metadata into AGENTS.*",
-        )
-        metadata_parser.add_argument(
-            arg_name,
-            required=True,
-            dest="metadata_path",
-            type=Path,
-            help=help_text,
-        )
+    powerbi_parser = sub.add_parser(
+        "powerbi",
+        help="ingest Power BI scanner metadata into AGENTS.POWERBI_*",
+    )
+    powerbi_parser.add_argument(
+        "--metadata-path",
+        required=True,
+        dest="metadata_path",
+        type=Path,
+        help="path to a Fabric / Power BI scanner metadata export file or directory",
+    )
 
     return parser
 
@@ -101,8 +88,6 @@ def main(argv: list[str] | None = None) -> int:
             lookml.run(_config("looker", args.lookml_dir))
         elif args.source_type == "osi":
             osi.run(_config("osi", args.osi_dir))
-        elif args.source_type == "dbt-semantic":
-            metadata_connectors.run("dbt_semantic", _config("dbt_semantic", args.metadata_path))
         elif args.source_type in metadata_connectors.SUPPORTED_PROVIDERS:
             metadata_connectors.run(args.source_type, _config(args.source_type, args.metadata_path))
         else:

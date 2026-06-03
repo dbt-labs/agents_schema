@@ -19,8 +19,8 @@ repo already produces `target/manifest.json`, the workflow only needs the dbt
 project path and your warehouse credentials.
 
 After the first run, your warehouse has queryable metadata tables such as
-`AGENTS.DBT_MODEL`, `AGENTS.LOOKML_VIEW`, `AGENTS.OSI_DATASET`,
-`AGENTS.POWERBI_MEASURE`, or `AGENTS.DATAHUB_ENTITY`. Agents can
+`AGENTS.DBT_MODEL`, `AGENTS.LOOKML_VIEW`, `AGENTS.OSI_DATASET`, or
+`AGENTS.POWERBI_MEASURE`. Agents can
 use those tables to understand which models and semantic objects exist, how
 they are documented, how they relate to the warehouse, and what context is
 available before writing or explaining queries.
@@ -42,7 +42,7 @@ available before writing or explaining queries.
 
 ## Getting Started
 
-There are thirteen supported metadata sources with setup guides and reusable workflows. Pick one to get started quickly.
+There are four supported metadata sources with setup guides and reusable workflows. Pick one to get started quickly.
 
 ### Prerequisites
 
@@ -71,15 +71,6 @@ action, example workflow, CLI command, and `AGENTS.ROOT` provider entries.
 | Looker | [looker-setup.md](looker-setup.md) | [looker.yml](examples/workflows/looker.yml) | LookML files |
 | OSI | [osi-setup.md](osi-setup.md) | [osi.yml](examples/workflows/osi.yml) | Open Semantic Interchange `*.osi.yaml` files |
 | Power BI | [powerbi-setup.md](powerbi-setup.md) | [powerbi.yml](examples/workflows/powerbi.yml) | Fabric / Power BI scanner metadata exports |
-| Tableau | [tableau-setup.md](tableau-setup.md) | [tableau.yml](examples/workflows/tableau.yml) | Tableau Metadata API exports |
-| dbt Semantic Layer | [dbt-semantic-setup.md](dbt-semantic-setup.md) | [dbt-semantic.yml](examples/workflows/dbt-semantic.yml) | dbt `semantic_manifest.json` files |
-| DataHub | [datahub-setup.md](datahub-setup.md) | [datahub.yml](examples/workflows/datahub.yml) | DataHub entity or search exports |
-| OpenMetadata | [openmetadata-setup.md](openmetadata-setup.md) | [openmetadata.yml](examples/workflows/openmetadata.yml) | OpenMetadata API exports |
-| Atlan | [atlan-setup.md](atlan-setup.md) | [atlan.yml](examples/workflows/atlan.yml) | Atlan asset exports |
-| Alation | [alation-setup.md](alation-setup.md) | [alation.yml](examples/workflows/alation.yml) | Alation API exports |
-| Collibra | [collibra-setup.md](collibra-setup.md) | [collibra.yml](examples/workflows/collibra.yml) | Collibra API exports |
-| Metabase | [metabase-setup.md](metabase-setup.md) | [metabase.yml](examples/workflows/metabase.yml) | Metabase API exports |
-| Cube | [cube-setup.md](cube-setup.md) | [cube.yml](examples/workflows/cube.yml) | Cube `/v1/meta` exports |
 
 ### Sync Multiple Sources
 
@@ -169,15 +160,6 @@ agents-schema dbt --project-dir dbt_project
 agents-schema looker --lookml-dir lookml
 agents-schema osi --osi-dir osi
 agents-schema powerbi --metadata-path powerbi-scan.json
-agents-schema tableau --metadata-path tableau-metadata.json
-agents-schema dbt-semantic --semantic-manifest semantic_manifest.json
-agents-schema datahub --metadata-path datahub-export.json
-agents-schema openmetadata --metadata-path openmetadata-export.json
-agents-schema atlan --metadata-path atlan-assets.json
-agents-schema alation --metadata-path alation-export.json
-agents-schema collibra --metadata-path collibra-assets.json
-agents-schema metabase --metadata-path metabase-export.json
-agents-schema cube --metadata-path cube-meta.json
 ```
 
 The CLI reads warehouse credentials from `WAREHOUSE_CREDENTIALS`. Supported

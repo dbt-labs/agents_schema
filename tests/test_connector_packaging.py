@@ -32,60 +32,6 @@ SUPPORTED_SOURCE_PACKAGING = {
         "command": "powerbi",
         "input": "metadata-path",
     },
-    "tableau": {
-        "slug": "tableau",
-        "setup": "tableau-setup.md",
-        "command": "tableau",
-        "input": "metadata-path",
-    },
-    "dbt_semantic": {
-        "slug": "dbt-semantic",
-        "setup": "dbt-semantic-setup.md",
-        "command": "dbt-semantic",
-        "input": "semantic-manifest",
-    },
-    "datahub": {
-        "slug": "datahub",
-        "setup": "datahub-setup.md",
-        "command": "datahub",
-        "input": "metadata-path",
-    },
-    "openmetadata": {
-        "slug": "openmetadata",
-        "setup": "openmetadata-setup.md",
-        "command": "openmetadata",
-        "input": "metadata-path",
-    },
-    "atlan": {
-        "slug": "atlan",
-        "setup": "atlan-setup.md",
-        "command": "atlan",
-        "input": "metadata-path",
-    },
-    "alation": {
-        "slug": "alation",
-        "setup": "alation-setup.md",
-        "command": "alation",
-        "input": "metadata-path",
-    },
-    "collibra": {
-        "slug": "collibra",
-        "setup": "collibra-setup.md",
-        "command": "collibra",
-        "input": "metadata-path",
-    },
-    "metabase": {
-        "slug": "metabase",
-        "setup": "metabase-setup.md",
-        "command": "metabase",
-        "input": "metadata-path",
-    },
-    "cube": {
-        "slug": "cube",
-        "setup": "cube-setup.md",
-        "command": "cube",
-        "input": "metadata-path",
-    },
 }
 
 
