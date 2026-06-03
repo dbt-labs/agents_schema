@@ -1,6 +1,9 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
-from agents_schema.destinations import _create_table_if_not_exists_sql, _merge_sql
+from agents_schema.destinations import Column, TableSchema, _create_table_if_not_exists_sql, _merge_sql, open_destination
 from agents_schema.root import ROOT
 
 
@@ -34,6 +37,43 @@ class DestinationSqlTests(unittest.TestCase):
             "VALUES (source.provider, source.key, source.content)",
             sql,
         )
+
+    def test_duckdb_destination_writes_tables_and_upserts_root(self):
+        table = TableSchema(
+            "agents.local_test",
+            (
+                Column("id", "varchar", nullable=False),
+                Column("tags", "array"),
+            ),
+            primary_key=("id",),
+        )
+
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "agents.duckdb"
+            credentials = f'{{"type": "duckdb", "path": "{path}"}}'
+            with patch.dict("os.environ", {"WAREHOUSE_CREDENTIALS": credentials}):
+                with open_destination({"warehouse": {"type": "duckdb"}}) as dest:
+                    dest.upsert_rows(ROOT, [("powerbi", "overview", "Power BI docs")])
+                    dest.upsert_rows(ROOT, [("powerbi", "overview", "Updated Power BI docs")])
+                    dest.replace_table(table)
+                    dest.insert_rows(table, [("row_1", ["a", "b"])])
+
+            import duckdb
+
+            con = duckdb.connect(str(path))
+            try:
+                catalog = con.execute("SELECT current_database()").fetchone()[0]
+                root_rows = con.execute(
+                    f'SELECT provider, key, content FROM "{catalog}"."agents"."root" WHERE provider = \'powerbi\''
+                ).fetchall()
+                test_rows = con.execute(
+                    f'SELECT id, CAST(tags AS VARCHAR) FROM "{catalog}"."agents"."local_test"'
+                ).fetchall()
+            finally:
+                con.close()
+
+        self.assertEqual(root_rows, [("powerbi", "overview", "Updated Power BI docs")])
+        self.assertEqual(test_rows, [("row_1", '["a", "b"]')])
 
 
 if __name__ == "__main__":

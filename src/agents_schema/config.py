@@ -8,7 +8,7 @@ class ConfigError(Exception):
     """Raised when CLI arguments or environment settings are invalid."""
 
 
-SUPPORTED_WAREHOUSE_TYPES = {"snowflake"}
+SUPPORTED_WAREHOUSE_TYPES = {"duckdb", "snowflake"}
 
 
 def warehouse_type(cfg: dict[str, Any]) -> str:

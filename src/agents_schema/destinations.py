@@ -84,6 +84,57 @@ class SnowflakeDestination:
                 cur.execute(_insert_sql(table, self._agents_schema, len(batch)), _flatten(batch))
 
 
+class DuckDBDestination:
+    def __init__(self, config: dict[str, Any]) -> None:
+        import duckdb
+
+        self._agents_schema = AGENTS_SCHEMA
+        path = _duckdb_path_from_secret(warehouse_credentials_from_env())
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._con = duckdb.connect(str(path))
+        self._catalog = str(self._con.execute("SELECT current_database()").fetchone()[0])
+
+    def __enter__(self) -> "DuckDBDestination":
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        self._con.close()
+
+    def replace_table(self, table: TableSchema) -> None:
+        self._con.execute(f"CREATE SCHEMA IF NOT EXISTS {_duckdb_schema_name(self._catalog, self._agents_schema)}")
+        self._con.execute(_duckdb_create_table_sql(table, self._catalog, self._agents_schema, replace=True))
+
+    def upsert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None:
+        bind_rows = _bind_rows(table, rows)
+        if not bind_rows:
+            return
+        if not table.primary_key:
+            raise ConfigError("upsert requires a table primary key")
+
+        self._con.execute(f"CREATE SCHEMA IF NOT EXISTS {_duckdb_schema_name(self._catalog, self._agents_schema)}")
+        self._con.execute(_duckdb_create_table_sql(table, self._catalog, self._agents_schema, replace=False))
+        for row in bind_rows:
+            where_sql, values = _duckdb_delete_where(table, row)
+            self._con.execute(f"DELETE FROM {_duckdb_table_name(table, self._catalog, self._agents_schema)} WHERE {where_sql}", values)
+        self._insert_bound_rows(table, bind_rows)
+
+    def insert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None:
+        bind_rows = _bind_rows(table, rows)
+        if not bind_rows:
+            return
+        self._insert_bound_rows(table, bind_rows)
+
+    def _insert_bound_rows(self, table: TableSchema, bind_rows: list[tuple[Any, ...]]) -> None:
+        placeholders = ", ".join("?" for _ in table.columns)
+        self._con.executemany(
+            f"INSERT INTO {_duckdb_table_name(table, self._catalog, self._agents_schema)} VALUES ({placeholders})",
+            bind_rows,
+        )
+
+
 def _bind_rows(table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
     bind_rows = []
     for row in rows:
@@ -150,9 +201,20 @@ def _flatten(rows: list[tuple[Any, ...]]) -> tuple[Any, ...]:
 
 def open_destination(cfg: dict[str, Any]) -> Destination:
     dest_type = warehouse_type(cfg)
+    if dest_type == "duckdb":
+        return DuckDBDestination(cfg)
     if dest_type == "snowflake":
         return SnowflakeDestination(cfg)
     raise ConfigError(f"unsupported destination type: {dest_type}")
+
+
+def _duckdb_path_from_secret(destination: dict[str, Any]) -> Path:
+    if destination.get("type") != "duckdb":
+        raise ConfigError("WAREHOUSE_CREDENTIALS.type must be duckdb")
+    raw_path = destination.get("path") or destination.get("database")
+    if not isinstance(raw_path, str) or not raw_path:
+        raise ConfigError("WAREHOUSE_CREDENTIALS.path is required for duckdb")
+    return Path(raw_path)
 
 
 def _snowflake_connect_kwargs(cfg: dict[str, Any]) -> dict[str, Any]:
@@ -266,15 +328,54 @@ def _create_table_statement_sql(prefix: str, table: TableSchema, schema: str) ->
     )
 
 
+def _duckdb_create_table_sql(table: TableSchema, catalog: str, schema: str, replace: bool) -> str:
+    prefix = "CREATE OR REPLACE TABLE" if replace else "CREATE TABLE IF NOT EXISTS"
+    definitions = []
+    for column in table.columns:
+        sql = f"{column.name} {_duckdb_type_sql(column.kind)}"
+        if not column.nullable:
+            sql += " NOT NULL"
+        definitions.append(sql)
+    if table.primary_key:
+        definitions.append(f"PRIMARY KEY ({', '.join(table.primary_key)})")
+    return (
+        f"{prefix} {_duckdb_table_name(table, catalog, schema)} (\n    "
+        + ",\n    ".join(definitions)
+        + "\n)"
+    )
+
+
+def _duckdb_delete_where(table: TableSchema, row: tuple[Any, ...]) -> tuple[str, tuple[Any, ...]]:
+    indexes = {column.name: i for i, column in enumerate(table.columns)}
+    where = " AND ".join(f"{_identifier(column)} = ?" for column in table.primary_key)
+    values = tuple(row[indexes[column]] for column in table.primary_key)
+    return where, values
+
+
 def _table_name(table: TableSchema, schema: str) -> str:
     name = table.name.split(".")[-1]
     return f"{schema}.{_identifier(name)}"
+
+
+def _duckdb_schema_name(catalog: str, schema: str) -> str:
+    return f"{_duckdb_identifier(catalog)}.{_duckdb_identifier(schema)}"
+
+
+def _duckdb_table_name(table: TableSchema, catalog: str, schema: str) -> str:
+    name = table.name.split(".")[-1]
+    return f"{_duckdb_schema_name(catalog, schema)}.{_duckdb_identifier(name)}"
 
 
 def _identifier(identifier: str) -> str:
     if not IDENTIFIER_RE.fullmatch(identifier):
         raise ConfigError(f"expected a simple Snowflake identifier: {identifier}")
     return identifier
+
+
+def _duckdb_identifier(identifier: str) -> str:
+    if not IDENTIFIER_RE.fullmatch(identifier):
+        raise ConfigError(f"expected a simple DuckDB identifier: {identifier}")
+    return f'"{identifier}"'
 
 
 def _type_sql(kind: str) -> str:
@@ -284,6 +385,18 @@ def _type_sql(kind: str) -> str:
         return "BOOLEAN"
     if kind == "text":
         return "TEXT"
+    if kind == "varchar":
+        return "VARCHAR"
+    raise ValueError(f"unsupported column kind: {kind}")
+
+
+def _duckdb_type_sql(kind: str) -> str:
+    if kind == "array":
+        return "JSON"
+    if kind == "boolean":
+        return "BOOLEAN"
+    if kind == "text":
+        return "VARCHAR"
     if kind == "varchar":
         return "VARCHAR"
     raise ValueError(f"unsupported column kind: {kind}")

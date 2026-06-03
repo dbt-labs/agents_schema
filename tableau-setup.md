@@ -8,8 +8,8 @@ replace tables in the `AGENTS` schema.
 Create one required GitHub Actions secret in the repository that calls these
 workflows: `WAREHOUSE_CREDENTIALS`.
 
-Snowflake is the only supported destination today, with more destination
-support coming soon. We recommend key-pair authentication:
+Snowflake is the production warehouse destination. DuckDB is also supported
+for local validation runs. For Snowflake, we recommend key-pair authentication:
 
 **Example key-pair auth secret:**
 

@@ -50,6 +50,14 @@ Each workflow writes to your warehouse using a single GitHub Actions secret:
 `WAREHOUSE_CREDENTIALS`. The source-specific setup guides show the expected
 secret shape and the workflow YAML to copy.
 
+For production warehouse publication, use Snowflake credentials. For local
+validation, you can write the same `AGENTS.*` tables to a DuckDB file:
+
+```bash
+export WAREHOUSE_CREDENTIALS='{"type":"duckdb","path":"tmp/agents-schema.duckdb"}'
+uv run agents-schema powerbi --metadata-path tmp/powerbi-scan-result.json
+```
+
 ## Guides
 
 ### Supported Sources
@@ -172,7 +180,9 @@ agents-schema metabase --metadata-path metabase-export.json
 agents-schema cube --metadata-path cube-meta.json
 ```
 
-The CLI reads warehouse credentials from `WAREHOUSE_CREDENTIALS`.
+The CLI reads warehouse credentials from `WAREHOUSE_CREDENTIALS`. Supported
+destination types are `snowflake` for warehouse publication and `duckdb` for
+local validation.
 
 ### Versioning
 

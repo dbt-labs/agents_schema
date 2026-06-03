@@ -4,22 +4,22 @@
 
 Agents Schema gives agents a predictable place to find context about warehouse data: what models exist, what fields mean, how semantic-layer objects are defined, and how those objects relate to each other. See [README.md](./README.md) for motivation, positioning, and GitHub workflow usage.
 
-This document describes the warehouse tables produced by this repository's current ingestion workflows. The SQL below is written in Snowflake form because Snowflake is the currently supported destination.
+This document describes the warehouse tables produced by this repository's current ingestion workflows. The SQL below is written in Snowflake form because Snowflake is the production warehouse destination. DuckDB is also supported for local validation runs.
 
 ## Core: The `AGENTS` Schema
 
 All Agents Schema tables live in a schema named `AGENTS`. The current writer creates the schema if it does not already exist.
 
-The implementation writes unquoted identifiers, so Snowflake stores table and column names in uppercase. The Python package defines them in lowercase internally, but the delivered warehouse objects are the uppercase `AGENTS.*` tables shown here.
+The Snowflake implementation writes unquoted identifiers, so Snowflake stores table and column names in uppercase. The Python package defines them in lowercase internally, but the delivered Snowflake objects are the uppercase `AGENTS.*` tables shown here.
 
 ### Supported Types
 
-| Internal kind | Snowflake type | Notes |
-|---|---|---|
-| `varchar` | `VARCHAR` | String values. |
-| `text` | `TEXT` | Longer free-form text. |
-| `boolean` | `BOOLEAN` | Boolean values. |
-| `array` | `VARIANT` | Inserted as JSON via `PARSE_JSON`. |
+| Internal kind | Snowflake type | DuckDB type | Notes |
+|---|---|---|---|
+| `varchar` | `VARCHAR` | `VARCHAR` | String values. |
+| `text` | `TEXT` | `VARCHAR` | Longer free-form text. |
+| `boolean` | `BOOLEAN` | `BOOLEAN` | Boolean values. |
+| `array` | `VARIANT` | `JSON` | Inserted as JSON. |
 
 ---
 

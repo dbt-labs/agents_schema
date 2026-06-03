@@ -1,13 +1,13 @@
 [project]
 name = "agents-schema"
 version = "0.0.6"
-description = "Populate an in-warehouse agents.* schema from dbt manifests, OSI YAML, and LookML."
+description = "Populate an AGENTS metadata schema from dbt manifests, OSI YAML, LookML, and metadata exports."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Fivetran", email = "opensource@fivetran.com" }]
-keywords = ["dbt", "osi", "lookml", "snowflake", "ai", "agents", "semantic-layer", "metadata"]
+keywords = ["dbt", "osi", "lookml", "snowflake", "duckdb", "ai", "agents", "semantic-layer", "metadata"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -22,6 +22,7 @@ classifiers = [
 ]
 dependencies = [
     "cryptography>=3.1.0",
+    "duckdb>=1.0.0",
     "pyyaml>=6.0",
     "snowflake-connector-python>=3.0.0",
 ]
