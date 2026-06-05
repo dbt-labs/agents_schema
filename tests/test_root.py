@@ -24,7 +24,7 @@ class RootTests(unittest.TestCase):
         self.assertEqual({row[0] for row in rows}, {"dbt"})
         self.assertEqual(
             {row[1] for row in rows},
-            {"overview", "model", "column", "dependency", "tables", "columns"},
+            {"overview", "model", "column", "dependency", "schemata", "tables", "columns"},
         )
 
     def test_upsert_provider_root_has_osi_entries(self):
@@ -35,7 +35,7 @@ class RootTests(unittest.TestCase):
         _, rows = dest.upserts[0]
         self.assertEqual(
             {row[1] for row in rows},
-            {"overview", "dataset", "field", "metric", "relationship", "tables", "columns"},
+            {"overview", "dataset", "field", "metric", "relationship", "schemata", "tables", "columns"},
         )
 
     def test_upsert_provider_root_has_core_view_entries(self):
@@ -46,7 +46,7 @@ class RootTests(unittest.TestCase):
         _, rows = dest.upserts[0]
         self.assertEqual(
             {row[1] for row in rows},
-            {"overview", "root", "tables", "columns"},
+            {"overview", "root", "schemata", "tables", "columns"},
         )
 
 

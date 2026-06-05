@@ -38,7 +38,7 @@ class TableSchema:
 class Destination(Protocol):
     def replace_table(self, table: TableSchema) -> None: ...
     def replace_view(self, name: str, sql: str) -> None: ...
-    def existing_table_names(self) -> set[str]: ...
+    def existing_relation_names(self) -> set[str]: ...
     def upsert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None: ...
     def insert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None: ...
     def close(self) -> None: ...
@@ -72,13 +72,12 @@ class SnowflakeDestination:
             cur.execute(f"CREATE SCHEMA IF NOT EXISTS {self._agents_schema}")
             cur.execute(_create_view_sql(name, sql, self._agents_schema))
 
-    def existing_table_names(self) -> set[str]:
+    def existing_relation_names(self) -> set[str]:
         with self._con.cursor() as cur:
             cur.execute(
                 "SELECT LOWER(table_name) "
                 "FROM information_schema.tables "
-                "WHERE table_schema = UPPER(%s) "
-                "AND table_type = 'BASE TABLE'",
+                "WHERE table_schema = UPPER(%s)",
                 (self._agents_schema,),
             )
             return {str(row[0]) for row in cur.fetchall()}

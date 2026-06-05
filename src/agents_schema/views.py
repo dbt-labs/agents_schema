@@ -1,21 +1,15 @@
-"""Information-schema-like context views over provider-normalized views.
+"""Information-schema-like context views over provider-normalized relations.
 
-v1 scope: extend the surfaces ``INFORMATION_SCHEMA`` already has — `TABLES` and
-`COLUMNS` — rather than inventing new object types. Each metadata provider
-publishes a normalized ``AGENTS.<PROVIDER>_TABLES`` / ``AGENTS.<PROVIDER>_COLUMNS``
-view with a shared shape. ``AGENTS.TABLES`` and ``AGENTS.COLUMNS`` then take the
-native ``INFORMATION_SCHEMA`` view as the row spine (``SELECT t.*``) and merge
-**every** provider view that exists by object identity, appending each
-provider's columns under a ``<provider>_`` prefix.
+v1 extends the surfaces ``INFORMATION_SCHEMA`` already has: ``SCHEMATA``,
+``TABLES``, and ``COLUMNS``. Providers that want to participate publish
+normalized ``AGENTS.<PROVIDER>_SCHEMATA`` / ``AGENTS.<PROVIDER>_TABLES`` /
+``AGENTS.<PROVIDER>_COLUMNS`` tables or views with a shared shape.
 
-The merge is generic: no native column list is hardcoded (``SELECT t.*`` inherits
-whatever the account exposes), and no provider is special-cased. A provider that
-ships a new ``*_TABLES`` view later — e.g. a memory provider contributing
-``memories_count`` — is picked up automatically with no change here.
-
-Relationships and metrics are intentionally out of scope for v1. The
-information-schema-faithful home for relationships is the
-``REFERENTIAL_CONSTRAINTS`` / ``KEY_COLUMN_USAGE`` family; see the proposal.
+The generic ``AGENTS.SCHEMATA``, ``AGENTS.TABLES``, and ``AGENTS.COLUMNS`` views
+use the native ``INFORMATION_SCHEMA`` view as the row spine and merge every
+provider-normalized relation by object identity. Provider columns are appended
+under a ``<provider>_`` prefix, so new providers can integrate by following the
+naming convention without core provider-specific logic.
 """
 from __future__ import annotations
 
@@ -26,18 +20,21 @@ from .root import upsert_provider_root
 
 __all__ = [
     "CORE_VIEW_NAMES",
-    "PROVIDER_VIEW_NAMES",
+    "BUILT_IN_PROVIDER_VIEW_NAMES",
     "create_context_views",
     "build_context_view_sql",
 ]
 
-CORE_VIEW_NAMES = frozenset({"tables", "columns"})
-PROVIDER_VIEW_NAMES = frozenset(
+CORE_VIEW_NAMES = frozenset({"schemata", "tables", "columns"})
+BUILT_IN_PROVIDER_VIEW_NAMES = frozenset(
     {
+        "dbt_schemata",
         "dbt_tables",
         "dbt_columns",
+        "lookml_schemata",
         "lookml_tables",
         "lookml_columns",
+        "osi_schemata",
         "osi_tables",
         "osi_columns",
     }
@@ -52,30 +49,57 @@ def create_context_views(dest: Destination) -> None:
     surrounding ingestion, which has already written the provider tables.
     """
     upsert_provider_root(dest, "core")
-    for name, sql in build_context_view_sql(dest.existing_table_names()).items():
+    for name, sql in build_context_view_sql(dest.existing_relation_names()).items():
         try:
             dest.replace_view(name, sql)
         except Exception as e:  # noqa: BLE001 - the view layer must not fail ingestion
             print(f"  warning: could not create view agents.{name}: {e}", file=sys.stderr)
 
 
-def build_context_view_sql(existing_tables: set[str]) -> dict[str, str]:
-    existing = {name.lower() for name in existing_tables}
+def build_context_view_sql(existing_relations: set[str]) -> dict[str, str]:
+    existing = {name.lower() for name in existing_relations}
     provider_views = _provider_view_sql(existing)
+    provider_relations = set(provider_views) | _external_provider_relations(existing)
     return provider_views | {
-        "tables": _merge_view(provider_views, "tables", "information_schema.tables", _TABLE_IDENTITY, _TABLE_MERGE),
-        "columns": _merge_view(provider_views, "columns", "information_schema.columns", _COLUMN_IDENTITY, _COLUMN_MERGE),
+        "schemata": _merge_view(
+            provider_relations,
+            "schemata",
+            "information_schema.schemata",
+            _SCHEMATA_IDENTITY,
+            _SCHEMATA_MERGE,
+        ),
+        "tables": _merge_view(provider_relations, "tables", "information_schema.tables", _TABLE_IDENTITY, _TABLE_MERGE),
+        "columns": _merge_view(
+            provider_relations,
+            "columns",
+            "information_schema.columns",
+            _COLUMN_IDENTITY,
+            _COLUMN_MERGE,
+        ),
     }
 
 
 def _provider_view_sql(existing: set[str]) -> dict[str, str]:
     return {
+        "dbt_schemata": _dbt_schemata_sql(existing),
         "dbt_tables": _dbt_tables_sql(existing),
         "dbt_columns": _dbt_columns_sql(existing),
+        "lookml_schemata": _lookml_schemata_sql(existing),
         "lookml_tables": _lookml_tables_sql(existing),
         "lookml_columns": _lookml_columns_sql(existing),
+        "osi_schemata": _osi_schemata_sql(existing),
         "osi_tables": _osi_tables_sql(existing),
         "osi_columns": _osi_columns_sql(existing),
+    }
+
+
+def _external_provider_relations(existing: set[str]) -> set[str]:
+    suffixes = ("_schemata", "_tables", "_columns")
+    return {
+        name
+        for name in existing
+        if name.endswith(suffixes)
+        and name not in BUILT_IN_PROVIDER_VIEW_NAMES
     }
 
 
@@ -83,13 +107,13 @@ def _provider_view_sql(existing: set[str]) -> dict[str, str]:
 
 
 def _merge_view(
-    provider_views: dict[str, str],
+    provider_relations: set[str],
     suffix: str,
     spine: str,
     identity: tuple[str, ...],
     merge_columns: tuple[str, ...],
 ) -> str:
-    views = [name for name in provider_views if name.endswith(f"_{suffix}")]
+    views = sorted(name for name in provider_relations if name.endswith(f"_{suffix}"))
     selects = [
         ",\n  ".join(f"{alias}.{column} AS {alias}_{column}" for column in merge_columns)
         for alias in (_provider_alias(name, suffix) for name in views)
@@ -110,7 +134,7 @@ def _merge_join(view_name: str, alias: str, identity: tuple[str, ...], merge_col
     id_select = ",\n    ".join(identity)
     agg_select = ",\n    ".join(f"{_agg(column)} AS {column}" for column in merge_columns)
     group_by = ", ".join(identity)
-    required = [column for column in identity if column not in ("table_catalog", "table_schema")]
+    required = [column for column in identity if column not in ("catalog_name", "table_catalog", "table_schema")]
     where = " AND ".join(f"{column} IS NOT NULL" for column in required)
     on = "\n AND ".join(_merge_on(alias, column) for column in identity)
     return (
@@ -128,7 +152,7 @@ def _merge_on(alias: str, column: str) -> str:
     # key. A provider row with NULL table_catalog matches the spine in any
     # catalog; since the spine is single-database, that is effectively
     # schema+name (plus column) identity.
-    if column == "table_catalog":
+    if column in ("catalog_name", "table_catalog"):
         return f"({alias}.{column} IS NULL OR LOWER(t.{column}) = LOWER({alias}.{column}))"
     return f"LOWER(t.{column}) = LOWER({alias}.{column})"
 
@@ -177,6 +201,21 @@ def _relation_identity_sql(relation: str, fallback_name: str) -> tuple[str, str,
 
 # --- provider-normalized view shapes -----------------------------------------
 
+_SCHEMATA_COLUMNS = [
+    ("catalog_name", "VARCHAR"),
+    ("schema_name", "VARCHAR"),
+    ("display_name", "VARCHAR"),
+    ("description", "TEXT"),
+    ("ai_context", "TEXT"),
+    ("source_provider", "VARCHAR"),
+    ("source_object_id", "VARCHAR"),
+    ("tags", "VARIANT"),
+]
+_SCHEMATA_IDENTITY = ("catalog_name", "schema_name")
+_SCHEMATA_MERGE = tuple(
+    name for name, _ in _SCHEMATA_COLUMNS if name not in _SCHEMATA_IDENTITY and name != "source_provider"
+)
+
 _TABLE_COLUMNS = [
     ("table_catalog", "VARCHAR"),
     ("table_schema", "VARCHAR"),
@@ -214,6 +253,21 @@ _COLUMN_IDENTITY = ("table_catalog", "table_schema", "table_name", "column_name"
 _COLUMN_MERGE = tuple(
     name for name, _ in _COLUMN_COLUMNS if name not in _COLUMN_IDENTITY and name != "source_provider"
 )
+
+
+def _dbt_schemata_sql(existing: set[str]) -> str:
+    if "dbt_model" not in existing:
+        return _empty_view(_SCHEMATA_COLUMNS)
+    return """SELECT
+  CAST(NULL AS VARCHAR) AS catalog_name,
+  schema_name,
+  schema_name AS display_name,
+  CAST(NULL AS TEXT) AS description,
+  CAST(NULL AS TEXT) AS ai_context,
+  'dbt' AS source_provider,
+  unique_id AS source_object_id,
+  tags
+FROM agents.dbt_model"""
 
 
 def _dbt_tables_sql(existing: set[str]) -> str:
@@ -255,6 +309,22 @@ FROM agents.dbt_column c
 JOIN agents.dbt_model m ON m.unique_id = c.model_id"""
 
 
+def _lookml_schemata_sql(existing: set[str]) -> str:
+    if "lookml_view" not in existing:
+        return _empty_view(_SCHEMATA_COLUMNS)
+    catalog_sql, schema_sql, _ = _relation_identity_sql("sql_table_name", "name")
+    return f"""SELECT
+  {catalog_sql.replace("table_catalog", "catalog_name")},
+  {schema_sql.replace("table_schema", "schema_name")},
+  {schema_sql.replace("table_schema", "display_name")},
+  CAST(NULL AS TEXT) AS description,
+  CAST(NULL AS TEXT) AS ai_context,
+  'lookml' AS source_provider,
+  name AS source_object_id,
+  PARSE_JSON('[]') AS tags
+FROM agents.lookml_view"""
+
+
 def _lookml_tables_sql(existing: set[str]) -> str:
     if "lookml_view" not in existing:
         return _empty_view(_TABLE_COLUMNS)
@@ -294,6 +364,22 @@ def _lookml_columns_sql(existing: set[str]) -> str:
   d.view_name || '.' || d.field_name AS source_object_id
 FROM agents.lookml_dimension d
 JOIN agents.lookml_view v ON v.name = d.view_name"""
+
+
+def _osi_schemata_sql(existing: set[str]) -> str:
+    if "osi_dataset" not in existing:
+        return _empty_view(_SCHEMATA_COLUMNS)
+    catalog_sql, schema_sql, _ = _relation_identity_sql("source_table", "name")
+    return f"""SELECT
+  {catalog_sql.replace("table_catalog", "catalog_name")},
+  {schema_sql.replace("table_schema", "schema_name")},
+  {schema_sql.replace("table_schema", "display_name")},
+  CAST(NULL AS TEXT) AS description,
+  CAST(NULL AS TEXT) AS ai_context,
+  'osi' AS source_provider,
+  name AS source_object_id,
+  PARSE_JSON('[]') AS tags
+FROM agents.osi_dataset"""
 
 
 def _osi_tables_sql(existing: set[str]) -> str:

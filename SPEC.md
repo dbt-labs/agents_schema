@@ -82,12 +82,13 @@ The current package delivers one table family per metadata source:
 
 Each ingestion replaces its own table family with `CREATE OR REPLACE TABLE` and then inserts the rows parsed from the source metadata.
 
-Each ingestion also refreshes provider-normalized views and generic context views over whichever provider tables currently exist. These views are intended to be familiar drop-in starting points for agents that would otherwise reach for `INFORMATION_SCHEMA.TABLES` or `INFORMATION_SCHEMA.COLUMNS`, while preserving source-provider references for deeper inspection.
+Each ingestion also refreshes provider-normalized views and generic context views over whichever provider relations currently exist. These views are intended to be familiar drop-in starting points for agents that would otherwise reach for `INFORMATION_SCHEMA.SCHEMATA`, `INFORMATION_SCHEMA.TABLES`, or `INFORMATION_SCHEMA.COLUMNS`, while preserving source-provider references for deeper inspection.
 
 The generic views are documented in `AGENTS.ROOT` under the `core` provider.
 
 | View | Purpose |
 |---|---|
+| `AGENTS.SCHEMATA` | `INFORMATION_SCHEMA.SCHEMATA` enriched with matching provider schema context. |
 | `AGENTS.TABLES` | `INFORMATION_SCHEMA.TABLES` enriched with matching provider table context. |
 | `AGENTS.COLUMNS` | `INFORMATION_SCHEMA.COLUMNS` enriched with matching provider column context. |
 
@@ -97,18 +98,31 @@ The generic views are documented in `AGENTS.ROOT` under the `core` provider.
 
 ### Scope
 
-v1 extends the surfaces `INFORMATION_SCHEMA` already has — `TABLES` and `COLUMNS` — rather than inventing new object types. Relationships, metrics, and entities are intentionally out of scope: the information-schema-faithful home for relationships is the `REFERENTIAL_CONSTRAINTS` / `KEY_COLUMN_USAGE` family (a future extension), and metrics/entities are object types that semantic providers such as OSI already model in their own `AGENTS.OSI_*` tables. The generic views enrich; they do not become a competing semantic model.
+v1 extends the surfaces `INFORMATION_SCHEMA` already has — `SCHEMATA`, `TABLES`, and `COLUMNS` — rather than inventing new object types. Relationships, metrics, and entities are intentionally out of scope: the information-schema-faithful home for relationships is the `REFERENTIAL_CONSTRAINTS` / `KEY_COLUMN_USAGE` family (a future extension), and metrics/entities are object types that semantic providers such as OSI already model in their own `AGENTS.OSI_*` tables. The generic views enrich; they do not become a competing semantic model.
 
 ### Merge model
 
-Each provider publishes a normalized `AGENTS.<PROVIDER>_TABLES` / `AGENTS.<PROVIDER>_COLUMNS` view with a shared shape. The generic views then take the native `INFORMATION_SCHEMA` view as the row spine via `SELECT t.*` (so they inherit whatever native columns the account exposes — nothing is hardcoded) and **left join every provider view that exists** by object identity:
+This introduces a provider-normalized relation convention tied to the existing `INFORMATION_SCHEMA` convention. A provider that wants to participate publishes `AGENTS.<PROVIDER>_SCHEMATA`, `AGENTS.<PROVIDER>_TABLES`, and/or `AGENTS.<PROVIDER>_COLUMNS` tables or views with the shared shapes below. The generic views then take the native `INFORMATION_SCHEMA` view as the row spine via `SELECT t.*` (so they inherit whatever native columns the account exposes — nothing is hardcoded) and **left join every provider relation that exists** by object identity:
 
+- `AGENTS.SCHEMATA`: `INFORMATION_SCHEMA.SCHEMATA` joined to each `*_SCHEMATA` view on `catalog_name` / `schema_name`.
 - `AGENTS.TABLES`: `INFORMATION_SCHEMA.TABLES` joined to each `*_TABLES` view on `table_catalog` / `table_schema` / `table_name`.
 - `AGENTS.COLUMNS`: `INFORMATION_SCHEMA.COLUMNS` joined to each `*_COLUMNS` view on `table_catalog` / `table_schema` / `table_name` / `column_name`.
 
-The merge is generic and provider-agnostic. Each provider's enrichment columns are appended under a `<provider>_` prefix (`dbt_description`, `lookml_ai_context`, `osi_description`, …), so providers never collide and no native column is overwritten. Within a single provider, rows are aggregated to one row per object identity before the join, so duplicate provider rows cannot multiply native rows. A provider that ships a new `*_TABLES`/`*_COLUMNS` view later — for example a memory provider contributing `memory_*` counts — is picked up automatically with no change to the core views.
+The merge is generic and provider-agnostic. Each provider's enrichment columns are appended under a `<provider>_` prefix (`dbt_description`, `lookml_ai_context`, `osi_description`, …), so providers never collide and no native column is overwritten. Within a single provider, rows are aggregated to one row per object identity before the join, so duplicate provider rows cannot multiply native rows. Any future provider can integrate by publishing views that follow the suffix convention; the core views do not need provider-specific logic.
 
-`SELECT t.*` resolves against the `INFORMATION_SCHEMA` of the database that holds the `AGENTS` schema, so `AGENTS.TABLES`/`COLUMNS` cover objects in that database. Provider-specific detail not promoted into the shared shape stays in the source tables (for example `AGENTS.LOOKML_DIMENSION`) and is reachable through the `<provider>_source_object_id` columns.
+`SELECT t.*` resolves against the `INFORMATION_SCHEMA` of the database that holds the `AGENTS` schema, so `AGENTS.SCHEMATA`/`TABLES`/`COLUMNS` cover objects in that database. Provider-specific detail not promoted into the shared shape stays in the source tables (for example `AGENTS.LOOKML_DIMENSION`) and is reachable through the `<provider>_source_object_id` columns.
+
+### `AGENTS.SCHEMATA`
+
+`SELECT t.*` from `INFORMATION_SCHEMA.SCHEMATA` plus, for each participating provider, the following prefixed columns:
+
+| Column | Description |
+|---|---|
+| `<provider>_display_name` | Provider label for the matched schema. |
+| `<provider>_description` | Provider description for the matched schema when available. |
+| `<provider>_ai_context` | Provider AI context for the matched schema when available. |
+| `<provider>_source_object_id` | Provider-specific object identifier(s). |
+| `<provider>_tags` | Provider tags when available. |
 
 ### `AGENTS.TABLES`
 
@@ -507,7 +521,7 @@ The current core provider name is:
 
 | Provider | Objects |
 |---|---|
-| `core` | `AGENTS.ROOT`, `AGENTS.TABLES`, `AGENTS.COLUMNS` |
+| `core` | `AGENTS.ROOT`, `AGENTS.SCHEMATA`, `AGENTS.TABLES`, `AGENTS.COLUMNS` |
 
 ---
 
@@ -516,6 +530,7 @@ The current core provider name is:
 | Table | Source | Purpose |
 |---|---|---|
 | `AGENTS.ROOT` | core | Provider registry upserted by dbt, LookML, and OSI workflows |
+| `AGENTS.SCHEMATA` | core | `INFORMATION_SCHEMA.SCHEMATA` enriched from provider `*_SCHEMATA` views |
 | `AGENTS.TABLES` | core | `INFORMATION_SCHEMA.TABLES` enriched from provider `*_TABLES` views |
 | `AGENTS.COLUMNS` | core | `INFORMATION_SCHEMA.COLUMNS` enriched from provider `*_COLUMNS` views |
 | `AGENTS.DBT_MODEL` | dbt | dbt models with schema, materialization, documentation, path, and tags |
