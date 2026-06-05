@@ -1,0 +1,37 @@
+schema_notes:
+  - note_id: sales_schema_time_policy
+    schema_name: sales
+    kind: time_policy
+    tags: [finance, revenue]
+    title: Sales reporting time
+    content: Sales reporting should use closed_at unless the question asks about pipeline creation.
+    author: revenue-ops
+    source: notes.yml
+    confidence: 0.95
+    importance: 0.8
+    created_at: "2026-06-01T12:00:00Z"
+
+table_notes:
+  - note_id: zendesk_ticket_grain
+    table_schema: zendesk
+    table_name: ticket
+    kind: grain_warning
+    tags: [support, grain]
+    title: Ticket grain
+    content: One row is one current ticket. Event-level analysis should use ticket_event and collapse before joining back.
+    author: data-platform
+    source: catalog://zendesk/ticket
+
+column_notes:
+  - note_id: stripe_invoice_amount_due_cents
+    table_schema: stripe
+    table_name: invoice
+    column_name: amount_due
+    kind: unit_rule
+    tags: [stripe, money]
+    title: Stripe amount units
+    content: Stripe amount columns are stored in cents; divide by 100 for dollar measures.
+    author: analyst@example.com
+    source: dbt://model/stripe_invoice
+    confidence: 0.9
+    importance: 1.0
