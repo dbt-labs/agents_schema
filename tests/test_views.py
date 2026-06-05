@@ -4,11 +4,11 @@ from agents_schema.views import CORE_VIEW_NAMES, PROVIDER_VIEW_NAMES, build_cont
 
 
 class ContextViewSqlTests(unittest.TestCase):
-    def test_builds_only_tables_and_columns_surfaces(self):
+    def test_builds_only_information_schema_surfaces(self):
         views = build_context_view_sql({"dbt_model", "dbt_column"})
 
         self.assertEqual(PROVIDER_VIEW_NAMES | CORE_VIEW_NAMES, set(views))
-        self.assertEqual(CORE_VIEW_NAMES, {"tables", "columns"})
+        self.assertEqual(CORE_VIEW_NAMES, {"schemata", "tables", "columns"})
         # relationships / metrics / entities are out of scope for v1
         self.assertNotIn("relationships", views)
         self.assertNotIn("metrics", views)
@@ -19,6 +19,19 @@ class ContextViewSqlTests(unittest.TestCase):
 
         self.assertIn("FROM agents.dbt_model", views["dbt_tables"])
         self.assertIn("FROM agents.dbt_column c", views["dbt_columns"])
+        self.assertIn("FROM agents.dbt_model", views["dbt_schemata"])
+
+    def test_core_schemata_uses_information_schema_schemata_spine(self):
+        views = build_context_view_sql({"dbt_model", "lookml_view", "osi_dataset"})
+        schemata = views["schemata"]
+
+        self.assertIn("SELECT\n  t.*", schemata)
+        self.assertIn("FROM information_schema.schemata t", schemata)
+        self.assertIn("dbt.display_name AS dbt_display_name", schemata)
+        self.assertIn("lookml.source_object_id AS lookml_source_object_id", schemata)
+        self.assertIn("FROM agents.dbt_schemata", schemata)
+        self.assertIn("LOWER(t.schema_name) = LOWER(dbt.schema_name)", schemata)
+        self.assertIn("GROUP BY catalog_name, schema_name", schemata)
 
     def test_core_tables_uses_information_schema_star_spine(self):
         views = build_context_view_sql({"dbt_model", "lookml_view", "osi_dataset"})
@@ -42,8 +55,8 @@ class ContextViewSqlTests(unittest.TestCase):
         self.assertIn("FROM agents.osi_tables", tables)
         self.assertIn("LOWER(t.table_name) = LOWER(dbt.table_name)", tables)
         self.assertIn("GROUP BY table_catalog, table_schema, table_name", tables)
-        # generic merge: no hardcoded memory counts anywhere
-        self.assertNotIn("memories_count", tables)
+        # generic merge: no hardcoded note counts anywhere
+        self.assertNotIn("notes_count", tables)
         self.assertNotIn("warnings_count", tables)
 
     def test_core_columns_merges_by_column_identity(self):
@@ -88,9 +101,10 @@ class ContextViewSqlTests(unittest.TestCase):
         views = build_context_view_sql(set())
 
         # no provider tables exist: provider views are empty typed projections,
-        # but AGENTS.TABLES still works as an information_schema passthrough
+        # but AGENTS.SCHEMATA/TABLES still work as information_schema passthroughs
         self.assertIn("WHERE 1 = 0", views["dbt_tables"])
-        self.assertIn("CAST(NULL AS VARCHAR) AS table_catalog", views["dbt_tables"])
+        self.assertIn("CAST(NULL AS VARCHAR) AS catalog_name", views["dbt_schemata"])
+        self.assertIn("FROM information_schema.schemata t", views["schemata"])
         self.assertIn("FROM information_schema.tables t", views["tables"])
 
 
