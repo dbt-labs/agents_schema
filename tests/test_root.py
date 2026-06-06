@@ -32,6 +32,14 @@ class RootTests(unittest.TestCase):
         _, rows = dest.upserts[0]
         self.assertEqual({row[1] for row in rows}, {"overview", "dataset", "field", "metric", "relationship"})
 
+    def test_upsert_provider_root_has_skills_entries(self):
+        dest = FakeDestination()
+
+        upsert_provider_root(dest, "skills")
+
+        _, rows = dest.upserts[0]
+        self.assertEqual({row[1] for row in rows}, {"overview", "root-convention", "skill_use"})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import __version__, dbt, lookml, osi
+from . import __version__, dbt, lookml, osi, skills
 from .config import ConfigError
 from .dbt_profiles import dbt_adapter_package_from_profiles_file
 from .destinations import warehouse_type_from_env
@@ -64,6 +64,22 @@ def _build_parser() -> argparse.ArgumentParser:
         help="path to a directory containing *.osi.yaml files",
     )
 
+    skills_parser = sub.add_parser(
+        "skills",
+        help="ingest markdown skills into AGENTS.ROOT",
+    )
+    skills_parser.add_argument(
+        "--skills-dir",
+        required=True,
+        type=Path,
+        help="path to a directory containing markdown skill files",
+    )
+    skills_parser.add_argument(
+        "--provider",
+        default="user",
+        help="publisher name to use for AGENTS.ROOT skill rows",
+    )
+
     return parser
 
 
@@ -76,6 +92,10 @@ def main(argv: list[str] | None = None) -> int:
             lookml.run(_config("looker", args.lookml_dir))
         elif args.source_type == "osi":
             osi.run(_config("osi", args.osi_dir))
+        elif args.source_type == "skills":
+            cfg = _config("skills", args.skills_dir)
+            cfg["metadata_connection"]["provider"] = args.provider
+            skills.run(cfg)
         else:
             raise ConfigError(f"unsupported source type: {args.source_type}")
     except (ConfigError, FileNotFoundError) as e:

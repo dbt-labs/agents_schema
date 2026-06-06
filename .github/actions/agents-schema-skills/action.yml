@@ -1,0 +1,27 @@
+name: 'Agents Schema Skills'
+description: >
+  Ingests markdown skills into AGENTS.ROOT and parsed uses into AGENTS.SKILL_USE.
+
+inputs:
+  skills-dir:
+    description: 'Path to a directory containing markdown skill files'
+    required: true
+  provider:
+    description: 'Publisher name to use for AGENTS.ROOT skill rows'
+    required: false
+    default: 'user'
+runs:
+  using: composite
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: '3.12'
+
+    - name: Run skills ingestion
+      shell: bash
+      run: |
+        uvx --from "agents-schema==0.0.6" \
+          agents-schema skills \
+            --skills-dir "${{ inputs.skills-dir }}" \
+            --provider "${{ inputs.provider }}"

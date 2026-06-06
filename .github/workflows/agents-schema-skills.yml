@@ -1,0 +1,33 @@
+name: Agents Schema Skills
+
+on:
+  workflow_call:
+    inputs:
+      skills-dir:
+        description: 'Path to a directory containing markdown skill files'
+        type: string
+        required: true
+      provider:
+        description: 'Publisher name to use for AGENTS.ROOT skill rows'
+        type: string
+        required: false
+        default: 'user'
+    secrets:
+      WAREHOUSE_CREDENTIALS:
+        required: true
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run skills ingestion
+        uses: fivetran/agents_schema/.github/actions/agents-schema-skills@v0.0.6
+        with:
+          skills-dir: ${{ inputs.skills-dir }}
+          provider: ${{ inputs.provider }}
+        env:
+          WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}

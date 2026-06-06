@@ -36,7 +36,7 @@ hard-coding them.
    ```sql
    SELECT provider, key, content FROM AGENTS.ROOT ORDER BY provider, key;
    ```
-   This lists the providers that published metadata (`osi`, `lookml`, `dbt`, or custom) plus
+   This lists the providers that published metadata (`osi`, `lookml`, `dbt`, or user-published) plus
    their overview/guidance rows. Only query tables for providers that actually appear here.
 
 2. **Find the metric.** Search the semantic definition tables for keywords from the question

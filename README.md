@@ -138,8 +138,8 @@ source-specific workflows.
 2. The workflow checks out your repository and reads source metadata such as
    dbt artifacts, LookML files, or OSI YAML files.
 3. The workflow runs the `agents-schema` CLI at the pinned release tag.
-4. The CLI writes normalized metadata into the warehouse under the `AGENTS`
-   schema.
+4. The CLI writes normalized metadata and warehouse-delivered skills into the
+   warehouse under the `AGENTS` schema.
 5. Agents and downstream tools query `AGENTS` for context close to the data
    itself.
 
@@ -153,9 +153,21 @@ The GitHub Actions call the CLI with explicit source arguments:
 agents-schema dbt --project-dir dbt_project
 agents-schema looker --lookml-dir lookml
 agents-schema osi --osi-dir osi
+agents-schema skills --skills-dir skills
 ```
 
-The CLI reads warehouse credentials from `WAREHOUSE_CREDENTIALS`.
+The CLI reads warehouse credentials from `WAREHOUSE_CREDENTIALS`. Skills default
+to `--provider user`; pass `--provider fivetran` or another reserved provider
+when publishing vendor-delivered skills.
+
+Skills are delivered as `AGENTS.ROOT` rows whose keys start with `skill/`:
+
+```sql
+SELECT provider, key, content
+FROM AGENTS.ROOT
+WHERE key LIKE 'skill/%'
+ORDER BY provider, key;
+```
 
 ### Versioning
 
