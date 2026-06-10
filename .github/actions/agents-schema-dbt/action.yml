@@ -29,11 +29,12 @@ runs:
     - name: Prepare dbt manifest
       shell: bash
       env:
+        AGENTS_SCHEMA_DBT_PROJECT_DIR: ${{ inputs.dbt-project-dir }}
         DBT_PROFILE_NAME: ${{ inputs.dbt-profile-name }}
         DBT_PARSE_COMMAND: ${{ inputs.dbt-parse-command }}
         DBT_TARGET: ${{ inputs.dbt-target }}
       run: |
-        project_dir="${{ inputs.dbt-project-dir }}"
+        project_dir="$AGENTS_SCHEMA_DBT_PROJECT_DIR"
         manifest_path="$project_dir/target/manifest.json"
         profiles_dir="$RUNNER_TEMP/agents-schema-dbt-profiles"
         profiles_path="$profiles_dir/profiles.yml"
@@ -111,6 +112,8 @@ runs:
 
     - name: Run dbt ingestion
       shell: bash
+      env:
+        AGENTS_SCHEMA_DBT_PROJECT_DIR: ${{ inputs.dbt-project-dir }}
       run: |
         uvx --from "agents-schema==0.0.6" \
-          agents-schema dbt --project-dir "${{ inputs.dbt-project-dir }}"
+          agents-schema dbt --project-dir "$AGENTS_SCHEMA_DBT_PROJECT_DIR"

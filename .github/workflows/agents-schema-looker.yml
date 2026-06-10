@@ -11,6 +11,9 @@ on:
       WAREHOUSE_CREDENTIALS:
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   ingest:
     runs-on: ubuntu-latest
