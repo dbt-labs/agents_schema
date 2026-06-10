@@ -28,6 +28,9 @@ on:
       DBT_PROFILES_YML:
         required: false
 
+permissions:
+  contents: read
+
 jobs:
   ingest:
     runs-on: ubuntu-latest
