@@ -17,5 +17,5 @@ runs:
     - name: Run OSI ingestion
       shell: bash
       run: |
-        uvx --from "agents-schema==0.0.6" \
+        uvx --from "agents-schema==0.0.7" \
           agents-schema osi --osi-dir "${{ inputs.osi-dir }}"

@@ -11,7 +11,7 @@ import yaml
 from .destinations import Column, Destination, TableSchema, open_destination
 from .root import ROOT, upsert_provider_root
 
-__all__ = ["SKILL_USE", "run"]
+__all__ = ["SKILL_USE", "publish_skill", "run"]
 
 SKILL_USE = TableSchema(
     "agents.skill_use",
@@ -57,6 +57,23 @@ def run(cfg: dict) -> None:
             dest.insert_rows(SKILL_USE, use_rows)
 
     print(f"  skills:   {len(root_rows)} skills, {len(use_rows)} uses")
+
+
+def publish_skill(dest: Destination, provider: str, skill_key: str, content: str) -> SkillFile:
+    uses, warnings = _parse_uses_frontmatter(content)
+    skill = SkillFile(key=skill_key, content=content, uses=uses, warnings=warnings)
+    root_rows = [(provider, skill.key, skill.content)]
+    use_rows = [
+        (provider, skill.key, use_kind, object_ref)
+        for use_kind, object_ref in skill.uses
+    ]
+
+    upsert_provider_root(dest, "skills")
+    dest.upsert_rows(ROOT, root_rows)
+    dest.delete_rows(SKILL_USE, ("provider", "skill_key"), [(provider, skill.key)])
+    if use_rows:
+        dest.upsert_rows(SKILL_USE, use_rows)
+    return skill
 
 
 def _load_skill_files(skills_dir: Path) -> list[SkillFile]:

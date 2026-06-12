@@ -39,17 +39,27 @@ class Destination(Protocol):
     def replace_table(self, table: TableSchema) -> None: ...
     def upsert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None: ...
     def insert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None: ...
+    def delete_rows(self, table: TableSchema, key_columns: tuple[str, ...], rows: Iterable[tuple[Any, ...]]) -> None: ...
     def close(self) -> None: ...
     def __enter__(self) -> "Destination": ...
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
 
 
 class SnowflakeDestination:
-    def __init__(self, config: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        config: dict[str, Any] | None = None,
+        *,
+        connect_kwargs: dict[str, Any] | None = None,
+    ) -> None:
         import snowflake.connector
 
         self._agents_schema = AGENTS_SCHEMA
-        self._con = snowflake.connector.connect(**_snowflake_connect_kwargs(config))
+        if connect_kwargs is None:
+            if config is None:
+                raise ConfigError("SnowflakeDestination requires config or connect_kwargs")
+            connect_kwargs = _snowflake_connect_kwargs(config)
+        self._con = snowflake.connector.connect(**connect_kwargs)
 
     def __enter__(self) -> "SnowflakeDestination":
         return self
@@ -83,6 +93,19 @@ class SnowflakeDestination:
             for batch in _batched(bind_rows, INSERT_BATCH_SIZE):
                 cur.execute(_insert_sql(table, self._agents_schema, len(batch)), _flatten(batch))
 
+    def delete_rows(self, table: TableSchema, key_columns: tuple[str, ...], rows: Iterable[tuple[Any, ...]]) -> None:
+        bind_rows = list(rows)
+        if not bind_rows:
+            return
+        with self._con.cursor() as cur:
+            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {self._agents_schema}")
+            cur.execute(_create_table_if_not_exists_sql(table, self._agents_schema))
+            for batch in _batched(bind_rows, INSERT_BATCH_SIZE):
+                cur.execute(
+                    _delete_sql(table, self._agents_schema, key_columns, len(batch)),
+                    _flatten(batch),
+                )
+
 
 def _bind_rows(table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
     bind_rows = []
@@ -106,6 +129,22 @@ def _insert_sql(table: TableSchema, schema: str, row_count: int) -> str:
     row_select = "SELECT " + ",".join(_placeholder(table, i) for i in range(len(table.columns)))
     values_sql = " UNION ALL ".join(row_select for _ in range(row_count))
     return f"INSERT INTO {_table_name(table, schema)} {values_sql}"
+
+
+def _delete_sql(table: TableSchema, schema: str, key_columns: tuple[str, ...], row_count: int) -> str:
+    if not key_columns:
+        raise ConfigError("delete requires at least one key column")
+    source_columns = tuple(Column(name, "varchar", nullable=False) for name in key_columns)
+    source_table = TableSchema(table.name, source_columns)
+    source_select = _source_select_sql(source_table, row_count)
+    match_sql = " AND ".join(
+        f"target.{_identifier(column)} = source.{_identifier(column)}" for column in key_columns
+    )
+    return (
+        f"DELETE FROM {_table_name(table, schema)} AS target\n"
+        f"USING ({source_select}) AS source\n"
+        f"WHERE {match_sql}"
+    )
 
 
 def _merge_sql(table: TableSchema, schema: str, row_count: int) -> str:
