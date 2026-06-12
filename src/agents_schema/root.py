@@ -36,6 +36,11 @@ ROOT_ENTRIES = {
         ("metric", "One row per OSI metric. See AGENTS.OSI_METRIC."),
         ("relationship", "One row per OSI relationship. See AGENTS.OSI_RELATIONSHIP."),
     ),
+    "skills": (
+        ("overview", "# Skills\nWarehouse-delivered agent skills published as AGENTS.ROOT rows."),
+        ("root-convention", "Skills are rows in AGENTS.ROOT where key starts with skill/."),
+        ("skill_use", "Optional parsed skill data-use declarations. See AGENTS.SKILL_USE."),
+    ),
 }
 
 

@@ -25,9 +25,9 @@ The implementation writes unquoted identifiers, so Snowflake stores table and co
 
 ## `AGENTS.ROOT`
 
-`AGENTS.ROOT` is the intended provider registry for the Agents Schema. It gives generic consumers one place to discover which providers have published metadata and how to use their tables.
+`AGENTS.ROOT` is the intended provider registry for the Agents Schema. It gives generic consumers one place to discover which providers have published metadata, how to use their tables, and which warehouse-delivered skills are available.
 
-The current dbt, LookML, and OSI ingestion workflows upsert their own provider rows into `AGENTS.ROOT` and write the source-specific tables documented below. Each workflow preserves `ROOT` rows from other providers.
+The current dbt, LookML, OSI, and skills ingestion workflows upsert their own provider rows into `AGENTS.ROOT` and write the source-specific tables documented below. Each workflow preserves `ROOT` rows from other providers.
 
 ```sql
 CREATE TABLE AGENTS.ROOT (
@@ -40,7 +40,7 @@ CREATE TABLE AGENTS.ROOT (
 
 | Column | Description |
 |---|---|
-| `provider` | A short, lowercase identifier for the metadata contributor, such as `dbt`, `lookml`, or `osi`. |
+| `provider` | A short, lowercase identifier for the metadata contributor, such as `dbt`, `lookml`, `osi`, `skills`, `fivetran`, or `user`. |
 | `key` | Provider-defined identifier, unique within the provider. For table documentation, the recommended convention is the unprefixed table name, such as `model` for `AGENTS.DBT_MODEL`. |
 | `content` | Free-form context about the provider, table, convention, skill, or anything else the provider wants discoverable. |
 
@@ -49,6 +49,41 @@ CREATE TABLE AGENTS.ROOT (
 A row in `AGENTS.ROOT` can hold any text a provider wants discoverable from inside the warehouse. The only hard rule is that `(provider, key)` is unique. Beyond that, providers are free to use rows however they like: for an overview, conventions, per-table notes, skills, query recipes, deprecation notices, or anything else worth publishing alongside the data. Markdown is a natural fit because consumers are often LLMs, but the column is plain text and any shape works.
 
 It is strongly recommended that when a row is meant to document a specific contributed table, its key match the unprefixed table name. For example, `(dbt, model)` documents `AGENTS.DBT_MODEL`, and `(lookml, explore)` documents `AGENTS.LOOKML_EXPLORE`. This is not enforced, but following the convention keeps consumers, especially LLM agents, from getting confused about whether a row describes a table or is freeform context.
+
+### Skill rows in `ROOT`
+
+Skills are agent-readable instructions delivered through `AGENTS.ROOT`. A skill row uses the convention:
+
+```
+provider = <publisher>
+key      = skill/<name>
+content  = markdown skill body
+```
+
+The skill body may include YAML frontmatter. The only standard frontmatter field in this version is `uses`, which declares the additive set of schemas and tables the skill may use:
+
+```markdown
+---
+uses:
+  schemas:
+    - QUICKSTART_FINANCE
+  tables:
+    - QUICKSTART_FINANCE.ARR_SNAPSHOT
+---
+
+# Revenue Skill
+
+Use this skill when answering ARR, MRR, recurring revenue, or revenue trend questions.
+```
+
+`uses.schemas` means the skill may use all tables in that schema. `uses.tables` entries must be schema-qualified table names. The lists are additive and do not express exclusions. Consumers can read skills with:
+
+```sql
+SELECT provider, key, content
+FROM AGENTS.ROOT
+WHERE key LIKE 'skill/%'
+ORDER BY provider, key;
+```
 
 ### Example rows
 
@@ -64,7 +99,9 @@ lookml     explore                   One row per LookML explore. See AGENTS.LOOK
 osi        overview                  # OSI\nOpen Semantic Interchange metadata.
 osi        dataset                   One row per OSI dataset. See AGENTS.OSI_DATASET.
 osi        metric                    One row per OSI metric. See AGENTS.OSI_METRIC.
-acme_corp  skills/refund_workflow    # Refund Workflow\nWhen a user asks about refunds...
+skills     overview                  # Skills\nWarehouse-delivered agent skills...
+skills     skill_use                 Optional parsed skill data-use declarations.
+acme_corp  skill/refund_workflow     # Refund Workflow\nWhen a user asks about refunds...
 acme_corp  costs                     # Query Costs\nUse this before running expensive joins.
 ```
 
@@ -79,8 +116,38 @@ The current package delivers one table family per metadata source:
 | dbt | `AGENTS.DBT_MODEL`, `AGENTS.DBT_COLUMN`, `AGENTS.DBT_DEPENDENCY` |
 | LookML | `AGENTS.LOOKML_VIEW`, `AGENTS.LOOKML_DIMENSION`, `AGENTS.LOOKML_MEASURE`, `AGENTS.LOOKML_EXPLORE` |
 | OSI | `AGENTS.OSI_DATASET`, `AGENTS.OSI_FIELD`, `AGENTS.OSI_METRIC`, `AGENTS.OSI_RELATIONSHIP` |
+| Skills | `AGENTS.SKILL_USE` |
 
 Each ingestion replaces its own table family with `CREATE OR REPLACE TABLE` and then inserts the rows parsed from the source metadata.
+
+---
+
+## Source: Skills
+
+The skills ingestion reads markdown files and publishes each file as a skill row in `AGENTS.ROOT`. It also parses compliant `uses` frontmatter into `AGENTS.SKILL_USE` so consumers can quickly find which skills may use a schema or table.
+
+Skill rows are stored in `AGENTS.ROOT` under the publisher passed to the CLI. The skills CLI defaults to `--provider user`. For example, `skills/revenue/arr.md` without an explicit provider is published as `(user, skill/revenue/arr)`, while the same file with `--provider fivetran` is published as `(fivetran, skill/revenue/arr)`.
+
+### `AGENTS.SKILL_USE`
+
+One row per parsed skill use declaration. Missing frontmatter produces no rows. Malformed `uses` frontmatter should not block publication of the skill markdown to `AGENTS.ROOT`, but should be skipped for `AGENTS.SKILL_USE`.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.SKILL_USE (
+  provider   VARCHAR NOT NULL,
+  skill_key  VARCHAR NOT NULL,
+  use_kind   VARCHAR NOT NULL,
+  object_ref VARCHAR NOT NULL,
+  PRIMARY KEY (provider, skill_key, use_kind, object_ref)
+);
+```
+
+| Column | Description |
+|---|---|
+| `provider` | Publisher used for the corresponding `AGENTS.ROOT` skill row. |
+| `skill_key` | `AGENTS.ROOT.key` value for the skill, such as `skill/revenue/arr`. |
+| `use_kind` | Either `schema` or `table`. |
+| `object_ref` | Schema name for `schema`, or schema-qualified table name for `table`. |
 
 ---
 
@@ -425,9 +492,9 @@ Agents Schema tables can be populated in several ways:
 - **Vendor-run pipelines** that sync provider metadata into the warehouse
 - **CI/CD jobs** that parse source artifacts and load `AGENTS.*` tables after project changes
 - **Scheduled workflows** that periodically refresh metadata from source systems or repositories
-- **Platform engineering jobs** that maintain custom provider tables for internal metadata, skills, query recipes, or operational context
+- **Platform engineering jobs** that maintain user-published provider tables for internal metadata, skills, query recipes, or operational context
 
-This repository currently provides source-specific GitHub reusable workflows for dbt, LookML, and OSI ingestion. Those workflows are one implementation path, not a requirement that all Agents Schema metadata be produced through GitHub Actions.
+This repository currently provides source-specific GitHub reusable workflows for dbt, LookML, OSI, and skills ingestion. Those workflows are one implementation path, not a requirement that all Agents Schema metadata be produced through GitHub Actions.
 
 Each source ingestion owns its table family and may replace those tables on each run. Consumers should treat these tables as generated metadata, not as hand-edited state.
 
@@ -438,13 +505,15 @@ Each source ingestion owns its table family and may replace those tables on each
 
 ### Provider Names
 
-The current source provider names are:
+The following provider names are reserved:
 
-| Provider | Tables |
+| Provider | Purpose |
 |---|---|
-| `dbt` | `AGENTS.DBT_*` |
-| `lookml` | `AGENTS.LOOKML_*` |
-| `osi` | `AGENTS.OSI_*` |
+| `dbt` | dbt metadata in `AGENTS.DBT_*` |
+| `lookml` | LookML metadata in `AGENTS.LOOKML_*` |
+| `osi` | OSI metadata in `AGENTS.OSI_*` |
+| `skills` | Skills extension metadata in `AGENTS.SKILL_USE` |
+| `user` | User-published skills, metadata, query recipes, or operational context |
 
 ---
 
@@ -452,7 +521,8 @@ The current source provider names are:
 
 | Table | Source | Purpose |
 |---|---|---|
-| `AGENTS.ROOT` | core | Provider registry upserted by dbt, LookML, and OSI workflows |
+| `AGENTS.ROOT` | core | Provider registry and skill delivery surface upserted by source workflows |
+| `AGENTS.SKILL_USE` | skills | Parsed skill schema and table use declarations |
 | `AGENTS.DBT_MODEL` | dbt | dbt models with schema, materialization, documentation, path, and tags |
 | `AGENTS.DBT_COLUMN` | dbt | Documented dbt model columns |
 | `AGENTS.DBT_DEPENDENCY` | dbt | Direct dbt dependency edges |

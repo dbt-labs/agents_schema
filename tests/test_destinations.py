@@ -1,10 +1,18 @@
 import unittest
+from unittest.mock import patch
 
-from agents_schema.destinations import _create_table_if_not_exists_sql, _merge_sql
+from agents_schema.destinations import SnowflakeDestination, _create_table_if_not_exists_sql, _merge_sql
 from agents_schema.root import ROOT
 
 
 class DestinationSqlTests(unittest.TestCase):
+    def test_snowflake_destination_accepts_explicit_connection_kwargs(self):
+        with patch("snowflake.connector.connect") as connect:
+            dest = SnowflakeDestination(connect_kwargs={"account": "acct", "user": "user"})
+
+        connect.assert_called_once_with(account="acct", user="user")
+        dest.close()
+
     def test_root_create_table_uses_if_not_exists(self):
         sql = _create_table_if_not_exists_sql(ROOT, "agents")
 

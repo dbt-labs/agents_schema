@@ -46,7 +46,7 @@ on:
 
 jobs:
   agents-schema-osi:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-osi.yml@v0.0.6
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-osi.yml@v0.0.7
     with:
       osi-dir: osi
     secrets: inherit

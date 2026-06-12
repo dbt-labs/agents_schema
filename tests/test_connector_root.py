@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import patch
 
-from agents_schema import dbt, lookml, osi
+from agents_schema import dbt, lookml, osi, skills
+from agents_schema.skills import SkillFile
 
 
 class FakeDestination:
@@ -16,6 +17,9 @@ class FakeDestination:
 
     def insert_rows(self, table, rows):
         self.calls.append(("insert", table.name, list(rows)))
+
+    def delete_rows(self, table, key_columns, rows):
+        self.calls.append(("delete", table.name, key_columns, list(rows)))
 
 
 class DestinationContext:
@@ -74,6 +78,71 @@ class ConnectorRootTests(unittest.TestCase):
         self.assertEqual(dest.calls[0][0], "upsert")
         self.assertEqual({row[0] for row in dest.calls[0][2]}, {"osi"})
         self.assertEqual([call[0] for call in dest.calls[1:5]], ["replace", "replace", "replace", "replace"])
+
+    def test_skills_run_upserts_root_before_source_tables(self):
+        dest = FakeDestination()
+        cfg = {"metadata_connection": {"path": ".", "provider": "fivetran"}}
+        skill = SkillFile(
+            key="skill/revenue",
+            content="# Revenue\n",
+            uses=(("schema", "QUICKSTART_FINANCE"), ("table", "QUICKSTART_FINANCE.ARR_SNAPSHOT")),
+        )
+
+        with (
+            patch("agents_schema.skills.open_destination", return_value=DestinationContext(dest)),
+            patch("agents_schema.skills._load_skill_files", return_value=[skill]),
+            patch("builtins.print"),
+        ):
+            skills.run(cfg)
+
+        self.assertEqual(dest.calls[0][0], "upsert")
+        self.assertEqual({row[0] for row in dest.calls[0][2]}, {"skills"})
+        self.assertEqual(dest.calls[1][0], "upsert")
+        self.assertEqual(dest.calls[1][1], "agents.root")
+        self.assertEqual(dest.calls[1][2], [("fivetran", "skill/revenue", "# Revenue\n")])
+        self.assertEqual(dest.calls[2], ("replace", "agents.skill_use"))
+        self.assertEqual(dest.calls[3][0], "insert")
+        self.assertEqual(dest.calls[3][1], "agents.skill_use")
+
+    def test_publish_skill_upserts_one_root_row_and_refreshes_its_uses(self):
+        dest = FakeDestination()
+        content = (
+            "---\n"
+            "uses:\n"
+            "  schemas:\n"
+            "    - ZENDESK\n"
+            "  tables:\n"
+            "    - ZENDESK.TICKET\n"
+            "---\n"
+            "# Zendesk\n"
+        )
+
+        skill = skills.publish_skill(dest, "fivetran", "skill/zendesk", content)
+
+        self.assertEqual(skill.uses, (("schema", "ZENDESK"), ("table", "ZENDESK.TICKET")))
+        self.assertEqual(dest.calls[0][0], "upsert")
+        self.assertEqual({row[0] for row in dest.calls[0][2]}, {"skills"})
+        self.assertEqual(dest.calls[1], ("upsert", "agents.root", [("fivetran", "skill/zendesk", content)]))
+        self.assertEqual(dest.calls[2], ("delete", "agents.skill_use", ("provider", "skill_key"), [("fivetran", "skill/zendesk")]))
+        self.assertEqual(
+            dest.calls[3],
+            (
+                "upsert",
+                "agents.skill_use",
+                [
+                    ("fivetran", "skill/zendesk", "schema", "ZENDESK"),
+                    ("fivetran", "skill/zendesk", "table", "ZENDESK.TICKET"),
+                ],
+            ),
+        )
+
+    def test_publish_skill_without_uses_only_deletes_stale_use_rows(self):
+        dest = FakeDestination()
+
+        skill = skills.publish_skill(dest, "fivetran", "skill/zendesk", "# Zendesk\n")
+
+        self.assertEqual(skill.uses, ())
+        self.assertEqual(dest.calls[-1], ("delete", "agents.skill_use", ("provider", "skill_key"), [("fivetran", "skill/zendesk")]))
 
 
 if __name__ == "__main__":

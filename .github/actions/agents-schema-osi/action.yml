@@ -19,5 +19,5 @@ runs:
       env:
         AGENTS_SCHEMA_OSI_DIR: ${{ inputs.osi-dir }}
       run: |
-        uvx --from "agents-schema==0.0.6" \
+        uvx --from "agents-schema==0.0.7" \
           agents-schema osi --osi-dir "$AGENTS_SCHEMA_OSI_DIR"
