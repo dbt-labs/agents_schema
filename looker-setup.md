@@ -8,8 +8,12 @@ replace tables in the `AGENTS` schema.
 Create one required GitHub Actions secret in the repository that calls these
 workflows: `WAREHOUSE_CREDENTIALS`.
 
-Snowflake is the only supported destination today, with more destination
-support coming soon. We recommend key-pair authentication:
+Snowflake and Databricks are supported destinations. The `type` field in the
+secret selects the destination.
+
+### Snowflake
+
+We recommend key-pair authentication:
 
 **Example key-pair auth secret:**
 
@@ -30,6 +34,22 @@ private_key_passphrase: your-passphrase   # only if the key is encrypted
 **Note:**
 - `role` is optional.
 - An unencrypted key uses `-----BEGIN PRIVATE KEY-----` / `-----END PRIVATE KEY-----` markers and omits `private_key_passphrase`.
+
+### Databricks
+
+Authenticate with a personal access token against a SQL warehouse or cluster.
+
+**Example Databricks secret:**
+
+```yaml
+type: databricks
+server_hostname: dbc-12345678-90ab.cloud.databricks.com
+http_path: /sql/1.0/warehouses/abc123def456
+access_token: <your-databricks-personal-access-token>
+catalog: analytics   # optional; sets the Unity Catalog catalog for the AGENTS schema
+```
+
+**Note:** `catalog` is optional; when omitted, the connection's default catalog is used.
 
 ## Run the Looker Sync Workflow
 

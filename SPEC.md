@@ -4,7 +4,7 @@
 
 Agents Schema gives agents a predictable place to find context about warehouse data: what models exist, what fields mean, how semantic-layer objects are defined, and how those objects relate to each other. See [README.md](./README.md) for motivation, positioning, and GitHub workflow usage.
 
-This document describes the warehouse tables produced by this repository's current ingestion workflows. The SQL below is written in Snowflake form because Snowflake is the currently supported destination.
+This document describes the warehouse tables produced by this repository's current ingestion workflows. Snowflake and Databricks are supported destinations. The SQL below is written in Snowflake form; see [Supported Types](#supported-types) for the Databricks equivalents.
 
 ## Core: The `AGENTS` Schema
 
@@ -14,12 +14,12 @@ The implementation writes unquoted identifiers, so Snowflake stores table and co
 
 ### Supported Types
 
-| Internal kind | Snowflake type | Notes |
-|---|---|---|
-| `varchar` | `VARCHAR` | String values. |
-| `text` | `TEXT` | Longer free-form text. |
-| `boolean` | `BOOLEAN` | Boolean values. |
-| `array` | `VARIANT` | Inserted as JSON via `PARSE_JSON`. |
+| Internal kind | Snowflake type | Databricks type | Notes |
+|---|---|---|---|
+| `varchar` | `VARCHAR` | `STRING` | String values. |
+| `text` | `TEXT` | `STRING` | Longer free-form text. |
+| `boolean` | `BOOLEAN` | `BOOLEAN` | Boolean values. |
+| `array` | `VARIANT` | `STRING` | JSON; Snowflake parses it via `PARSE_JSON`. |
 
 ---
 
