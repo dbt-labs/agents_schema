@@ -3,7 +3,7 @@
 ## Prerequisites
 
 Configure the `WAREHOUSE_CREDENTIALS` GitHub Actions secret for your destination
-warehouse. See [Warehouse Credentials](warehouse-credentials.md).
+warehouse. See [Warehouse Credentials](README.md#warehouse-credentials).
 
 ## Run the dbt Sync Workflow
 
