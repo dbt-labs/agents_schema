@@ -99,6 +99,7 @@ lookml     explore                   One row per LookML explore. See AGENTS.LOOK
 osi        overview                  # OSI\nOpen Semantic Interchange metadata.
 osi        dataset                   One row per OSI dataset. See AGENTS.OSI_DATASET.
 osi        metric                    One row per OSI metric. See AGENTS.OSI_METRIC.
+snowflake_semantic semantic_view/... Pointer to a native Snowflake semantic view.
 skills     overview                  # Skills\nWarehouse-delivered agent skills...
 skills     skill_use                 Optional parsed skill data-use declarations.
 acme_corp  skill/refund_workflow     # Refund Workflow\nWhen a user asks about refunds...
@@ -513,6 +514,7 @@ The following provider names are reserved:
 | `lookml` | LookML metadata in `AGENTS.LOOKML_*` |
 | `osi` | OSI metadata in `AGENTS.OSI_*` |
 | `skills` | Skills extension metadata in `AGENTS.SKILL_USE` |
+| `snowflake_semantic` | Pointer rows for native Snowflake semantic views |
 | `user` | User-published skills, metadata, query recipes, or operational context |
 
 ---
@@ -534,3 +536,7 @@ The following provider names are reserved:
 | `AGENTS.OSI_FIELD` | OSI | OSI dataset fields |
 | `AGENTS.OSI_METRIC` | OSI | OSI metrics |
 | `AGENTS.OSI_RELATIONSHIP` | OSI | OSI relationships between datasets |
+
+Snowflake semantic view support is currently pointer-only. It adds rows to
+`AGENTS.ROOT` under provider `snowflake_semantic`; it does not create additional
+`AGENTS.*` tables.
