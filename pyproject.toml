@@ -22,6 +22,7 @@ classifiers = [
 ]
 dependencies = [
     "cryptography>=3.1.0",
+    "databricks-sql-connector>=3.0.0,<5",
     "pyyaml>=6.0",
     "snowflake-connector-python>=3.0.0",
 ]
