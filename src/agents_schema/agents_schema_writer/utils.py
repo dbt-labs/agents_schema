@@ -35,6 +35,13 @@ def primary_key_rows(table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> lis
     return [tuple(row[index] for index in primary_key_indexes) for row in rows]
 
 
+def rows_json_for_table(table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> list[dict[str, Any]]:
+    return [
+        {column.name: value for column, value in zip(table.columns, row, strict=True)}
+        for row in rows
+    ]
+
+
 def databricks_placeholder(column: Column) -> str:
     if column.kind == "array":
         return "from_json(?, 'array<string>')"

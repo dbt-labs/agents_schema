@@ -2,8 +2,10 @@ import unittest
 from unittest.mock import patch
 
 from agents_schema.destinations import (
+    BigQueryDestination,
     DatabricksDestination,
     SnowflakeDestination,
+    _bigquery_credentials_from_secret,
     _create_table_if_not_exists_sql,
     _databricks_connect_kwargs_from_secret,
     _merge_sql,
@@ -108,6 +110,71 @@ class DestinationSqlTests(unittest.TestCase):
     def test_open_destination_supports_databricks(self):
         with patch("agents_schema.destinations.DatabricksDestination") as destination:
             result = open_destination({"warehouse": {"type": "databricks"}})
+
+        self.assertIs(result, destination.return_value)
+
+    def test_bigquery_credentials_accept_object_shape(self):
+        credentials, project_id, location = _bigquery_credentials_from_secret(
+            {
+                "type": "bigquery",
+                "project_id": "analytics-project",
+                "location": "US",
+                "credentials_json": {
+                    "type": "service_account",
+                    "private_key": "key",
+                    "client_email": "bot@example.com",
+                },
+            }
+        )
+
+        self.assertEqual(project_id, "analytics-project")
+        self.assertEqual(location, "US")
+        self.assertEqual(credentials["type"], "service_account")
+        self.assertEqual(credentials["private_key"], "key")
+
+    def test_bigquery_credentials_accept_json_string(self):
+        credentials, project_id, _ = _bigquery_credentials_from_secret(
+            {
+                "type": "bigquery",
+                "project_id": "analytics-project",
+                "credentials_json": '{"private_key": "key", "client_email": "bot@example.com"}',
+            }
+        )
+
+        self.assertEqual(project_id, "analytics-project")
+        self.assertEqual(credentials["client_email"], "bot@example.com")
+
+    def test_bigquery_credentials_accept_flattened_service_account_fields(self):
+        credentials, project_id, _ = _bigquery_credentials_from_secret(
+            {
+                "type": "big_query",
+                "project_id": "analytics-project",
+                "private_key": "key",
+                "client_email": "bot@example.com",
+            }
+        )
+
+        self.assertEqual(project_id, "analytics-project")
+        self.assertEqual(credentials["project_id"], "analytics-project")
+        self.assertEqual(credentials["private_key"], "key")
+
+    def test_bigquery_destination_accepts_explicit_client(self):
+        client = object()
+
+        dest = BigQueryDestination(client=client, project_id="analytics-project")
+
+        self.assertIs(dest._client, client)
+        self.assertEqual(dest._project_id, "analytics-project")
+
+    def test_open_destination_supports_bigquery(self):
+        with patch("agents_schema.destinations.BigQueryDestination") as destination:
+            result = open_destination({"warehouse": {"type": "bigquery"}})
+
+        self.assertIs(result, destination.return_value)
+
+    def test_open_destination_supports_big_query_alias(self):
+        with patch("agents_schema.destinations.BigQueryDestination") as destination:
+            result = open_destination({"warehouse": {"type": "big_query"}})
 
         self.assertIs(result, destination.return_value)
 

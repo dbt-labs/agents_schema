@@ -2,45 +2,8 @@
 
 ## Prerequisites
 
-The workflow needs destination warehouse credentials so it can create and
-replace tables in the `AGENTS` schema.
-
-Create one required GitHub Actions secret in the repository that calls these
-workflows: `WAREHOUSE_CREDENTIALS`.
-
-Supported destinations are Snowflake and Databricks.
-
-For Snowflake, we recommend key-pair authentication:
-
-**Example key-pair auth secret:**
-
-```yaml
-type: snowflake
-account: abc123
-user: AGENTS_SCHEMA_BOT
-warehouse: COMPUTE_WH
-database: ANALYTICS
-role: TRANSFORMER
-private_key_pem: |
-  -----BEGIN ENCRYPTED PRIVATE KEY-----
-  MIIEvQIBADANBgkqh...
-  -----END ENCRYPTED PRIVATE KEY-----
-private_key_passphrase: your-passphrase   # only if the key is encrypted
-```
-
-**Note:**
-- `role` is optional.
-- An unencrypted key uses `-----BEGIN PRIVATE KEY-----` / `-----END PRIVATE KEY-----` markers and omits `private_key_passphrase`.
-
-**Example Databricks PAT secret:**
-
-```yaml
-type: databricks
-host: dbc-abc123.cloud.databricks.com
-http_path: /sql/1.0/warehouses/abc123
-catalog: main
-token: your-personal-access-token
-```
+Configure the `WAREHOUSE_CREDENTIALS` GitHub Actions secret for your destination
+warehouse. See [Warehouse Credentials](warehouse-credentials.md).
 
 ## Run the dbt Sync Workflow
 

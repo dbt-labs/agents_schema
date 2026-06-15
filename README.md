@@ -29,6 +29,7 @@ available before writing or explaining queries.
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
 - [Guides](#guides)
+  - [Warehouse Credentials](#warehouse-credentials)
   - [Sync dbt](#sync-dbt)
   - [Sync Looker](#sync-looker)
   - [Sync OSI](#sync-osi)
@@ -43,15 +44,33 @@ available before writing or explaining queries.
 
 ## Getting Started
 
-There are three supported metadata sources. Pick one to get started quickly.
+Pick a metadata source and a destination warehouse to get started quickly.
+
+Supported sources:
+
+- dbt
+- Looker
+- OSI
+- Markdown skills
+
+Supported destinations:
+
+- Snowflake
+- Databricks
+- BigQuery
 
 ### Prerequisites
 
 Each workflow writes to your warehouse using a single GitHub Actions secret:
-`WAREHOUSE_CREDENTIALS`. The source-specific setup guides show the expected
-secret shape and the workflow YAML to copy.
+`WAREHOUSE_CREDENTIALS`. See [Warehouse Credentials](warehouse-credentials.md)
+for supported destination secret shapes.
 
 ## Guides
+
+### Warehouse Credentials
+
+Use [Warehouse Credentials](warehouse-credentials.md) to configure the
+`WAREHOUSE_CREDENTIALS` secret for Snowflake, Databricks, or BigQuery.
 
 ### Sync dbt
 

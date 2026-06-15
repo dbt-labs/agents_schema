@@ -10,6 +10,7 @@ import yaml
 
 from .agents_schema_writer import (
     AgentsSchemaWriter,
+    BigQueryAgentsSchemaWriter,
     Column,
     DatabricksAgentsSchemaWriter,
     SnowflakeAgentsSchemaWriter,
@@ -60,12 +61,39 @@ class DatabricksDestination(DatabricksAgentsSchemaWriter):
         super().__init__(databricks.sql.connect(**connect_kwargs))
 
 
+class BigQueryDestination(BigQueryAgentsSchemaWriter):
+    def __init__(
+        self,
+        config: dict[str, Any] | None = None,
+        *,
+        client: Any | None = None,
+        credentials_info: dict[str, Any] | None = None,
+        project_id: str | None = None,
+        location: str | None = None,
+    ) -> None:
+        if client is None:
+            from google.cloud import bigquery
+            from google.oauth2.service_account import Credentials
+
+            if credentials_info is None or project_id is None:
+                if config is None:
+                    raise ConfigError("BigQueryDestination requires config or client")
+                credentials_info, project_id, location = _bigquery_credentials(config)
+            credentials = Credentials.from_service_account_info(credentials_info)
+            client = bigquery.Client(credentials=credentials, project=project_id)
+        if project_id is None:
+            raise ConfigError("BigQueryDestination requires project_id")
+        super().__init__(client, project_id, location)
+
+
 def open_destination(cfg: dict[str, Any]) -> Destination:
     dest_type = warehouse_type(cfg)
     if dest_type == "snowflake":
         return SnowflakeDestination(cfg)
     if dest_type == "databricks":
         return DatabricksDestination(cfg)
+    if dest_type in {"bigquery", "big_query"}:
+        return BigQueryDestination(cfg)
     raise ConfigError(f"unsupported destination type: {dest_type}")
 
 
@@ -181,12 +209,69 @@ def _databricks_connect_kwargs_from_secret(destination: dict[str, Any]) -> dict[
     }
 
 
+def _bigquery_credentials(cfg: dict[str, Any]) -> tuple[dict[str, Any], str, str | None]:
+    destination = warehouse_credentials_from_env()
+    if destination.get("type") not in {"bigquery", "big_query"}:
+        raise ConfigError("WAREHOUSE_CREDENTIALS.type must be bigquery")
+    return _bigquery_credentials_from_secret(destination)
+
+
+def _bigquery_credentials_from_secret(destination: dict[str, Any]) -> tuple[dict[str, Any], str, str | None]:
+    project_id = destination.get("project_id") or destination.get("projectId") or destination.get("project")
+    if not project_id:
+        raise ConfigError("WAREHOUSE_CREDENTIALS missing keys: project_id")
+
+    credentials_info = destination.get("credentials_json") or destination.get("credentialsJson")
+    if isinstance(credentials_info, str):
+        try:
+            credentials_info = json.loads(credentials_info)
+        except json.JSONDecodeError as e:
+            raise ConfigError(f"WAREHOUSE_CREDENTIALS.credentials_json is not valid JSON: {e}") from e
+    if credentials_info is None:
+        credentials_info = _bigquery_service_account_from_flat_secret(destination)
+    if not isinstance(credentials_info, dict):
+        raise ConfigError("WAREHOUSE_CREDENTIALS.credentials_json must be a JSON object")
+
+    required = ["private_key", "client_email"]
+    missing = [name for name in required if not credentials_info.get(name)]
+    if missing:
+        raise ConfigError("WAREHOUSE_CREDENTIALS.credentials_json missing keys: " + ", ".join(missing))
+    credentials_info = {"type": "service_account", **credentials_info}
+    return credentials_info, str(project_id), _optional_string(destination.get("location"))
+
+
+def _bigquery_service_account_from_flat_secret(destination: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": destination.get("service_account_type") or "service_account",
+        "project_id": destination.get("service_account_project_id") or destination.get("project_id"),
+        "private_key_id": destination.get("private_key_id", ""),
+        "private_key": destination.get("private_key", ""),
+        "client_email": destination.get("client_email", ""),
+        "client_id": destination.get("client_id", ""),
+        "auth_uri": destination.get("auth_uri", "https://accounts.google.com/o/oauth2/auth"),
+        "token_uri": destination.get("token_uri", "https://oauth2.googleapis.com/token"),
+        "auth_provider_x509_cert_url": destination.get(
+            "auth_provider_x509_cert_url",
+            "https://www.googleapis.com/oauth2/v1/certs",
+        ),
+        "client_x509_cert_url": destination.get("client_x509_cert_url", ""),
+    }
+
+
+def _optional_string(value: object) -> str | None:
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
 __all__ = [
+    "BigQueryDestination",
     "Column",
     "DatabricksDestination",
     "Destination",
     "SnowflakeDestination",
     "TableSchema",
+    "_bigquery_credentials_from_secret",
     "_create_table_if_not_exists_sql",
     "_create_table_sql",
     "_databricks_connect_kwargs_from_secret",
