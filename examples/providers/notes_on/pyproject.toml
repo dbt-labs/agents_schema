@@ -1,0 +1,21 @@
+[project]
+name = "agents-schema-notes-on"
+version = "0.0.0"
+description = "Example Agents Schema provider for object-scoped notes."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "cryptography>=3.1.0",
+    "pyyaml>=6.0",
+    "snowflake-connector-python>=3.0.0",
+]
+
+[project.scripts]
+agents-schema-notes-on = "agents_schema_notes_on.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agents_schema_notes_on"]
