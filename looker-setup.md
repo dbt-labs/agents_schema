@@ -3,11 +3,12 @@
 ## Prerequisites
 
 Configure the `WAREHOUSE_CREDENTIALS` GitHub Actions secret for your destination
-warehouse. Pick the shape for the warehouse you want this Looker sync to write
-to.
+warehouse. Copy the YAML for your destination, fill in your values, and save it
+as the `WAREHOUSE_CREDENTIALS` GitHub Actions secret in the repository that
+calls this workflow.
 
 <details>
-<summary>Snowflake credentials</summary>
+<summary>Snowflake setup</summary>
 
 We recommend key-pair authentication:
 
@@ -37,7 +38,7 @@ password: your-password
 </details>
 
 <details>
-<summary>Databricks credentials</summary>
+<summary>Databricks setup</summary>
 
 Use a SQL warehouse HTTP path and a personal access token:
 
@@ -55,7 +56,7 @@ within the configured catalog.
 </details>
 
 <details>
-<summary>BigQuery credentials</summary>
+<summary>BigQuery setup</summary>
 
 Use the destination project plus a service account JSON object:
 
