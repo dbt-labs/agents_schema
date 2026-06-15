@@ -250,11 +250,17 @@ agents-schema dbt --project-dir dbt_project
 agents-schema looker --lookml-dir lookml
 agents-schema osi --osi-dir osi
 agents-schema skills --skills-dir skills
+agents-schema snowflake-semantic --semantic-view ANALYTICS.FINANCE.REVENUE
 ```
 
 The CLI reads warehouse credentials from `WAREHOUSE_CREDENTIALS`. Skills default
 to `--provider user`; pass `--provider fivetran` or another reserved provider
 when publishing vendor-delivered skills.
+
+The `snowflake-semantic` command is an experimental pointer-only workflow. It
+publishes one `AGENTS.ROOT` row per `--semantic-view` value using keys such as
+`semantic_view/ANALYTICS.FINANCE.REVENUE`; the semantic view definition remains
+native to Snowflake.
 
 Skills are delivered as `AGENTS.ROOT` rows whose keys start with `skill/`:
 

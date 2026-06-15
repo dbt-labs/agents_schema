@@ -101,6 +101,32 @@ class SkillsTests(unittest.TestCase):
             }
         )
 
+    def test_cli_dispatches_snowflake_semantic_views(self):
+        with (
+            patch("agents_schema.cli.warehouse_type_from_env", return_value="snowflake"),
+            patch("agents_schema.cli.snowflake_semantic.run") as run,
+        ):
+            result = cli.main(
+                [
+                    "snowflake-semantic",
+                    "--semantic-view",
+                    "ANALYTICS.FINANCE.REVENUE",
+                    "--semantic-view",
+                    "ANALYTICS.SALES.PIPELINE",
+                ]
+            )
+
+        self.assertEqual(result, 0)
+        run.assert_called_once_with(
+            {
+                "warehouse": {"type": "snowflake"},
+                "metadata_connection": {
+                    "type": "snowflake-semantic",
+                    "semantic_views": ["ANALYTICS.FINANCE.REVENUE", "ANALYTICS.SALES.PIPELINE"],
+                },
+            }
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
