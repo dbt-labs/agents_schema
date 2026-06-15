@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import __version__, dbt, lookml, osi, skills
+from . import __version__, dbt, lookml, osi, skills, snowflake_semantic
 from .config import ConfigError
 from .dbt_profiles import dbt_adapter_package_from_profiles_file
 from .destinations import warehouse_type_from_env
@@ -80,6 +80,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="publisher name to use for AGENTS.ROOT skill rows",
     )
 
+    snowflake_semantic_parser = sub.add_parser(
+        "snowflake-semantic",
+        help="publish Snowflake semantic view pointers into AGENTS.ROOT",
+    )
+    snowflake_semantic_parser.add_argument(
+        "--semantic-view",
+        action="append",
+        required=True,
+        dest="semantic_views",
+        help="fully qualified Snowflake semantic view name; repeat for multiple views",
+    )
+
     return parser
 
 
@@ -96,6 +108,15 @@ def main(argv: list[str] | None = None) -> int:
             cfg = _config("skills", args.skills_dir)
             cfg["metadata_connection"]["provider"] = args.provider
             skills.run(cfg)
+        elif args.source_type == "snowflake-semantic":
+            cfg = {
+                "warehouse": {"type": warehouse_type_from_env()},
+                "metadata_connection": {
+                    "type": "snowflake-semantic",
+                    "semantic_views": args.semantic_views,
+                },
+            }
+            snowflake_semantic.run(cfg)
         else:
             raise ConfigError(f"unsupported source type: {args.source_type}")
     except (ConfigError, FileNotFoundError) as e:

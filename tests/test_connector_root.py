@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from agents_schema import dbt, lookml, osi, skills
+from agents_schema import dbt, lookml, osi, skills, snowflake_semantic
 from agents_schema.skills import SkillFile
 
 
@@ -103,6 +103,25 @@ class ConnectorRootTests(unittest.TestCase):
         self.assertEqual(dest.calls[2], ("replace", "agents.skill_use"))
         self.assertEqual(dest.calls[3][0], "insert")
         self.assertEqual(dest.calls[3][1], "agents.skill_use")
+
+    def test_snowflake_semantic_run_upserts_root_pointer_rows(self):
+        dest = FakeDestination()
+        cfg = {"metadata_connection": {"semantic_views": ["ANALYTICS.FINANCE.REVENUE"]}}
+
+        with (
+            patch(
+                "agents_schema.snowflake_semantic.open_destination",
+                return_value=DestinationContext(dest),
+            ),
+            patch("builtins.print"),
+        ):
+            snowflake_semantic.run(cfg)
+
+        self.assertEqual(dest.calls[0][0], "upsert")
+        self.assertEqual(dest.calls[0][1], "agents.root")
+        self.assertEqual(dest.calls[0][2][0][0], "snowflake_semantic")
+        self.assertEqual(dest.calls[0][2][0][1], "semantic_view/ANALYTICS.FINANCE.REVENUE")
+        self.assertIn("Snowflake object: `ANALYTICS.FINANCE.REVENUE`", dest.calls[0][2][0][2])
 
     def test_publish_skill_upserts_one_root_row_and_refreshes_its_uses(self):
         dest = FakeDestination()
