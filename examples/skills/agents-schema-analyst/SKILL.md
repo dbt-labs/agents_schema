@@ -42,7 +42,7 @@ snow sql -c <connection> -q "<SQL>"
 **Databricks:** Read `host`, `http_path`, `token`, and `catalog` from `agents.yml`. Run:
 ```bash
 python3 - <<'PYEOF'
-import databricks.sql, json, yaml, sys
+import databricks.sql, json, yaml
 cfg = yaml.safe_load(open("agents.yml"))
 conn = databricks.sql.connect(
     server_hostname=cfg["host"],
@@ -51,14 +51,17 @@ conn = databricks.sql.connect(
     catalog=cfg.get("catalog", "hive_metastore"),
 )
 cursor = conn.cursor()
-cursor.execute(sys.argv[1])
+sql = """
+SELECT ...  -- replace with actual SQL
+"""
+cursor.execute(sql)
 cols = [d[0] for d in cursor.description]
 rows = [dict(zip(cols, row)) for row in cursor.fetchall()]
 print(json.dumps(rows, indent=2, default=str))
 conn.close()
 PYEOF
 ```
-Pass the SQL as the first positional argument (replace `sys.argv[1]` with the actual SQL string, or embed the SQL directly in the here-doc for multi-line queries).
+Replace the `sql = """..."""` line with the actual SQL query before running.
 
 **Step 2 — Read-only guard:** Only `SELECT`. Never `INSERT`, `UPDATE`, `DELETE`, `CREATE`, or `DROP`.
 
