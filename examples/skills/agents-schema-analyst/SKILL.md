@@ -143,5 +143,5 @@ A given warehouse has only the families its ROOT lists.
 | Picking a plausible-looking column or table for a metric | Read the metric/dataset `AI_CONTEXT` and use exactly the column, table, and filter it names. |
 | Reporting `$0` / no result for "year-to-date" | If current-year returns no rows, the data is historical — anchor to the latest year present and label it. |
 | Querying a metric from the wrong table | The dataset/view metadata names the `source_table` and any "use X not Y" caveat. Follow it. |
-| Assuming a provider's tables exist | Check `AGENTS.ROOT` first; some warehouses have only OSI, only LookML, or only dbt. |
+| Assuming a provider's tables exist | Check `{{AGENTS_PREFIX}}.root` first; some warehouses have only OSI, only LookML, or only dbt. |
 | `SHOW TABLES` / `GET_DDL` (Snowflake) or `SHOW TABLES IN` / `DESCRIBE TABLE` (Databricks) to explore | Use focused `SELECT`s against the known `{{AGENTS_PREFIX}}.*` tables. |
