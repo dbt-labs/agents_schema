@@ -23,6 +23,8 @@ because it discovers the metrics, tables, and rules at query time rather than ha
 
 ## Setup
 
+**Detect warehouse type:** read the `type` field from `agents.yml` (`type: snowflake` or `type: databricks`). All branching below depends on this value.
+
 **Step 1 — Read `agents.yml` and establish two macros used throughout this skill:**
 
 **`{{AGENTS_PREFIX}}`** — the schema prefix for all metadata queries:
@@ -69,7 +71,7 @@ Replace the `sql = """..."""` line with the actual SQL query before running.
 
 1. **Discover what metadata exists — don't assume which providers are present.**
    ```sql
-   SELECT provider, key, content FROM {{AGENTS_PREFIX}}.ROOT ORDER BY provider, key;
+   SELECT provider, key, content FROM {{AGENTS_PREFIX}}.root ORDER BY provider, key;
    ```
    This lists the providers that published metadata (`osi`, `lookml`, `dbt`, or user-published) plus
    their overview/guidance rows. Only query tables for providers that actually appear here.
@@ -79,17 +81,17 @@ Replace the `sql = """..."""` line with the actual SQL query before running.
    Substitute a keyword from the question for `<keyword>`:
    ```sql
    SELECT name, description, ai_context, expression
-   FROM {{AGENTS_PREFIX}}.OSI_METRIC
+   FROM {{AGENTS_PREFIX}}.osi_metric
    WHERE LOWER(name||' '||COALESCE(description,'')||' '||COALESCE(ai_context,''))
          LIKE '%<keyword>%';
    ```
-   Use `{{AGENTS_PREFIX}}.LOOKML_MEASURE` (`sql`, `description`, `ai_context`) when the provider is LookML.
+   Use `{{AGENTS_PREFIX}}.lookml_measure` (`sql`, `description`, `ai_context`) when the provider is LookML.
 
 3. **Resolve the physical table and its rules.** Find the source table and every query caveat
    in the dataset/view metadata, and obey each `AI_CONTEXT` instruction exactly:
-   - OSI: `{{AGENTS_PREFIX}}.OSI_DATASET` (`source_table`, `ai_context`), `{{AGENTS_PREFIX}}.OSI_FIELD`
-   - LookML: `{{AGENTS_PREFIX}}.LOOKML_VIEW` (`sql_table_name`), `{{AGENTS_PREFIX}}.LOOKML_DIMENSION`
-   - dbt, *only if present in ROOT*: `{{AGENTS_PREFIX}}.DBT_MODEL` / `{{AGENTS_PREFIX}}.DBT_COLUMN` add model and
+   - OSI: `{{AGENTS_PREFIX}}.osi_dataset` (`source_table`, `ai_context`), `{{AGENTS_PREFIX}}.osi_field`
+   - LookML: `{{AGENTS_PREFIX}}.lookml_view` (`sql_table_name`), `{{AGENTS_PREFIX}}.lookml_dimension`
+   - dbt, *only if present in root*: `{{AGENTS_PREFIX}}.dbt_model` / `{{AGENTS_PREFIX}}.dbt_column` add model and
      column descriptions.
    Use the source table named in the metadata — not a same-named table you assume exists elsewhere.
 
@@ -99,12 +101,12 @@ Replace the `sql = """..."""` line with the actual SQL query before running.
    → use the `{% else %}` branch.
 
 5. **Pick the time grain from metadata.** Use the time dimension the metadata marks
-   (`OSI_FIELD.IS_TIME_DIMENSION`, or a LookML `dimension_group`). For "current"/snapshot
+   (`osi_field.is_time_dimension`, or a LookML `dimension_group`). For "current"/snapshot
    metrics, use the latest available period. For "year-to-date", try wall-clock current year
    first; **if it returns no rows because the data is historical, do NOT report $0** — anchor to
    the latest year present in the table and clearly label the date range you used.
 
-6. **Run it and answer.** Run the grounded query with `{{run_sql}}`, show the SQL you ran, and state
+6. **Run it and answer.** Run the grounded query with `{{run_sql "<your query>"}}`, show the SQL you ran, and state
    the answer plainly (round currency to whole dollars with a `$`; percentages to one decimal).
 
 ## Hard rules — never hard-code
@@ -122,7 +124,7 @@ Replace the `sql = """..."""` line with the actual SQL query before running.
 
 Column names are stored **lowercase** in Databricks and case-insensitively in Snowflake.
 Use lowercase column names in SELECT — they resolve on both warehouses.
-A given warehouse has only the families its ROOT lists.
+A given warehouse has only the families its `root` table lists.
 
 | Table | Key columns (lowercase — work on both warehouses) |
 |---|---|
