@@ -69,7 +69,7 @@ Replace the `sql = """..."""` line with the actual SQL query before running.
 
 1. **Discover what metadata exists — don't assume which providers are present.**
    ```sql
-   SELECT provider, key, content FROM AGENTS.ROOT ORDER BY provider, key;
+   SELECT provider, key, content FROM {{AGENTS_PREFIX}}.ROOT ORDER BY provider, key;
    ```
    This lists the providers that published metadata (`osi`, `lookml`, `dbt`, or user-published) plus
    their overview/guidance rows. Only query tables for providers that actually appear here.
@@ -79,17 +79,17 @@ Replace the `sql = """..."""` line with the actual SQL query before running.
    Substitute a keyword from the question for `<keyword>`:
    ```sql
    SELECT name, description, ai_context, expression
-   FROM AGENTS.OSI_METRIC
-   WHERE LOWER(NAME||' '||COALESCE(DESCRIPTION,'')||' '||COALESCE(AI_CONTEXT,''))
+   FROM {{AGENTS_PREFIX}}.OSI_METRIC
+   WHERE LOWER(name||' '||COALESCE(description,'')||' '||COALESCE(ai_context,''))
          LIKE '%<keyword>%';
    ```
-   Use `AGENTS.LOOKML_MEASURE` (`SQL`, `DESCRIPTION`, `AI_CONTEXT`) when the provider is LookML.
+   Use `{{AGENTS_PREFIX}}.LOOKML_MEASURE` (`sql`, `description`, `ai_context`) when the provider is LookML.
 
 3. **Resolve the physical table and its rules.** Find the source table and every query caveat
    in the dataset/view metadata, and obey each `AI_CONTEXT` instruction exactly:
-   - OSI: `AGENTS.OSI_DATASET` (`SOURCE_TABLE`, `AI_CONTEXT`), `AGENTS.OSI_FIELD`
-   - LookML: `AGENTS.LOOKML_VIEW` (`SQL_TABLE_NAME`), `AGENTS.LOOKML_DIMENSION`
-   - dbt, *only if present in ROOT*: `AGENTS.DBT_MODEL` / `AGENTS.DBT_COLUMN` add model and
+   - OSI: `{{AGENTS_PREFIX}}.OSI_DATASET` (`source_table`, `ai_context`), `{{AGENTS_PREFIX}}.OSI_FIELD`
+   - LookML: `{{AGENTS_PREFIX}}.LOOKML_VIEW` (`sql_table_name`), `{{AGENTS_PREFIX}}.LOOKML_DIMENSION`
+   - dbt, *only if present in ROOT*: `{{AGENTS_PREFIX}}.DBT_MODEL` / `{{AGENTS_PREFIX}}.DBT_COLUMN` add model and
      column descriptions.
    Use the source table named in the metadata — not a same-named table you assume exists elsewhere.
 
@@ -104,7 +104,7 @@ Replace the `sql = """..."""` line with the actual SQL query before running.
    first; **if it returns no rows because the data is historical, do NOT report $0** — anchor to
    the latest year present in the table and clearly label the date range you used.
 
-6. **Run it and answer.** Run the grounded query with `snow sql`, show the SQL you ran, and state
+6. **Run it and answer.** Run the grounded query with `{{run_sql}}`, show the SQL you ran, and state
    the answer plainly (round currency to whole dollars with a `$`; percentages to one decimal).
 
 ## Hard rules — never hard-code
