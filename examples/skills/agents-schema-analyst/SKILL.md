@@ -120,19 +120,21 @@ Replace the `sql = """..."""` line with the actual SQL query before running.
 
 ## Metadata table shapes (reference)
 
-Identifiers are UPPERCASE in Snowflake. A given warehouse has only the families its ROOT lists.
+Column names are stored **lowercase** in Databricks and case-insensitively in Snowflake.
+Use lowercase column names in SELECT — they resolve on both warehouses.
+A given warehouse has only the families its ROOT lists.
 
-| Table | Key columns |
+| Table | Key columns (lowercase — work on both warehouses) |
 |---|---|
-| `AGENTS.ROOT` | `PROVIDER`, `KEY`, `CONTENT` |
-| `AGENTS.OSI_METRIC` | `NAME`, `DESCRIPTION`, `AI_CONTEXT`, `EXPRESSION` |
-| `AGENTS.OSI_DATASET` | `NAME`, `SOURCE_TABLE`, `PRIMARY_KEY`, `DESCRIPTION`, `AI_CONTEXT` |
-| `AGENTS.OSI_FIELD` | `DATASET_NAME`, `FIELD_NAME`, `DESCRIPTION`, `AI_CONTEXT`, `IS_TIME_DIMENSION`, `EXPRESSION` |
-| `AGENTS.LOOKML_MEASURE` | `VIEW_NAME`, `MEASURE_NAME`, `TYPE`, `SQL`, `DESCRIPTION`, `AI_CONTEXT` |
-| `AGENTS.LOOKML_VIEW` | `NAME`, `SQL_TABLE_NAME`, `DESCRIPTION`, `AI_CONTEXT` |
-| `AGENTS.LOOKML_DIMENSION` | `VIEW_NAME`, `FIELD_NAME`, `FIELD_KIND`, `TYPE`, `SQL`, `DESCRIPTION`, `AI_CONTEXT` |
-| `AGENTS.DBT_MODEL` | `UNIQUE_ID`, `NAME`, `SCHEMA_NAME`, `DESCRIPTION` |
-| `AGENTS.DBT_COLUMN` | `MODEL_ID`, `COLUMN_NAME`, `DATA_TYPE`, `DESCRIPTION` |
+| `{{AGENTS_PREFIX}}.root` | `provider`, `key`, `content` |
+| `{{AGENTS_PREFIX}}.osi_metric` | `name`, `description`, `ai_context`, `expression` |
+| `{{AGENTS_PREFIX}}.osi_dataset` | `name`, `source_table`, `primary_key`, `description`, `ai_context` |
+| `{{AGENTS_PREFIX}}.osi_field` | `dataset_name`, `field_name`, `description`, `ai_context`, `is_time_dimension`, `expression` |
+| `{{AGENTS_PREFIX}}.lookml_measure` | `view_name`, `measure_name`, `type`, `sql`, `description`, `ai_context` |
+| `{{AGENTS_PREFIX}}.lookml_view` | `name`, `sql_table_name`, `description`, `ai_context` |
+| `{{AGENTS_PREFIX}}.lookml_dimension` | `view_name`, `field_name`, `field_kind`, `type`, `sql`, `description`, `ai_context` |
+| `{{AGENTS_PREFIX}}.dbt_model` | `unique_id`, `name`, `schema_name`, `description` |
+| `{{AGENTS_PREFIX}}.dbt_column` | `model_id`, `column_name`, `data_type`, `description` |
 
 ## Common mistakes
 
