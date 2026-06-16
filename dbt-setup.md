@@ -101,7 +101,7 @@ on:
 
 jobs:
   agents-schema-dbt:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.7
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.8
     with:
       dbt-project-dir: dbt_project
     secrets: inherit
