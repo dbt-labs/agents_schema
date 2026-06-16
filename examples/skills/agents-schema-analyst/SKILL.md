@@ -16,10 +16,10 @@ metadata schema, then querying the business tables exactly as those definitions 
 **Core principle: the warehouse tells you how to compute the answer. Your job is to find
 that instruction in `AGENTS.*` and follow it — not to guess a formula, table, filter, or date rule.**
 
-This skill is warehouse-agnostic in approach but Snowflake-specific in tooling: it queries
-through the Snowflake CLI (`snow`). It works against any `AGENTS` schema — your own warehouse
-or a customer's — because it discovers the metrics, tables, and rules at query time rather than
-hard-coding them.
+This skill is warehouse-agnostic in both approach and tooling. It detects the warehouse type
+from `agents.yml` and routes SQL execution to the appropriate client (Snowflake CLI or Databricks
+Python connector). It works against any `AGENTS` schema — your own warehouse or a customer's —
+because it discovers the metrics, tables, and rules at query time rather than hard-coding them.
 
 ## Setup
 
