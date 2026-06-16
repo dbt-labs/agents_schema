@@ -23,12 +23,44 @@ because it discovers the metrics, tables, and rules at query time rather than ha
 
 ## Setup
 
-- Query Snowflake **read-only** with: `snow sql -c <connection> -q "<SQL>"`.
-- **Connection:** read `snow_cli_connection` from an `agents.yml` in the working directory if
-  present. Otherwise run `snow connection list` and use the default (or the only) connection;
-  if it is ambiguous, ask the user which connection to use.
-- **Metadata schema:** use `agents_schema_name` from `agents.yml` uppercased, else `AGENTS`.
-- Only `SELECT` / `SHOW`. Never write, create, or drop.
+**Step 1 — Read `agents.yml` and establish two macros used throughout this skill:**
+
+**`{{AGENTS_PREFIX}}`** — the schema prefix for all metadata queries:
+
+| Warehouse | Value | Example |
+|---|---|---|
+| Snowflake | `agents_schema_name` from `agents.yml` uppercased, else `AGENTS` | `AGENTS` |
+| Databricks | `catalog` from `agents.yml` + `.agents` (or + `.` + `agents_schema_name` lowercased if set) | `main.agents` |
+
+**`{{run_sql "<SQL>"}}`** — how to execute a query:
+
+**Snowflake:** Read `snow_cli_connection` from `agents.yml` if present, else run `snow connection list` and use the default (ask the user if ambiguous):
+```bash
+snow sql -c <connection> -q "<SQL>"
+```
+
+**Databricks:** Read `host`, `http_path`, `token`, and `catalog` from `agents.yml`. Run:
+```bash
+python3 - <<'PYEOF'
+import databricks.sql, json, yaml, sys
+cfg = yaml.safe_load(open("agents.yml"))
+conn = databricks.sql.connect(
+    server_hostname=cfg["host"],
+    http_path=cfg["http_path"],
+    access_token=cfg["token"],
+    catalog=cfg.get("catalog", "hive_metastore"),
+)
+cursor = conn.cursor()
+cursor.execute(sys.argv[1])
+cols = [d[0] for d in cursor.description]
+rows = [dict(zip(cols, row)) for row in cursor.fetchall()]
+print(json.dumps(rows, indent=2, default=str))
+conn.close()
+PYEOF
+```
+Pass the SQL as the first positional argument (replace `sys.argv[1]` with the actual SQL string, or embed the SQL directly in the here-doc for multi-line queries).
+
+**Step 2 — Read-only guard:** Only `SELECT`. Never `INSERT`, `UPDATE`, `DELETE`, `CREATE`, or `DROP`.
 
 ## Procedure
 
