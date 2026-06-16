@@ -43,13 +43,26 @@ available before writing or explaining queries.
 
 ## Getting Started
 
-There are three supported metadata sources. Pick one to get started quickly.
+Pick a metadata source and a destination warehouse to get started quickly.
+
+Supported sources:
+
+- dbt
+- Looker
+- OSI
+- Markdown skills
+
+Supported destinations:
+
+- Snowflake
+- Databricks
+- BigQuery
 
 ### Prerequisites
 
 Each workflow writes to your warehouse using a single GitHub Actions secret:
-`WAREHOUSE_CREDENTIALS`. The source-specific setup guides show the expected
-secret shape and the workflow YAML to copy.
+`WAREHOUSE_CREDENTIALS`. Each source setup guide includes collapsible
+destination-specific examples for Snowflake, Databricks, and BigQuery.
 
 ## Guides
 

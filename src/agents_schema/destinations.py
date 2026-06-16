@@ -3,49 +3,33 @@ from __future__ import annotations
 
 import json
 import os
-import re
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Protocol
+from typing import Any
 
 import yaml
 
+from .agents_schema_writer import (
+    AgentsSchemaWriter,
+    BigQueryAgentsSchemaWriter,
+    Column,
+    DatabricksAgentsSchemaWriter,
+    SnowflakeAgentsSchemaWriter,
+    TableSchema,
+)
+from .agents_schema_writer.snowflake import (
+    _create_table_if_not_exists_sql,
+    _create_table_sql,
+    _delete_sql,
+    _insert_sql,
+    _merge_sql,
+    load_private_key,
+)
 from .config import ConfigError, SUPPORTED_WAREHOUSE_TYPES, warehouse_type
 
-INSERT_BATCH_SIZE = 1000
-IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
-AGENTS_SCHEMA = "agents"
+Destination = AgentsSchemaWriter
 
 
-@dataclass(frozen=True)
-class Column:
-    name: str
-    kind: str
-    nullable: bool = True
-
-
-@dataclass(frozen=True)
-class TableSchema:
-    name: str
-    columns: tuple[Column, ...]
-    primary_key: tuple[str, ...] = ()
-
-    @property
-    def array_indexes(self) -> set[int]:
-        return {i for i, column in enumerate(self.columns) if column.kind == "array"}
-
-
-class Destination(Protocol):
-    def replace_table(self, table: TableSchema) -> None: ...
-    def upsert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None: ...
-    def insert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None: ...
-    def delete_rows(self, table: TableSchema, key_columns: tuple[str, ...], rows: Iterable[tuple[Any, ...]]) -> None: ...
-    def close(self) -> None: ...
-    def __enter__(self) -> "Destination": ...
-    def __exit__(self, exc_type: object, exc: object, tb: object) -> None: ...
-
-
-class SnowflakeDestination:
+class SnowflakeDestination(SnowflakeAgentsSchemaWriter):
     def __init__(
         self,
         config: dict[str, Any] | None = None,
@@ -54,151 +38,63 @@ class SnowflakeDestination:
     ) -> None:
         import snowflake.connector
 
-        self._agents_schema = AGENTS_SCHEMA
         if connect_kwargs is None:
             if config is None:
                 raise ConfigError("SnowflakeDestination requires config or connect_kwargs")
             connect_kwargs = _snowflake_connect_kwargs(config)
-        self._con = snowflake.connector.connect(**connect_kwargs)
-
-    def __enter__(self) -> "SnowflakeDestination":
-        return self
-
-    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
-        self.close()
-
-    def close(self) -> None:
-        self._con.close()
-
-    def replace_table(self, table: TableSchema) -> None:
-        with self._con.cursor() as cur:
-            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {self._agents_schema}")
-            cur.execute(_create_table_sql(table, self._agents_schema))
-
-    def upsert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None:
-        bind_rows = _bind_rows(table, rows)
-        if not bind_rows:
-            return
-        with self._con.cursor() as cur:
-            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {self._agents_schema}")
-            cur.execute(_create_table_if_not_exists_sql(table, self._agents_schema))
-            for batch in _batched(bind_rows, INSERT_BATCH_SIZE):
-                cur.execute(_merge_sql(table, self._agents_schema, len(batch)), _flatten(batch))
-
-    def insert_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None:
-        bind_rows = _bind_rows(table, rows)
-        if not bind_rows:
-            return
-        with self._con.cursor() as cur:
-            for batch in _batched(bind_rows, INSERT_BATCH_SIZE):
-                cur.execute(_insert_sql(table, self._agents_schema, len(batch)), _flatten(batch))
-
-    def delete_rows(self, table: TableSchema, key_columns: tuple[str, ...], rows: Iterable[tuple[Any, ...]]) -> None:
-        bind_rows = list(rows)
-        if not bind_rows:
-            return
-        with self._con.cursor() as cur:
-            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {self._agents_schema}")
-            cur.execute(_create_table_if_not_exists_sql(table, self._agents_schema))
-            for batch in _batched(bind_rows, INSERT_BATCH_SIZE):
-                cur.execute(
-                    _delete_sql(table, self._agents_schema, key_columns, len(batch)),
-                    _flatten(batch),
-                )
+        super().__init__(snowflake.connector.connect(**connect_kwargs))
 
 
-def _bind_rows(table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
-    bind_rows = []
-    for row in rows:
-        bind_row = []
-        for i, value in enumerate(row):
-            if i in table.array_indexes:
-                bind_row.append(json.dumps(value or []))
-            else:
-                bind_row.append(value)
-        bind_rows.append(tuple(bind_row))
-    return bind_rows
+class DatabricksDestination(DatabricksAgentsSchemaWriter):
+    def __init__(
+        self,
+        config: dict[str, Any] | None = None,
+        *,
+        connect_kwargs: dict[str, Any] | None = None,
+    ) -> None:
+        import databricks.sql
+
+        if connect_kwargs is None:
+            if config is None:
+                raise ConfigError("DatabricksDestination requires config or connect_kwargs")
+            connect_kwargs = _databricks_connect_kwargs(config)
+        super().__init__(databricks.sql.connect(**connect_kwargs))
 
 
-def _batched(rows: list[tuple[Any, ...]], size: int) -> Iterable[list[tuple[Any, ...]]]:
-    for i in range(0, len(rows), size):
-        yield rows[i : i + size]
+class BigQueryDestination(BigQueryAgentsSchemaWriter):
+    def __init__(
+        self,
+        config: dict[str, Any] | None = None,
+        *,
+        client: Any | None = None,
+        credentials_info: dict[str, Any] | None = None,
+        project_id: str | None = None,
+        location: str | None = None,
+    ) -> None:
+        if client is None:
+            from google.cloud import bigquery
+            from google.oauth2.service_account import Credentials
 
-
-def _insert_sql(table: TableSchema, schema: str, row_count: int) -> str:
-    row_select = "SELECT " + ",".join(_placeholder(table, i) for i in range(len(table.columns)))
-    values_sql = " UNION ALL ".join(row_select for _ in range(row_count))
-    return f"INSERT INTO {_table_name(table, schema)} {values_sql}"
-
-
-def _delete_sql(table: TableSchema, schema: str, key_columns: tuple[str, ...], row_count: int) -> str:
-    if not key_columns:
-        raise ConfigError("delete requires at least one key column")
-    source_columns = tuple(Column(name, "varchar", nullable=False) for name in key_columns)
-    source_table = TableSchema(table.name, source_columns)
-    source_select = _source_select_sql(source_table, row_count)
-    match_sql = " AND ".join(
-        f"target.{_identifier(column)} = source.{_identifier(column)}" for column in key_columns
-    )
-    return (
-        f"DELETE FROM {_table_name(table, schema)} AS target\n"
-        f"USING ({source_select}) AS source\n"
-        f"WHERE {match_sql}"
-    )
-
-
-def _merge_sql(table: TableSchema, schema: str, row_count: int) -> str:
-    if not table.primary_key:
-        raise ConfigError("upsert requires a table primary key")
-    source_select = _source_select_sql(table, row_count)
-    match_sql = " AND ".join(
-        f"target.{_identifier(column)} = source.{_identifier(column)}" for column in table.primary_key
-    )
-    non_key_columns = [column.name for column in table.columns if column.name not in table.primary_key]
-    update_sql = ", ".join(
-        f"target.{_identifier(column)} = source.{_identifier(column)}" for column in non_key_columns
-    )
-    insert_columns = ", ".join(_identifier(column.name) for column in table.columns)
-    insert_values = ", ".join(f"source.{_identifier(column.name)}" for column in table.columns)
-    matched_sql = f"WHEN MATCHED THEN UPDATE SET {update_sql}\n" if update_sql else ""
-    return (
-        f"MERGE INTO {_table_name(table, schema)} AS target\n"
-        f"USING ({source_select}) AS source\n"
-        f"ON {match_sql}\n"
-        f"{matched_sql}"
-        f"WHEN NOT MATCHED THEN INSERT ({insert_columns}) VALUES ({insert_values})"
-    )
-
-
-def _source_select_sql(table: TableSchema, row_count: int) -> str:
-    row_select = "SELECT " + ", ".join(
-        f"{_placeholder(table, i)} AS {_identifier(column.name)}" for i, column in enumerate(table.columns)
-    )
-    return " UNION ALL ".join(row_select for _ in range(row_count))
-
-
-def _placeholder(table: TableSchema, index: int) -> str:
-    if index in table.array_indexes:
-        return "PARSE_JSON(%s)"
-    return "%s"
-
-
-def _flatten(rows: list[tuple[Any, ...]]) -> tuple[Any, ...]:
-    return tuple(value for row in rows for value in row)
+            if credentials_info is None or project_id is None:
+                if config is None:
+                    raise ConfigError("BigQueryDestination requires config or client")
+                credentials_info, project_id, location = _bigquery_credentials(config)
+            credentials = Credentials.from_service_account_info(credentials_info)
+            client = bigquery.Client(credentials=credentials, project=project_id)
+        if project_id is None:
+            raise ConfigError("BigQueryDestination requires project_id")
+        super().__init__(client, project_id, location)
 
 
 def open_destination(cfg: dict[str, Any]) -> Destination:
     dest_type = warehouse_type(cfg)
     if dest_type == "snowflake":
         return SnowflakeDestination(cfg)
+    if dest_type == "databricks":
+        return DatabricksDestination(cfg)
+    if dest_type in {"bigquery", "big_query"}:
+        return BigQueryDestination(cfg)
     raise ConfigError(f"unsupported destination type: {dest_type}")
-
-
-def _snowflake_connect_kwargs(cfg: dict[str, Any]) -> dict[str, Any]:
-    destination = warehouse_credentials_from_env()
-    if destination.get("type") != "snowflake":
-        raise ConfigError("WAREHOUSE_CREDENTIALS.type must be snowflake")
-    return _snowflake_connect_kwargs_from_secret(destination)
 
 
 def warehouse_credentials_from_env() -> dict[str, Any]:
@@ -234,6 +130,13 @@ def _parse_warehouse_credentials(raw: str) -> dict[str, Any]:
     return destination
 
 
+def _snowflake_connect_kwargs(cfg: dict[str, Any]) -> dict[str, Any]:
+    destination = warehouse_credentials_from_env()
+    if destination.get("type") != "snowflake":
+        raise ConfigError("WAREHOUSE_CREDENTIALS.type must be snowflake")
+    return _snowflake_connect_kwargs_from_secret(destination)
+
+
 def _snowflake_connect_kwargs_from_secret(destination: dict[str, Any]) -> dict[str, Any]:
     required = ["account", "user", "warehouse", "database"]
     missing = [name for name in required if not destination.get(name)]
@@ -255,12 +158,12 @@ def _snowflake_connect_kwargs_from_secret(destination: dict[str, Any]) -> dict[s
         kwargs["role"] = role
     passphrase = destination.get("private_key_passphrase")
     if has_private_key_pem:
-        kwargs["private_key"] = _load_private_key(
+        kwargs["private_key"] = load_private_key(
             destination["private_key_pem"].encode(),
             passphrase,
         )
     elif has_private_key_path:
-        kwargs["private_key"] = _load_private_key(
+        kwargs["private_key"] = load_private_key(
             Path(destination["private_key_path"]).read_bytes(),
             passphrase,
         )
@@ -269,60 +172,114 @@ def _snowflake_connect_kwargs_from_secret(destination: dict[str, Any]) -> dict[s
     return kwargs
 
 
-def _load_private_key(pem_bytes: bytes, passphrase: str | None) -> bytes:
-    from cryptography.hazmat.primitives import serialization
+def _databricks_connect_kwargs(cfg: dict[str, Any]) -> dict[str, Any]:
+    destination = warehouse_credentials_from_env()
+    if destination.get("type") != "databricks":
+        raise ConfigError("WAREHOUSE_CREDENTIALS.type must be databricks")
+    return _databricks_connect_kwargs_from_secret(destination)
 
-    password = passphrase.encode() if passphrase else None
-    private_key = serialization.load_pem_private_key(pem_bytes, password=password)
-    return private_key.private_bytes(
-        encoding=serialization.Encoding.DER,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
+
+def _databricks_connect_kwargs_from_secret(destination: dict[str, Any]) -> dict[str, Any]:
+    host = (
+        destination.get("host")
+        or destination.get("server_host_name")
+        or destination.get("serverHostName")
     )
-
-
-def _create_table_sql(table: TableSchema, schema: str) -> str:
-    return _create_table_statement_sql("CREATE OR REPLACE TABLE", table, schema)
-
-
-def _create_table_if_not_exists_sql(table: TableSchema, schema: str) -> str:
-    return _create_table_statement_sql("CREATE TABLE IF NOT EXISTS", table, schema)
-
-
-def _create_table_statement_sql(prefix: str, table: TableSchema, schema: str) -> str:
-    definitions = []
-    for column in table.columns:
-        sql = f"{column.name} {_type_sql(column.kind)}"
-        if not column.nullable:
-            sql += " NOT NULL"
-        definitions.append(sql)
-    if table.primary_key:
-        definitions.append(f"PRIMARY KEY ({', '.join(table.primary_key)})")
-    return (
-        f"{prefix} {_table_name(table, schema)} (\n    "
-        + ",\n    ".join(definitions)
-        + "\n)"
+    token = (
+        destination.get("token")
+        or destination.get("access_token")
+        or destination.get("personal_access_token")
+        or destination.get("personalAccessToken")
     )
+    required = {
+        "host": host,
+        "http_path": destination.get("http_path") or destination.get("httpPath"),
+        "catalog": destination.get("catalog"),
+        "token": token,
+    }
+    missing = [name for name, value in required.items() if not value]
+    if missing:
+        raise ConfigError("WAREHOUSE_CREDENTIALS missing keys: " + ", ".join(missing))
+
+    return {
+        "server_hostname": required["host"],
+        "http_path": required["http_path"],
+        "catalog": required["catalog"],
+        "access_token": required["token"],
+    }
 
 
-def _table_name(table: TableSchema, schema: str) -> str:
-    name = table.name.split(".")[-1]
-    return f"{schema}.{_identifier(name)}"
+def _bigquery_credentials(cfg: dict[str, Any]) -> tuple[dict[str, Any], str, str | None]:
+    destination = warehouse_credentials_from_env()
+    if destination.get("type") not in {"bigquery", "big_query"}:
+        raise ConfigError("WAREHOUSE_CREDENTIALS.type must be bigquery")
+    return _bigquery_credentials_from_secret(destination)
 
 
-def _identifier(identifier: str) -> str:
-    if not IDENTIFIER_RE.fullmatch(identifier):
-        raise ConfigError(f"expected a simple Snowflake identifier: {identifier}")
-    return identifier
+def _bigquery_credentials_from_secret(destination: dict[str, Any]) -> tuple[dict[str, Any], str, str | None]:
+    project_id = destination.get("project_id") or destination.get("projectId") or destination.get("project")
+    if not project_id:
+        raise ConfigError("WAREHOUSE_CREDENTIALS missing keys: project_id")
+
+    credentials_info = destination.get("credentials_json") or destination.get("credentialsJson")
+    if isinstance(credentials_info, str):
+        try:
+            credentials_info = json.loads(credentials_info)
+        except json.JSONDecodeError as e:
+            raise ConfigError(f"WAREHOUSE_CREDENTIALS.credentials_json is not valid JSON: {e}") from e
+    if credentials_info is None:
+        credentials_info = _bigquery_service_account_from_flat_secret(destination)
+    if not isinstance(credentials_info, dict):
+        raise ConfigError("WAREHOUSE_CREDENTIALS.credentials_json must be a JSON object")
+
+    required = ["private_key", "client_email"]
+    missing = [name for name in required if not credentials_info.get(name)]
+    if missing:
+        raise ConfigError("WAREHOUSE_CREDENTIALS.credentials_json missing keys: " + ", ".join(missing))
+    credentials_info = {"type": "service_account", **credentials_info}
+    return credentials_info, str(project_id), _optional_string(destination.get("location"))
 
 
-def _type_sql(kind: str) -> str:
-    if kind == "array":
-        return "VARIANT"
-    if kind == "boolean":
-        return "BOOLEAN"
-    if kind == "text":
-        return "TEXT"
-    if kind == "varchar":
-        return "VARCHAR"
-    raise ValueError(f"unsupported column kind: {kind}")
+def _bigquery_service_account_from_flat_secret(destination: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": destination.get("service_account_type") or "service_account",
+        "project_id": destination.get("service_account_project_id") or destination.get("project_id"),
+        "private_key_id": destination.get("private_key_id", ""),
+        "private_key": destination.get("private_key", ""),
+        "client_email": destination.get("client_email", ""),
+        "client_id": destination.get("client_id", ""),
+        "auth_uri": destination.get("auth_uri", "https://accounts.google.com/o/oauth2/auth"),
+        "token_uri": destination.get("token_uri", "https://oauth2.googleapis.com/token"),
+        "auth_provider_x509_cert_url": destination.get(
+            "auth_provider_x509_cert_url",
+            "https://www.googleapis.com/oauth2/v1/certs",
+        ),
+        "client_x509_cert_url": destination.get("client_x509_cert_url", ""),
+    }
+
+
+def _optional_string(value: object) -> str | None:
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
+__all__ = [
+    "BigQueryDestination",
+    "Column",
+    "DatabricksDestination",
+    "Destination",
+    "SnowflakeDestination",
+    "TableSchema",
+    "_bigquery_credentials_from_secret",
+    "_create_table_if_not_exists_sql",
+    "_create_table_sql",
+    "_databricks_connect_kwargs_from_secret",
+    "_delete_sql",
+    "_insert_sql",
+    "_merge_sql",
+    "_snowflake_connect_kwargs_from_secret",
+    "open_destination",
+    "warehouse_credentials_from_env",
+    "warehouse_type_from_env",
+]

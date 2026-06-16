@@ -4,7 +4,7 @@
 
 Agents Schema gives agents a predictable place to find context about warehouse data: what models exist, what fields mean, how semantic-layer objects are defined, and how those objects relate to each other. See [README.md](./README.md) for motivation, positioning, and GitHub workflow usage.
 
-This document describes the warehouse tables produced by this repository's current ingestion workflows. The SQL below is written in Snowflake form because Snowflake is the currently supported destination.
+This document describes the logical warehouse tables produced by this repository's current ingestion workflows. The SQL below is written in Snowflake form as a readable reference for the schema contract. See the source setup guides linked from [README.md](./README.md#guides) for supported destination setup.
 
 ## Core: The `AGENTS` Schema
 
