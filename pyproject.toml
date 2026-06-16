@@ -29,9 +29,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/fivetran/agents_schema"
-Repository = "https://github.com/fivetran/agents_schema"
-Issues = "https://github.com/fivetran/agents_schema/issues"
+Homepage = "https://github.com/dbt-labs/agents_schema"
+Repository = "https://github.com/dbt-labs/agents_schema"
+Issues = "https://github.com/dbt-labs/agents_schema/issues"
 
 [project.scripts]
 agents-schema = "agents_schema.cli:main"

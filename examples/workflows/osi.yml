@@ -7,7 +7,7 @@ on:
 
 jobs:
   agents-schema-osi:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-osi.yml@v0.0.9
+    uses: dbt-labs/agents_schema/.github/workflows/agents-schema-osi.yml@v0.0.9
     with:
       osi-dir: osi
     secrets:
