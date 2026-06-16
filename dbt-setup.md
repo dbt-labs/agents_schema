@@ -104,7 +104,8 @@ jobs:
     uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.9
     with:
       dbt-project-dir: dbt_project
-    secrets: inherit
+    secrets:
+      WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
 ```
 
 `dbt-project-dir` is required — set it to the path of your dbt project (the

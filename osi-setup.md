@@ -103,7 +103,8 @@ jobs:
     uses: fivetran/agents_schema/.github/workflows/agents-schema-osi.yml@v0.0.9
     with:
       osi-dir: osi
-    secrets: inherit
+    secrets:
+      WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
 ```
 
 `osi-dir` is required — set it to the directory that contains your `*.osi.yaml`

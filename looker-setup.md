@@ -102,7 +102,8 @@ jobs:
     uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.9
     with:
       lookml-dir: lookml
-    secrets: inherit
+    secrets:
+      WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
 ```
 
 `lookml-dir` is required — set it to the directory that contains your `*.lkml`

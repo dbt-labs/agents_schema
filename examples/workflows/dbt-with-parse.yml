@@ -12,4 +12,6 @@ jobs:
       dbt-project-dir: dbt_project
       dbt-profile-name: analytics
       dbt-target: prod
-    secrets: inherit
+    secrets:
+      WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
+      DBT_PROFILES_YML: ${{ secrets.DBT_PROFILES_YML }}

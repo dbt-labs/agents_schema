@@ -11,4 +11,5 @@ jobs:
     with:
       skills-dir: skills
       provider: fivetran
-    secrets: inherit
+    secrets:
+      WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
