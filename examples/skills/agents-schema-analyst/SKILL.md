@@ -1,7 +1,7 @@
 ---
 name: agents-schema-analyst
-description: Use when answering a business data question (revenue, MRR, ARR, churn, customer or connector counts, etc.) against a Snowflake warehouse that has an AGENTS metadata schema. Triggers on questions like "what is our current MRR", "net revenue year-to-date", "how many active customers", or any ask for a governed metric instead of a guessed one.
-allowed-tools: "Bash(snow:*), Read"
+description: Use when answering a business data question (revenue, MRR, ARR, churn, customer or connector counts, etc.) against a warehouse that has an AGENTS metadata schema. Triggers on questions like "what is our current MRR", "net revenue year-to-date", "how many active customers", or any ask for a governed metric instead of a guessed one. Supports Snowflake and Databricks.
+allowed-tools: "Bash(snow:*), Bash(python3:*), Read"
 user-invocable: true
 argument-hint: "[business question]"
 ---
