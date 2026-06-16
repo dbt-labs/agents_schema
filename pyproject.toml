@@ -1,13 +1,13 @@
 [project]
 name = "agents-schema"
-version = "0.0.8"
+version = "0.0.9"
 description = "Populate an in-warehouse agents.* schema from dbt manifests, OSI YAML, LookML, and markdown skills."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Fivetran", email = "opensource@fivetran.com" }]
-keywords = ["dbt", "osi", "lookml", "snowflake", "ai", "agents", "semantic-layer", "metadata"]
+keywords = ["dbt", "osi", "lookml", "snowflake", "databricks", "bigquery", "ai", "agents", "semantic-layer", "metadata"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",

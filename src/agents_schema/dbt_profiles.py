@@ -9,6 +9,8 @@ import yaml
 from .config import ConfigError
 
 DBT_ADAPTER_PACKAGE_BY_PROFILE_TYPE = {
+    "bigquery": "dbt-bigquery",
+    "databricks": "dbt-databricks",
     "snowflake": "dbt-snowflake",
 }
 
@@ -71,4 +73,4 @@ def dbt_profile_type_from_profiles_file(
     profile_type = output.get("type")
     if not isinstance(profile_type, str) or not profile_type:
         raise ConfigError(f"dbt profile {profile_name!r} target {selected_target!r} must define type")
-    return profile_type
+    return profile_type.lower()

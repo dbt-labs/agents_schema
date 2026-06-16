@@ -99,7 +99,7 @@ on:
 
 jobs:
   agents-schema-looker:
-    uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.8
+    uses: fivetran/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.9
     with:
       lookml-dir: lookml
     secrets: inherit

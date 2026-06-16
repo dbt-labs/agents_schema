@@ -92,14 +92,15 @@ and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.ym
 Once `AGENTS` is populated, the
 [`agents-schema-analyst`](examples/skills/agents-schema-analyst/SKILL.md) skill lets an AI agent
 answer questions about your warehouse — grounded in your real metric definitions from `AGENTS.*`,
-not guesses. You need a `snow` CLI connection (run `snow connection add` if you don't have one).
+not guesses. It supports Snowflake, Databricks, and BigQuery; configure the matching local SQL
+client credentials in `agents.yml` before using it.
 
 **Claude Code**
 
 ```bash
 curl -fsSL --create-dirs \
   -o ~/.claude/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/fivetran/agents_schema/v0.0.8/examples/skills/agents-schema-analyst/SKILL.md
+  https://raw.githubusercontent.com/fivetran/agents_schema/v0.0.9/examples/skills/agents-schema-analyst/SKILL.md
 ```
 
 Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
@@ -109,7 +110,7 @@ Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
 ```bash
 curl -fsSL --create-dirs \
   -o ~/.codex/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/fivetran/agents_schema/v0.0.8/examples/skills/agents-schema-analyst/SKILL.md
+  https://raw.githubusercontent.com/fivetran/agents_schema/v0.0.9/examples/skills/agents-schema-analyst/SKILL.md
 ```
 
 Then ask: `$agents-schema-analyst "What is our total MRR this month?"`
@@ -196,11 +197,11 @@ source, examples, README, and spec.
 Pin exact tags in your workflows:
 
 ```yaml
-uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.8
+uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.9
 ```
 
 To upgrade, change only the tag in the `uses:` line. The current release tag is
-`v0.0.8`.
+`v0.0.9`.
 
 ### Specification
 
