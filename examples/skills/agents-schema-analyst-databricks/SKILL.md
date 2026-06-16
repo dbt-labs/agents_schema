@@ -31,10 +31,12 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
       server_hostname=cfg["host"],
       http_path=cfg["http_path"],
       access_token=cfg["token"],
-      catalog=cfg.get("catalog", "hive_metastore"),
+      catalog=cfg["catalog"],
   )
   cursor = conn.cursor()
-  sql = "<SQL>"
+  sql = """
+  <SQL>
+  """
   cursor.execute(sql)
   cols = [d[0] for d in cursor.description]
   rows = [dict(zip(cols, row)) for row in cursor.fetchall()]
@@ -63,6 +65,7 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
          LIKE '%<keyword>%';
    ```
    Use `{{AGENTS_PREFIX}}.lookml_measure` (`sql`, `description`, `ai_context`) when the provider is LookML.
+   **If no rows match, stop and tell the user** — do not proceed to Step 3 without a metric definition. Try a shorter or alternate keyword if the first search returns nothing.
 
 3. **Resolve the physical table and its rules.** Find the source table and every query caveat
    in the dataset/view metadata, and obey each `ai_context` instruction exactly:

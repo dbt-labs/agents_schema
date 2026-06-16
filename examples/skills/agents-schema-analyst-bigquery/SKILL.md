@@ -29,10 +29,11 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
     --project_id="<project_id>" \
     --location="<location>" \
     --use_legacy_sql=false \
-    --format=json \
-    '<SQL>'
+    --format=json << 'SQLEOF'
+<SQL>
+SQLEOF
   ```
-  Omit `--location` when `agents.yml` does not set one.
+  Omit `--location` when `agents.yml` does not set one. Replace `<SQL>` with the actual query.
 - Only `SELECT`. Never `INSERT`, `UPDATE`, `DELETE`, `CREATE`, or `DROP`.
 
 ## Procedure
@@ -50,10 +51,11 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
    ```sql
    SELECT name, description, ai_context, expression
    FROM {{AGENTS_PREFIX}}.osi_metric
-   WHERE LOWER(CONCAT(name, ' ', COALESCE(description, ''), ' ', COALESCE(ai_context, '')))
+   WHERE LOWER(CONCAT(COALESCE(name, ''), ' ', COALESCE(description, ''), ' ', COALESCE(ai_context, '')))
          LIKE '%<keyword>%';
    ```
    Use `{{AGENTS_PREFIX}}.lookml_measure` (`sql`, `description`, `ai_context`) when the provider is LookML.
+   **If no rows match, stop and tell the user** — do not proceed to Step 3 without a metric definition. Try a shorter or alternate keyword if the first search returns nothing.
 
 3. **Resolve the physical table and its rules.** Find the source table and every query caveat
    in the dataset/view metadata, and obey each `ai_context` instruction exactly:
@@ -64,7 +66,7 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
    Use the source table named in the metadata — not a same-named table you assume exists elsewhere.
 
 4. **Translate the formula to SQL.** OSI `expression` is usually plain SQL (e.g. `SUM(amount)`)
-   — use it as-is against the resolved table. For LookML `sql`: `${TABLE}.col` → `col`;
+   — use it as-is against the resolved table. **Always alias aggregate expressions** (e.g. `SUM(amount) AS value`) so `bq query --format=json` returns a named key instead of the auto-generated `f0_`. For LookML `sql`: `${TABLE}.col` → `col`;
    `${other_field}` → look that field up and substitute recursively; `{% if %}…{% else %} X {% endif %}`
    → use the `{% else %}` branch.
 
