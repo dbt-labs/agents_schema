@@ -100,7 +100,7 @@ client credentials in `agents.yml` before using it.
 ```bash
 curl -fsSL --create-dirs \
   -o ~/.claude/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/fivetran/agents_schema/v0.0.9/examples/skills/agents-schema-analyst/SKILL.md
+  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/examples/skills/agents-schema-analyst/SKILL.md
 ```
 
 Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
@@ -110,7 +110,7 @@ Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
 ```bash
 curl -fsSL --create-dirs \
   -o ~/.codex/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/fivetran/agents_schema/v0.0.9/examples/skills/agents-schema-analyst/SKILL.md
+  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/examples/skills/agents-schema-analyst/SKILL.md
 ```
 
 Then ask: `$agents-schema-analyst "What is our total MRR this month?"`
@@ -197,7 +197,7 @@ source, examples, README, and spec.
 Pin exact tags in your workflows:
 
 ```yaml
-uses: fivetran/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.9
+uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.9
 ```
 
 To upgrade, change only the tag in the `uses:` line. The current release tag is

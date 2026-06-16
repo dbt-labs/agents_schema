@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run OSI ingestion
-        uses: fivetran/agents_schema/.github/actions/agents-schema-osi@v0.0.9
+        uses: dbt-labs/agents_schema/.github/actions/agents-schema-osi@v0.0.9
         with:
           osi-dir: ${{ inputs.osi-dir }}
         env:
