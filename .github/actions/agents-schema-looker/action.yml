@@ -19,5 +19,5 @@ runs:
       env:
         AGENTS_SCHEMA_LOOKML_DIR: ${{ inputs.lookml-dir }}
       run: |
-        uvx --from "agents-schema==0.0.7" \
+        uvx --from "agents-schema==0.0.9" \
           agents-schema looker --lookml-dir "$AGENTS_SCHEMA_LOOKML_DIR"
