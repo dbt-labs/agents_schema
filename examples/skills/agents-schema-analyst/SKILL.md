@@ -113,8 +113,9 @@ Replace the `sql = """..."""` line with the actual SQL query before running.
   bake business facts into this skill, the prompt, or your reasoning.
 - Follow `AI_CONTEXT` / `DESCRIPTION` exactly. If it says to use one column or table and not
   another, do exactly that.
-- Do not run `SHOW TABLES`, `GET_DDL`, or broad schema crawls. The metadata rows tell you where
-  to look — use focused `SELECT`s derived from the question.
+- Do not run `SHOW TABLES`, `GET_DDL` (Snowflake), `SHOW TABLES IN`, `DESCRIBE TABLE` (Databricks),
+  or any broad schema crawl. The metadata rows tell you where to look — use focused `SELECT`s
+  derived from the question.
 - If a definition is missing or ambiguous, say so. Do not substitute a guess.
 
 ## Metadata table shapes (reference)
