@@ -20,9 +20,10 @@ that instruction in the agents dataset and follow it — not to guess a formula,
 
 - Read `project_id` and optional `location` from `agents.yml` in the working directory.
 - **Metadata dataset:** `` `<project_id>.agents` `` where `project_id` is the value from
-  `agents.yml`. For example, if `project_id` is `my-project`, tables are referenced as
-  `` `my-project.agents`.root ``, `` `my-project.agents`.osi_metric ``, etc.
-  Substitute your actual project ID throughout all queries below.
+  `agents.yml`. If `agents_schema_name` is set in `agents.yml`, use that value instead of
+  `agents` (e.g. `` `<project_id>.my_agents` ``). Tables are referenced as
+  `` `<project_id>.agents.root` ``, `` `<project_id>.agents.osi_metric` ``, etc.
+  Substitute your actual project ID (and dataset name if customized) throughout all queries below.
 - Execute SQL by replacing `<project_id>`, `<location>`, and `<SQL>` below and running:
   ```bash
   bq query \
@@ -40,7 +41,7 @@ SQLEOF
 
 1. **Discover what metadata exists — don't assume which providers are present.**
    ```sql
-   SELECT provider, key, content FROM `<project_id>.agents`.root ORDER BY provider, key;
+   SELECT provider, key, content FROM `<project_id>.agents.root` ORDER BY provider, key;
    ```
    This lists the providers that published metadata (`osi`, `lookml`, `dbt`, or user-published) plus
    their overview/guidance rows. Only query tables for providers that actually appear here.
@@ -50,19 +51,19 @@ SQLEOF
    Substitute a keyword from the question for `<keyword>`:
    ```sql
    SELECT name, description, ai_context, expression
-   FROM `<project_id>.agents`.osi_metric
+   FROM `<project_id>.agents.osi_metric`
    WHERE LOWER(CONCAT(COALESCE(name, ''), ' ', COALESCE(description, ''), ' ', COALESCE(ai_context, '')))
          LIKE '%<keyword>%';
    ```
-   Use `` `<project_id>.agents`.lookml_measure `` (`sql`, `description`, `ai_context`) when the provider is LookML.
+   Use `` `<project_id>.agents.lookml_measure` `` (`sql`, `description`, `ai_context`) when the provider is LookML.
    **If no rows match, stop and tell the user** — do not proceed to Step 3 without a metric
    definition. Try a shorter or alternate keyword if the first search returns nothing.
 
 3. **Resolve the physical table and its rules.** Find the source table and every query caveat
    in the dataset/view metadata, and obey each `ai_context` instruction exactly:
-   - OSI: `` `<project_id>.agents`.osi_dataset `` (`source_table`, `ai_context`), `` `<project_id>.agents`.osi_field ``
-   - LookML: `` `<project_id>.agents`.lookml_view `` (`sql_table_name`), `` `<project_id>.agents`.lookml_dimension ``
-   - dbt, *only if present in root*: `` `<project_id>.agents`.dbt_model `` / `` `<project_id>.agents`.dbt_column ``
+   - OSI: `` `<project_id>.agents.osi_dataset` `` (`source_table`, `ai_context`), `` `<project_id>.agents.osi_field` ``
+   - LookML: `` `<project_id>.agents.lookml_view` `` (`sql_table_name`), `` `<project_id>.agents.lookml_dimension` ``
+   - dbt, *only if present in root*: `` `<project_id>.agents.dbt_model` `` / `` `<project_id>.agents.dbt_column` ``
      add model and column descriptions.
    Use the source table named in the metadata — not a same-named table you assume exists elsewhere.
 
@@ -99,15 +100,15 @@ Replace `<project_id>` with the actual project ID from `agents.yml` throughout.
 
 | Table | Key columns |
 |---|---|
-| `` `<project_id>.agents`.root `` | `provider`, `key`, `content` |
-| `` `<project_id>.agents`.osi_metric `` | `name`, `description`, `ai_context`, `expression` |
-| `` `<project_id>.agents`.osi_dataset `` | `name`, `source_table`, `primary_key`, `description`, `ai_context` |
-| `` `<project_id>.agents`.osi_field `` | `dataset_name`, `field_name`, `description`, `ai_context`, `is_time_dimension`, `expression` |
-| `` `<project_id>.agents`.lookml_measure `` | `view_name`, `measure_name`, `type`, `sql`, `description`, `ai_context` |
-| `` `<project_id>.agents`.lookml_view `` | `name`, `sql_table_name`, `description`, `ai_context` |
-| `` `<project_id>.agents`.lookml_dimension `` | `view_name`, `field_name`, `field_kind`, `type`, `sql`, `description`, `ai_context` |
-| `` `<project_id>.agents`.dbt_model `` | `unique_id`, `name`, `schema_name`, `description` |
-| `` `<project_id>.agents`.dbt_column `` | `model_id`, `column_name`, `data_type`, `description` |
+| `` `<project_id>.agents.root` `` | `provider`, `key`, `content` |
+| `` `<project_id>.agents.osi_metric` `` | `name`, `description`, `ai_context`, `expression` |
+| `` `<project_id>.agents.osi_dataset` `` | `name`, `source_table`, `primary_key`, `description`, `ai_context` |
+| `` `<project_id>.agents.osi_field` `` | `dataset_name`, `field_name`, `description`, `ai_context`, `is_time_dimension`, `expression` |
+| `` `<project_id>.agents.lookml_measure` `` | `view_name`, `measure_name`, `type`, `sql`, `description`, `ai_context` |
+| `` `<project_id>.agents.lookml_view` `` | `name`, `sql_table_name`, `description`, `ai_context` |
+| `` `<project_id>.agents.lookml_dimension` `` | `view_name`, `field_name`, `field_kind`, `type`, `sql`, `description`, `ai_context` |
+| `` `<project_id>.agents.dbt_model` `` | `unique_id`, `name`, `schema_name`, `description` |
+| `` `<project_id>.agents.dbt_column` `` | `model_id`, `column_name`, `data_type`, `description` |
 
 ## Common mistakes
 
@@ -116,5 +117,5 @@ Replace `<project_id>` with the actual project ID from `agents.yml` throughout.
 | Picking a plausible-looking column or table for a metric | Read the metric/dataset `ai_context` and use exactly the column, table, and filter it names. |
 | Reporting `$0` / no result for "year-to-date" | If current-year returns no rows, the data is historical — anchor to the latest year present and label it. |
 | Querying a metric from the wrong table | The dataset/view metadata names the `source_table` and any "use X not Y" caveat. Follow it. |
-| Assuming a provider's tables exist | Check `` `<project_id>.agents`.root `` first; some warehouses have only OSI, only LookML, or only dbt. |
-| Broad `INFORMATION_SCHEMA` scans to explore | Use focused `SELECT`s against the known `` `<project_id>.agents`.* `` tables. |
+| Assuming a provider's tables exist | Check `` `<project_id>.agents.root` `` first; some warehouses have only OSI, only LookML, or only dbt. |
+| Broad `INFORMATION_SCHEMA` scans to explore | Use focused `SELECT`s against the known `` `<project_id>.agents.*` `` tables. |

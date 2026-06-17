@@ -42,7 +42,7 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
    ```sql
    SELECT name, description, ai_context, expression
    FROM AGENTS.osi_metric
-   WHERE LOWER(name||' '||COALESCE(description,'')||' '||COALESCE(ai_context,''))
+   WHERE LOWER(COALESCE(name,'')||' '||COALESCE(description,'')||' '||COALESCE(ai_context,''))
          LIKE '%<keyword>%';
    ```
    Use `AGENTS.lookml_measure` (`sql`, `description`, `ai_context`) when the provider is LookML.
@@ -84,6 +84,8 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
 ## Metadata table shapes (reference)
 
 A given warehouse has only the families its `root` table lists.
+Snowflake returns unquoted identifiers in UPPERCASE — business table column names will typically
+be UPPERCASE when you query them.
 
 | Table | Key columns |
 |---|---|

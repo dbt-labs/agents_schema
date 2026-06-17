@@ -19,9 +19,10 @@ that instruction in the agents schema and follow it — not to guess a formula, 
 ## Setup
 
 - Read `host`, `http_path`, `token`, and `catalog` from `agents.yml` in the working directory.
-- **Metadata schema:** `<catalog>.agents` where `catalog` is the value from `agents.yml`. For
-  example, if `catalog` is `main`, every query below uses `main.agents.root`,
-  `main.agents.osi_metric`, etc. Substitute your actual catalog name throughout.
+- **Metadata schema:** `<catalog>.agents` where `catalog` is the value from `agents.yml`. If
+  `agents_schema_name` is set in `agents.yml`, use that value lowercased instead of `agents`
+  (e.g. `<catalog>.my_agents`). All queries below use `<catalog>.agents` — substitute your
+  actual catalog and schema name throughout.
 - Execute SQL by replacing `<SQL>` in the snippet below and running it:
   ```bash
   python3 - <<'PYEOF'
@@ -61,7 +62,7 @@ that instruction in the agents schema and follow it — not to guess a formula, 
    ```sql
    SELECT name, description, ai_context, expression
    FROM <catalog>.agents.osi_metric
-   WHERE LOWER(name||' '||COALESCE(description,'')||' '||COALESCE(ai_context,''))
+   WHERE LOWER(COALESCE(name,'')||' '||COALESCE(description,'')||' '||COALESCE(ai_context,''))
          LIKE '%<keyword>%';
    ```
    Use `<catalog>.agents.lookml_measure` (`sql`, `description`, `ai_context`) when the provider is LookML.
