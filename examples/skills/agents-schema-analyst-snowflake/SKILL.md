@@ -21,16 +21,15 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
 - Query Snowflake **read-only** with: `snow sql -c <connection> -q "<SQL>"`.
 - **Connection:** read `snow_cli_connection` from an `agents.yml` in the working directory if
   present. Otherwise run `snow connection list` and use the default (or the only) connection;
-  if it is ambiguous, ask the user which connection to use.
-- **Schema prefix (`{{AGENTS_PREFIX}}`):** use `agents_schema_name` from `agents.yml` uppercased, else `AGENTS`.
-  Use this as the schema in every query below: `{{AGENTS_PREFIX}}.table_name`.
+  if ambiguous, ask the user which connection to use.
+- **Metadata schema:** `AGENTS`. All queries below use this schema name directly.
 - Only `SELECT`. Never `INSERT`, `UPDATE`, `DELETE`, `CREATE`, or `DROP`.
 
 ## Procedure
 
 1. **Discover what metadata exists — don't assume which providers are present.**
    ```sql
-   SELECT provider, key, content FROM {{AGENTS_PREFIX}}.root ORDER BY provider, key;
+   SELECT provider, key, content FROM AGENTS.root ORDER BY provider, key;
    ```
    This lists the providers that published metadata (`osi`, `lookml`, `dbt`, or user-published) plus
    their overview/guidance rows. Only query tables for providers that actually appear here.
@@ -40,18 +39,19 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
    Substitute a keyword from the question for `<keyword>`:
    ```sql
    SELECT name, description, ai_context, expression
-   FROM {{AGENTS_PREFIX}}.osi_metric
-   WHERE LOWER(name||' '||COALESCE(description,'')||' '||COALESCE(ai_context,''))
+   FROM AGENTS.osi_metric
+   WHERE LOWER(COALESCE(name,'')||' '||COALESCE(description,'')||' '||COALESCE(ai_context,''))
          LIKE '%<keyword>%';
    ```
-   Use `{{AGENTS_PREFIX}}.lookml_measure` (`sql`, `description`, `ai_context`) when the provider is LookML.
-   **If no rows match, stop and tell the user** — do not proceed to Step 3 without a metric definition. Try a shorter or alternate keyword if the first search returns nothing.
+   Use `AGENTS.lookml_measure` (`sql`, `description`, `ai_context`) when the provider is LookML.
+   **If no rows match, stop and tell the user** — do not proceed to Step 3 without a metric
+   definition. Try a shorter or alternate keyword if the first search returns nothing.
 
 3. **Resolve the physical table and its rules.** Find the source table and every query caveat
    in the dataset/view metadata, and obey each `ai_context` instruction exactly:
-   - OSI: `{{AGENTS_PREFIX}}.osi_dataset` (`source_table`, `ai_context`), `{{AGENTS_PREFIX}}.osi_field`
-   - LookML: `{{AGENTS_PREFIX}}.lookml_view` (`sql_table_name`), `{{AGENTS_PREFIX}}.lookml_dimension`
-   - dbt, *only if present in root*: `{{AGENTS_PREFIX}}.dbt_model` / `{{AGENTS_PREFIX}}.dbt_column` add model and
+   - OSI: `AGENTS.osi_dataset` (`source_table`, `ai_context`), `AGENTS.osi_field`
+   - LookML: `AGENTS.lookml_view` (`sql_table_name`), `AGENTS.lookml_dimension`
+   - dbt, *only if present in root*: `AGENTS.dbt_model` / `AGENTS.dbt_column` add model and
      column descriptions.
    Use the source table named in the metadata — not a same-named table you assume exists elsewhere.
 
@@ -82,18 +82,20 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
 ## Metadata table shapes (reference)
 
 A given warehouse has only the families its `root` table lists.
+Snowflake returns unquoted identifiers in UPPERCASE — business table column names will typically
+be UPPERCASE when you query them.
 
 | Table | Key columns |
 |---|---|
-| `{{AGENTS_PREFIX}}.root` | `provider`, `key`, `content` |
-| `{{AGENTS_PREFIX}}.osi_metric` | `name`, `description`, `ai_context`, `expression` |
-| `{{AGENTS_PREFIX}}.osi_dataset` | `name`, `source_table`, `primary_key`, `description`, `ai_context` |
-| `{{AGENTS_PREFIX}}.osi_field` | `dataset_name`, `field_name`, `description`, `ai_context`, `is_time_dimension`, `expression` |
-| `{{AGENTS_PREFIX}}.lookml_measure` | `view_name`, `measure_name`, `type`, `sql`, `description`, `ai_context` |
-| `{{AGENTS_PREFIX}}.lookml_view` | `name`, `sql_table_name`, `description`, `ai_context` |
-| `{{AGENTS_PREFIX}}.lookml_dimension` | `view_name`, `field_name`, `field_kind`, `type`, `sql`, `description`, `ai_context` |
-| `{{AGENTS_PREFIX}}.dbt_model` | `unique_id`, `name`, `schema_name`, `description` |
-| `{{AGENTS_PREFIX}}.dbt_column` | `model_id`, `column_name`, `data_type`, `description` |
+| `AGENTS.root` | `provider`, `key`, `content` |
+| `AGENTS.osi_metric` | `name`, `description`, `ai_context`, `expression` |
+| `AGENTS.osi_dataset` | `name`, `source_table`, `primary_key`, `description`, `ai_context` |
+| `AGENTS.osi_field` | `dataset_name`, `field_name`, `description`, `ai_context`, `is_time_dimension`, `expression` |
+| `AGENTS.lookml_measure` | `view_name`, `measure_name`, `type`, `sql`, `description`, `ai_context` |
+| `AGENTS.lookml_view` | `name`, `sql_table_name`, `description`, `ai_context` |
+| `AGENTS.lookml_dimension` | `view_name`, `field_name`, `field_kind`, `type`, `sql`, `description`, `ai_context` |
+| `AGENTS.dbt_model` | `unique_id`, `name`, `schema_name`, `description` |
+| `AGENTS.dbt_column` | `model_id`, `column_name`, `data_type`, `description` |
 
 ## Common mistakes
 
@@ -102,5 +104,5 @@ A given warehouse has only the families its `root` table lists.
 | Picking a plausible-looking column or table for a metric | Read the metric/dataset `ai_context` and use exactly the column, table, and filter it names. |
 | Reporting `$0` / no result for "year-to-date" | If current-year returns no rows, the data is historical — anchor to the latest year present and label it. |
 | Querying a metric from the wrong table | The dataset/view metadata names the `source_table` and any "use X not Y" caveat. Follow it. |
-| Assuming a provider's tables exist | Check `{{AGENTS_PREFIX}}.root` first; some warehouses have only OSI, only LookML, or only dbt. |
-| `SHOW TABLES` / `GET_DDL` to explore | Use focused `SELECT`s against the known `{{AGENTS_PREFIX}}.*` tables. |
+| Assuming a provider's tables exist | Check `AGENTS.root` first; some warehouses have only OSI, only LookML, or only dbt. |
+| `SHOW TABLES` / `GET_DDL` to explore | Use focused `SELECT`s against the known `AGENTS.*` tables. |
