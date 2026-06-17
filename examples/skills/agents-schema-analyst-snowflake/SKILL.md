@@ -22,9 +22,7 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
 - **Connection:** read `snow_cli_connection` from an `agents.yml` in the working directory if
   present. Otherwise run `snow connection list` and use the default (or the only) connection;
   if ambiguous, ask the user which connection to use.
-- **Metadata schema:** `AGENTS` (the default). If `agents_schema_name` is set in `agents.yml`,
-  use that value uppercased instead. All queries below use `AGENTS` — substitute the configured
-  name if needed.
+- **Metadata schema:** `AGENTS`. All queries below use this schema name directly.
 - Only `SELECT`. Never `INSERT`, `UPDATE`, `DELETE`, `CREATE`, or `DROP`.
 
 ## Procedure

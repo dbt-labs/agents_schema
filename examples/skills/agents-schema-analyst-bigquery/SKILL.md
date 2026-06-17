@@ -20,10 +20,8 @@ that instruction in the agents dataset and follow it — not to guess a formula,
 
 - Read `project_id` and optional `location` from `agents.yml` in the working directory.
 - **Metadata dataset:** `` `<project_id>.agents` `` where `project_id` is the value from
-  `agents.yml`. If `agents_schema_name` is set in `agents.yml`, use that value instead of
-  `agents` (e.g. `` `<project_id>.my_agents` ``). Tables are referenced as
-  `` `<project_id>.agents.root` ``, `` `<project_id>.agents.osi_metric` ``, etc.
-  Substitute your actual project ID (and dataset name if customized) throughout all queries below.
+  `agents.yml`. Tables are referenced as `` `<project_id>.agents.root` ``,
+  `` `<project_id>.agents.osi_metric` ``, etc. Substitute your actual project ID throughout.
 - Execute SQL by replacing `<project_id>`, `<location>`, and `<SQL>` below and running:
   ```bash
   bq query \
