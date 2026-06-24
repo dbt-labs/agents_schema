@@ -1,0 +1,23 @@
+name: 'Agents Schema Omni'
+description: >
+  Ingests Omni metadata into AGENTS.OMNI_* tables.
+
+inputs:
+  omni-dir:
+    description: 'Path to an Omni connection directory containing *.view.yaml and *.topic.yaml files'
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: '3.12'
+
+    - name: Run Omni ingestion
+      shell: bash
+      env:
+        AGENTS_SCHEMA_OMNI_DIR: ${{ inputs.omni-dir }}
+      run: |
+        uvx --from "agents-schema==0.0.9" \
+          agents-schema omni --omni-dir "$AGENTS_SCHEMA_OMNI_DIR"

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import __version__, dbt, lookml, osi, skills, snowflake_semantic
+from . import __version__, dbt, lookml, omni, osi, skills, snowflake_semantic
 from .config import ConfigError
 from .dbt_profiles import dbt_adapter_package_from_profiles_file
 from .destinations import warehouse_type_from_env
@@ -51,6 +51,17 @@ def _build_parser() -> argparse.ArgumentParser:
         required=True,
         type=Path,
         help="path to a Looker project or directory containing *.lkml files",
+    )
+
+    omni_parser = sub.add_parser(
+        "omni",
+        help="ingest Omni YAML files into AGENTS.OMNI_*",
+    )
+    omni_parser.add_argument(
+        "--omni-dir",
+        required=True,
+        type=Path,
+        help="path to an Omni connection directory containing *.view.yaml and *.topic.yaml files",
     )
 
     osi_parser = sub.add_parser(
@@ -102,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
             dbt.run(_config("dbt", args.project_dir))
         elif args.source_type == "looker":
             lookml.run(_config("looker", args.lookml_dir))
+        elif args.source_type == "omni":
+            omni.run(_config("omni", args.omni_dir))
         elif args.source_type == "osi":
             osi.run(_config("osi", args.osi_dir))
         elif args.source_type == "skills":
