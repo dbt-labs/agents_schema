@@ -104,7 +104,7 @@ class ConnectorRootTests(unittest.TestCase):
         self.assertEqual(dest.calls[3][0], "insert")
         self.assertEqual(dest.calls[3][1], "agents.skill_use")
 
-    def test_snowflake_semantic_run_upserts_root_pointer_rows(self):
+    def test_snowflake_semantic_run_upserts_root_overview_then_pointer_rows(self):
         dest = FakeDestination()
         cfg = {"metadata_connection": {"semantic_views": ["ANALYTICS.FINANCE.REVENUE"]}}
 
@@ -117,11 +117,18 @@ class ConnectorRootTests(unittest.TestCase):
         ):
             snowflake_semantic.run(cfg)
 
+        self.assertEqual(len(dest.calls), 2)
+        # first call: overview row
         self.assertEqual(dest.calls[0][0], "upsert")
         self.assertEqual(dest.calls[0][1], "agents.root")
-        self.assertEqual(dest.calls[0][2][0][0], "snowflake_semantic")
-        self.assertEqual(dest.calls[0][2][0][1], "semantic_view/ANALYTICS.FINANCE.REVENUE")
-        self.assertIn("Snowflake object: `ANALYTICS.FINANCE.REVENUE`", dest.calls[0][2][0][2])
+        self.assertEqual({row[0] for row in dest.calls[0][2]}, {"snowflake_semantic"})
+        self.assertEqual({row[1] for row in dest.calls[0][2]}, {"overview"})
+        # second call: per-view pointer row
+        self.assertEqual(dest.calls[1][0], "upsert")
+        self.assertEqual(dest.calls[1][1], "agents.root")
+        self.assertEqual(dest.calls[1][2][0][0], "snowflake_semantic")
+        self.assertEqual(dest.calls[1][2][0][1], "semantic_view/ANALYTICS.FINANCE.REVENUE")
+        self.assertIn("Snowflake object: `ANALYTICS.FINANCE.REVENUE`", dest.calls[1][2][0][2])
 
     def test_publish_skill_upserts_one_root_row_and_refreshes_its_uses(self):
         dest = FakeDestination()

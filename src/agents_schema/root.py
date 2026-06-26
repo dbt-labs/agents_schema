@@ -41,6 +41,9 @@ ROOT_ENTRIES = {
         ("root-convention", "Skills are rows in AGENTS.ROOT where key starts with skill/."),
         ("skill_use", "Optional parsed skill data-use declarations. See AGENTS.SKILL_USE."),
     ),
+    "snowflake_semantic": (
+        ("overview", "# Snowflake Semantic\nPointer rows for native Snowflake semantic views. Each key semantic_view/<name> in AGENTS.ROOT points to one Snowflake semantic view object. Inspect the Snowflake object for current dimensions, metrics, relationships, and query behavior."),
+    ),
 }
 
 

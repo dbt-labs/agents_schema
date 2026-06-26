@@ -118,6 +118,7 @@ The current package delivers one table family per metadata source:
 | LookML | `AGENTS.LOOKML_VIEW`, `AGENTS.LOOKML_DIMENSION`, `AGENTS.LOOKML_MEASURE`, `AGENTS.LOOKML_EXPLORE` |
 | OSI | `AGENTS.OSI_DATASET`, `AGENTS.OSI_FIELD`, `AGENTS.OSI_METRIC`, `AGENTS.OSI_RELATIONSHIP` |
 | Skills | `AGENTS.SKILL_USE` |
+| Snowflake Semantic | `AGENTS.ROOT` only (pointer rows; no additional tables) |
 
 Each ingestion replaces its own table family with `CREATE OR REPLACE TABLE` and then inserts the rows parsed from the source metadata.
 
@@ -464,6 +465,31 @@ CREATE OR REPLACE TABLE AGENTS.OSI_RELATIONSHIP (
 
 ---
 
+## Source: Snowflake Semantic
+
+The Snowflake Semantic ingestion publishes pointer rows into `AGENTS.ROOT` for one or more named native Snowflake semantic views. It does not create additional `AGENTS.*` tables — the semantic definition (dimensions, metrics, relationships, and query behavior) lives in Snowflake itself and should be inspected there.
+
+Each semantic view produces one row in `AGENTS.ROOT` under provider `snowflake_semantic`. The key convention is `semantic_view/<fully_qualified_name>`.
+
+The ingestion also publishes an overview row:
+
+| key | content summary |
+|---|---|
+| `overview` | Description of the `snowflake_semantic` provider and the `semantic_view/<name>` key convention. |
+| `semantic_view/<name>` | One row per configured semantic view. Content identifies the Snowflake object and directs consumers to inspect it for current metadata. |
+
+To discover all published semantic view pointers:
+
+```sql
+SELECT key, content
+FROM AGENTS.ROOT
+WHERE provider = 'snowflake_semantic'
+  AND key LIKE 'semantic_view/%'
+ORDER BY key;
+```
+
+---
+
 ## Cross-Source Queries
 
 One of the most valuable things agents can do is join across delivered source tables. For example, an agent can discover a LookML view, identify the warehouse relation it references, and compare that to dbt model names and schemas:
@@ -537,6 +563,4 @@ The following provider names are reserved:
 | `AGENTS.OSI_METRIC` | OSI | OSI metrics |
 | `AGENTS.OSI_RELATIONSHIP` | OSI | OSI relationships between datasets |
 
-Snowflake semantic view support is currently pointer-only. It adds rows to
-`AGENTS.ROOT` under provider `snowflake_semantic`; it does not create additional
-`AGENTS.*` tables.
+Snowflake Semantic writes only to `AGENTS.ROOT` under provider `snowflake_semantic` — one overview row and one `semantic_view/<name>` pointer row per configured view. See [Source: Snowflake Semantic](#source-snowflake-semantic).
