@@ -40,6 +40,15 @@ class RootTests(unittest.TestCase):
         _, rows = dest.upserts[0]
         self.assertEqual({row[1] for row in rows}, {"overview", "root-convention", "skill_use"})
 
+    def test_upsert_provider_root_has_snowflake_semantic_entries(self):
+        dest = FakeDestination()
+
+        upsert_provider_root(dest, "snowflake_semantic")
+
+        _, rows = dest.upserts[0]
+        self.assertEqual({row[1] for row in rows}, {"overview"})
+        self.assertEqual({row[0] for row in rows}, {"snowflake_semantic"})
+
 
 if __name__ == "__main__":
     unittest.main()
