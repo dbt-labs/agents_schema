@@ -1,0 +1,31 @@
+name: 'Agents Schema Snowflake Semantic'
+description: >
+  Publishes Snowflake semantic view pointer rows into AGENTS.ROOT.
+
+inputs:
+  semantic-views:
+    description: >
+      Newline-separated list of fully qualified Snowflake semantic view names,
+      for example: MY_DB.MY_SCHEMA.REVENUE_MODEL
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: '3.12'
+
+    - name: Run snowflake-semantic ingestion
+      shell: bash
+      env:
+        AGENTS_SCHEMA_SEMANTIC_VIEWS: ${{ inputs.semantic-views }}
+      run: |
+        args=()
+        while IFS= read -r view; do
+          view="$(echo "$view" | xargs)"
+          [ -n "$view" ] && args+=(--semantic-view "$view")
+        done <<< "$AGENTS_SCHEMA_SEMANTIC_VIEWS"
+
+        uvx --from "agents-schema==0.0.9" \
+          agents-schema snowflake-semantic "${args[@]}"
