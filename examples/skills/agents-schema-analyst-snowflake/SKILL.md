@@ -49,7 +49,7 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
 
 3. **Resolve the physical table and its rules.** Find the source table and every query caveat
    in the dataset/view metadata, and obey each `ai_context` instruction exactly:
-   - OSI: `AGENTS.osi_dataset` (`source_table`, `ai_context`), `AGENTS.osi_field`
+   - OSI: `AGENTS.osi_dataset` (`source`, `ai_context`), `AGENTS.osi_field`
    - LookML: `AGENTS.lookml_view` (`sql_table_name`), `AGENTS.lookml_dimension`
    - dbt, *only if present in root*: `AGENTS.dbt_model` / `AGENTS.dbt_column` add model and
      column descriptions.
@@ -88,9 +88,9 @@ be UPPERCASE when you query them.
 | Table | Key columns |
 |---|---|
 | `AGENTS.root` | `provider`, `key`, `content` |
-| `AGENTS.osi_metric` | `name`, `description`, `ai_context`, `expression` |
-| `AGENTS.osi_dataset` | `name`, `source_table`, `primary_key`, `description`, `ai_context` |
-| `AGENTS.osi_field` | `dataset_name`, `field_name`, `description`, `ai_context`, `is_time_dimension`, `expression` |
+| `AGENTS.osi_metric` | `model_name`, `name`, `description`, `ai_context`, `expressions` |
+| `AGENTS.osi_dataset` | `model_name`, `name`, `source`, `primary_key`, `unique_keys`, `description`, `synonyms`, `ai_context` |
+| `AGENTS.osi_field` | `dataset_name`, `name`, `description`, `ai_context`, `is_time_dimension`, `expressions` |
 | `AGENTS.lookml_measure` | `view_name`, `measure_name`, `type`, `sql`, `description`, `ai_context` |
 | `AGENTS.lookml_view` | `name`, `sql_table_name`, `description`, `ai_context` |
 | `AGENTS.lookml_dimension` | `view_name`, `field_name`, `field_kind`, `type`, `sql`, `description`, `ai_context` |
@@ -103,6 +103,6 @@ be UPPERCASE when you query them.
 |---|---|
 | Picking a plausible-looking column or table for a metric | Read the metric/dataset `ai_context` and use exactly the column, table, and filter it names. |
 | Reporting `$0` / no result for "year-to-date" | If current-year returns no rows, the data is historical — anchor to the latest year present and label it. |
-| Querying a metric from the wrong table | The dataset/view metadata names the `source_table` and any "use X not Y" caveat. Follow it. |
+| Querying a metric from the wrong table | The dataset/view metadata names the `source` and any "use X not Y" caveat. Follow it. |
 | Assuming a provider's tables exist | Check `AGENTS.root` first; some warehouses have only OSI, only LookML, or only dbt. |
 | `SHOW TABLES` / `GET_DDL` to explore | Use focused `SELECT`s against the known `AGENTS.*` tables. |

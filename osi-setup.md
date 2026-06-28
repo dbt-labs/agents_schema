@@ -115,8 +115,13 @@ files. The example uses `osi`; change it to match your repository. With
 osi/*.osi.yaml
 ```
 
+Each `*.osi.yaml` file is validated against the vendored OSI JSON schema before
+ingest; an invalid file fails the run with the offending path rather than writing
+partial data.
+
 The workflow writes:
 
+- `AGENTS.OSI_MODEL`
 - `AGENTS.OSI_DATASET`
 - `AGENTS.OSI_FIELD`
 - `AGENTS.OSI_METRIC`

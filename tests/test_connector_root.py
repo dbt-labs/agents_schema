@@ -77,7 +77,7 @@ class ConnectorRootTests(unittest.TestCase):
 
         self.assertEqual(dest.calls[0][0], "upsert")
         self.assertEqual({row[0] for row in dest.calls[0][2]}, {"osi"})
-        self.assertEqual([call[0] for call in dest.calls[1:5]], ["replace", "replace", "replace", "replace"])
+        self.assertEqual([call[0] for call in dest.calls[1:6]], ["replace"] * 5)
 
     def test_skills_run_upserts_root_before_source_tables(self):
         dest = FakeDestination()

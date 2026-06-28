@@ -69,7 +69,7 @@ that instruction in the agents schema and follow it — not to guess a formula, 
 
 3. **Resolve the physical table and its rules.** Find the source table and every query caveat
    in the dataset/view metadata, and obey each `ai_context` instruction exactly:
-   - OSI: `<catalog>.agents.osi_dataset` (`source_table`, `ai_context`), `<catalog>.agents.osi_field`
+   - OSI: `<catalog>.agents.osi_dataset` (`source`, `ai_context`), `<catalog>.agents.osi_field`
    - LookML: `<catalog>.agents.lookml_view` (`sql_table_name`), `<catalog>.agents.lookml_dimension`
    - dbt, *only if present in root*: `<catalog>.agents.dbt_model` / `<catalog>.agents.dbt_column`
      add model and column descriptions.
@@ -108,9 +108,9 @@ Replace `<catalog>` with the actual catalog name from `agents.yml` throughout.
 | Table | Key columns |
 |---|---|
 | `<catalog>.agents.root` | `provider`, `key`, `content` |
-| `<catalog>.agents.osi_metric` | `name`, `description`, `ai_context`, `expression` |
-| `<catalog>.agents.osi_dataset` | `name`, `source_table`, `primary_key`, `description`, `ai_context` |
-| `<catalog>.agents.osi_field` | `dataset_name`, `field_name`, `description`, `ai_context`, `is_time_dimension`, `expression` |
+| `<catalog>.agents.osi_metric` | `model_name`, `name`, `description`, `ai_context`, `expressions` |
+| `<catalog>.agents.osi_dataset` | `model_name`, `name`, `source`, `primary_key`, `unique_keys`, `description`, `synonyms`, `ai_context` |
+| `<catalog>.agents.osi_field` | `dataset_name`, `name`, `description`, `ai_context`, `is_time_dimension`, `expressions` |
 | `<catalog>.agents.lookml_measure` | `view_name`, `measure_name`, `type`, `sql`, `description`, `ai_context` |
 | `<catalog>.agents.lookml_view` | `name`, `sql_table_name`, `description`, `ai_context` |
 | `<catalog>.agents.lookml_dimension` | `view_name`, `field_name`, `field_kind`, `type`, `sql`, `description`, `ai_context` |
@@ -123,6 +123,6 @@ Replace `<catalog>` with the actual catalog name from `agents.yml` throughout.
 |---|---|
 | Picking a plausible-looking column or table for a metric | Read the metric/dataset `ai_context` and use exactly the column, table, and filter it names. |
 | Reporting `$0` / no result for "year-to-date" | If current-year returns no rows, the data is historical — anchor to the latest year present and label it. |
-| Querying a metric from the wrong table | The dataset/view metadata names the `source_table` and any "use X not Y" caveat. Follow it. |
+| Querying a metric from the wrong table | The dataset/view metadata names the `source` and any "use X not Y" caveat. Follow it. |
 | Assuming a provider's tables exist | Check `<catalog>.agents.root` first; some warehouses have only OSI, only LookML, or only dbt. |
 | `SHOW TABLES IN` / `DESCRIBE TABLE` to explore | Use focused `SELECT`s against the known `<catalog>.agents.*` tables. |
