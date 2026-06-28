@@ -30,7 +30,8 @@ ROOT_ENTRIES = {
         ("explore", "One row per LookML explore. See AGENTS.LOOKML_EXPLORE."),
     ),
     "osi": (
-        ("overview", "# OSI\nOpen Semantic Interchange metadata parsed from *.osi.yaml files."),
+        ("overview", "# OSI\nOpen Semantic Interchange metadata parsed from *.osi.yaml files. The canonical semantic-layer source; other formats (e.g. LookML) reach AGENTS.OSI_* by being converted to OSI first."),
+        ("model", "One row per OSI semantic model. See AGENTS.OSI_MODEL."),
         ("dataset", "One row per OSI dataset. See AGENTS.OSI_DATASET."),
         ("field", "One row per OSI dataset field. See AGENTS.OSI_FIELD."),
         ("metric", "One row per OSI metric. See AGENTS.OSI_METRIC."),
