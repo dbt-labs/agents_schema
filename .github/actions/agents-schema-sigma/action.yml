@@ -1,0 +1,23 @@
+name: 'Agents Schema Sigma'
+description: >
+  Ingests Sigma data model metadata into AGENTS.SIGMA_* tables.
+
+inputs:
+  sigma-dir:
+    description: 'Path to a directory containing *.sigma.yaml files'
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: '3.12'
+
+    - name: Run Sigma ingestion
+      shell: bash
+      env:
+        AGENTS_SCHEMA_SIGMA_DIR: ${{ inputs.sigma-dir }}
+      run: |
+        uvx --from "agents-schema==0.0.9" \
+          agents-schema sigma --sigma-dir "$AGENTS_SCHEMA_SIGMA_DIR"

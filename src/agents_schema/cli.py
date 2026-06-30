@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import __version__, dbt, lookml, osi, skills, snowflake_semantic
+from . import __version__, dbt, lookml, osi, sigma, skills, snowflake_semantic
 from .config import ConfigError
 from .dbt_profiles import dbt_adapter_package_from_profiles_file
 from .destinations import warehouse_type_from_env
@@ -80,6 +80,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="publisher name to use for AGENTS.ROOT skill rows",
     )
 
+    sigma_parser = sub.add_parser(
+        "sigma",
+        help="ingest Sigma data model YAML files into AGENTS.SIGMA_*",
+    )
+    sigma_parser.add_argument(
+        "--sigma-dir",
+        required=True,
+        type=Path,
+        help="path to a directory containing *.sigma.yaml files",
+    )
+
     snowflake_semantic_parser = sub.add_parser(
         "snowflake-semantic",
         help="publish Snowflake semantic view pointers into AGENTS.ROOT",
@@ -104,6 +115,8 @@ def main(argv: list[str] | None = None) -> int:
             lookml.run(_config("looker", args.lookml_dir))
         elif args.source_type == "osi":
             osi.run(_config("osi", args.osi_dir))
+        elif args.source_type == "sigma":
+            sigma.run(_config("sigma", args.sigma_dir))
         elif args.source_type == "skills":
             cfg = _config("skills", args.skills_dir)
             cfg["metadata_connection"]["provider"] = args.provider
@@ -119,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
             snowflake_semantic.run(cfg)
         else:
             raise ConfigError(f"unsupported source type: {args.source_type}")
-    except (ConfigError, FileNotFoundError) as e:
+    except (ConfigError, FileNotFoundError, ValueError) as e:
         print(f"agents-schema: error: {e}", file=sys.stderr)
         return 1
     return 0
