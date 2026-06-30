@@ -32,6 +32,7 @@ available before writing or explaining queries.
   - [Sync dbt](#sync-dbt)
   - [Sync Looker](#sync-looker)
   - [Sync OSI](#sync-osi)
+  - [Sync Sigma](#sync-sigma)
   - [Sync Multiple Sources](#sync-multiple-sources)
 - [Query with an agent](#query-with-an-agent)
 - [Why Agents Schema](#why-agents-schema)
@@ -50,6 +51,7 @@ Supported sources:
 - dbt
 - Looker
 - OSI
+- Sigma
 - Markdown skills
 
 Supported destinations:
@@ -80,6 +82,11 @@ files.
 
 Use [OSI Setup Guide](osi-setup.md) when your repository contains Open Semantic
 Interchange `*.osi.yaml` files.
+
+### Sync Sigma
+
+Use [Sigma Setup Guide](sigma-setup.md) when your repository contains exported
+Sigma data model `*.sigma.yaml` files.
 
 ### Sync Multiple Sources
 
@@ -167,6 +174,7 @@ The GitHub Actions call the CLI with explicit source arguments:
 agents-schema dbt --project-dir dbt_project
 agents-schema looker --lookml-dir lookml
 agents-schema osi --osi-dir osi
+agents-schema sigma --sigma-dir sigma
 agents-schema skills --skills-dir skills
 agents-schema snowflake-semantic --semantic-view ANALYTICS.FINANCE.REVENUE
 ```

@@ -44,6 +44,13 @@ ROOT_ENTRIES = {
     "snowflake_semantic": (
         ("overview", "# Snowflake Semantic\nPointer rows for native Snowflake semantic views. Each key semantic_view/<name> in AGENTS.ROOT points to one Snowflake semantic view object. Inspect the Snowflake object for current dimensions, metrics, relationships, and query behavior."),
     ),
+    "sigma": (
+        ("overview", "# Sigma\nSemantic metadata parsed from Sigma data model YAML files."),
+        ("data_model", "One row per Sigma data model YAML file. See AGENTS.SIGMA_DATA_MODEL."),
+        ("element", "One row per table element in a Sigma data model. See AGENTS.SIGMA_ELEMENT."),
+        ("column", "One row per column in a Sigma table element. See AGENTS.SIGMA_COLUMN."),
+        ("metric", "One row per metric in a Sigma table element. See AGENTS.SIGMA_METRIC."),
+    ),
 }
 
 

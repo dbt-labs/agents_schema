@@ -99,6 +99,11 @@ lookml     explore                   One row per LookML explore. See AGENTS.LOOK
 osi        overview                  # OSI\nOpen Semantic Interchange metadata.
 osi        dataset                   One row per OSI dataset. See AGENTS.OSI_DATASET.
 osi        metric                    One row per OSI metric. See AGENTS.OSI_METRIC.
+sigma      overview                  # Sigma\nSemantic metadata from Sigma data model YAML.
+sigma      data_model                One row per Sigma data model YAML file. See AGENTS.SIGMA_DATA_MODEL.
+sigma      element                   One row per Sigma table element. See AGENTS.SIGMA_ELEMENT.
+sigma      column                    One row per column in a Sigma table element. See AGENTS.SIGMA_COLUMN.
+sigma      metric                    One row per metric in a Sigma table element. See AGENTS.SIGMA_METRIC.
 snowflake_semantic semantic_view/... Pointer to a native Snowflake semantic view.
 skills     overview                  # Skills\nWarehouse-delivered agent skills...
 skills     skill_use                 Optional parsed skill data-use declarations.
@@ -117,6 +122,7 @@ The current package delivers one table family per metadata source:
 | dbt | `AGENTS.DBT_MODEL`, `AGENTS.DBT_COLUMN`, `AGENTS.DBT_DEPENDENCY` |
 | LookML | `AGENTS.LOOKML_VIEW`, `AGENTS.LOOKML_DIMENSION`, `AGENTS.LOOKML_MEASURE`, `AGENTS.LOOKML_EXPLORE` |
 | OSI | `AGENTS.OSI_DATASET`, `AGENTS.OSI_FIELD`, `AGENTS.OSI_METRIC`, `AGENTS.OSI_RELATIONSHIP` |
+| Sigma | `AGENTS.SIGMA_DATA_MODEL`, `AGENTS.SIGMA_ELEMENT`, `AGENTS.SIGMA_COLUMN`, `AGENTS.SIGMA_METRIC` |
 | Skills | `AGENTS.SKILL_USE` |
 | Snowflake Semantic | `AGENTS.ROOT` only (pointer rows; no additional tables) |
 
@@ -465,6 +471,130 @@ CREATE OR REPLACE TABLE AGENTS.OSI_RELATIONSHIP (
 
 ---
 
+## Source: Sigma
+
+The Sigma ingestion scans `*.sigma.yaml` files in the configured Sigma directory and reads each file as the code representation of a Sigma data model. These files are obtained from the Sigma REST API using the `GET /v2/dataModels/{dataModelId}/spec?format=yaml` endpoint. The ingestion writes normalized element, column, and metric tables.
+
+Each Sigma data model is organized into pages, and each page contains elements. The ingestion processes only `kind: table` elements — control elements (date pickers, sliders, etc.) are skipped.
+
+Agents can use this extension to understand the BI and semantic surface exposed through Sigma: which data model elements exist, which warehouse tables back them, what columns and metrics are available, and how elements are organized within data model pages.
+
+#### Metric coverage limitation
+
+Only metrics whose formula is a single standard aggregation applied to one column are written to `AGENTS.SIGMA_METRIC`. The supported forms are:
+
+```
+Sum([table/column])
+Avg([table/column])
+Count([table/column])
+CountDistinct([table/column])
+Min([table/column])
+Max([table/column])
+```
+
+The following formula patterns are **excluded** because they do not map cleanly to a single SQL aggregate expression:
+
+| Pattern | Example |
+|---|---|
+| Conditional aggregations (`*If` suffix) | `SumIf([Amount], [Is Active])`, `CountDistinctIf([Id], DateDiff(...) < 30)`, `CountIf([Flag])` |
+| Cross-metric references | `[Metrics/Revenue] / [Metrics/Total COGS]` |
+| Multi-field arithmetic inside aggregation | `Sum([Quantity] * [Price])` |
+| Statistical functions | `PercentileCont([Amount], 0.9)` |
+| No-argument calls | `Count()` |
+| Any other function not in the supported list | `Median([Amount])` |
+
+Metrics using these patterns are silently skipped during ingestion and will not appear in `AGENTS.SIGMA_METRIC`. Agents querying that table will only see metrics that have a direct SQL aggregate equivalent.
+
+### `AGENTS.SIGMA_DATA_MODEL`
+
+One row per `.sigma.yaml` file. Each file contains one Sigma data model.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.SIGMA_DATA_MODEL (
+  source_file  VARCHAR NOT NULL,
+  name         VARCHAR,
+  description  TEXT,
+  PRIMARY KEY (source_file)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `source_file` | Relative path of the `.sigma.yaml` file (for example, `sigma/orders.sigma.yaml`). Primary key and join target for `AGENTS.SIGMA_ELEMENT.source_file`. |
+| `name` | Data model `name`. |
+| `description` | Data model `description`, when present. |
+
+### `AGENTS.SIGMA_ELEMENT`
+
+One row per `kind: table` element across all pages in all ingested data models. `source_path` is unique — when two data models reference the same warehouse table, the first file alphabetically wins and that element's columns and metrics are used.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.SIGMA_ELEMENT (
+  source_path   VARCHAR NOT NULL,
+  source_file   VARCHAR NOT NULL,
+  page_name     VARCHAR NOT NULL,
+  element_name  VARCHAR,
+  connection_id VARCHAR,
+  description   TEXT,
+  PRIMARY KEY (source_path)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `source_path` | Warehouse path from `source.path`, joined with `.` (for example, `ANALYTICS.REVENUE.ORDERS`). Primary key and join target for `AGENTS.SIGMA_COLUMN` and `AGENTS.SIGMA_METRIC`. |
+| `source_file` | Relative path of the source `.sigma.yaml` file — joins to `AGENTS.SIGMA_DATA_MODEL.source_file`. |
+| `page_name` | Parent page `name`. |
+| `element_name` | Element `name` (user-readable label in Sigma). |
+| `connection_id` | Element `source.connectionId`. |
+| `description` | Element `description`, when present. |
+
+### `AGENTS.SIGMA_COLUMN`
+
+One row per column in a `kind: table` element. Columns without a resolvable name (no `name` field and no direct `[TABLE/Column]` formula to extract from) are skipped.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.SIGMA_COLUMN (
+  source_path  VARCHAR NOT NULL,
+  name         VARCHAR NOT NULL,
+  kind         VARCHAR NOT NULL,
+  formula      TEXT,
+  description  TEXT,
+  PRIMARY KEY (source_path, name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `source_path` | Warehouse path of the parent element — joins to `AGENTS.SIGMA_ELEMENT.source_path`. |
+| `name` | Column `name` if set; otherwise extracted from the column formula (`[TABLE/Column Name]` → `Column Name`). |
+| `kind` | `direct` if the formula is a bare warehouse reference (`[TABLE/Column]`); `computed` for all derived expressions. |
+| `formula` | Column `formula` (Sigma formula expression for the column). |
+| `description` | Column `description`, when present. |
+
+### `AGENTS.SIGMA_METRIC`
+
+One row per metric in a `kind: table` element whose formula maps to a single standard SQL aggregate.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.SIGMA_METRIC (
+  source_path  VARCHAR NOT NULL,
+  name         VARCHAR NOT NULL,
+  formula      TEXT,
+  description  TEXT,
+  PRIMARY KEY (source_path, name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `source_path` | Warehouse path of the parent element — joins to `AGENTS.SIGMA_ELEMENT.source_path`. |
+| `name` | Metric `name` (user-readable label). |
+| `formula` | Metric `formula` (Sigma aggregation formula). |
+| `description` | Metric `description`, when present. |
+
+---
+
 ## Source: Snowflake Semantic
 
 The Snowflake Semantic ingestion publishes pointer rows into `AGENTS.ROOT` for one or more named native Snowflake semantic views. It does not create additional `AGENTS.*` tables — the semantic definition (dimensions, metrics, relationships, and query behavior) lives in Snowflake itself and should be inspected there.
@@ -539,6 +669,7 @@ The following provider names are reserved:
 | `dbt` | dbt metadata in `AGENTS.DBT_*` |
 | `lookml` | LookML metadata in `AGENTS.LOOKML_*` |
 | `osi` | OSI metadata in `AGENTS.OSI_*` |
+| `sigma` | Sigma data model metadata in `AGENTS.SIGMA_*` |
 | `skills` | Skills extension metadata in `AGENTS.SKILL_USE` |
 | `snowflake_semantic` | Pointer rows for native Snowflake semantic views |
 | `user` | User-published skills, metadata, query recipes, or operational context |
@@ -562,5 +693,9 @@ The following provider names are reserved:
 | `AGENTS.OSI_FIELD` | OSI | OSI dataset fields |
 | `AGENTS.OSI_METRIC` | OSI | OSI metrics |
 | `AGENTS.OSI_RELATIONSHIP` | OSI | OSI relationships between datasets |
+| `AGENTS.SIGMA_DATA_MODEL` | Sigma | One row per Sigma data model YAML file |
+| `AGENTS.SIGMA_ELEMENT` | Sigma | Sigma table elements with warehouse source path and page context |
+| `AGENTS.SIGMA_COLUMN` | Sigma | Sigma element columns with direct/computed kind |
+| `AGENTS.SIGMA_METRIC` | Sigma | Sigma element metrics (simple SQL aggregates only) |
 
 Snowflake Semantic writes only to `AGENTS.ROOT` under provider `snowflake_semantic` — one overview row and one `semantic_view/<name>` pointer row per configured view. See [Source: Snowflake Semantic](#source-snowflake-semantic).

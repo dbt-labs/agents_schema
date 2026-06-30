@@ -1,0 +1,30 @@
+name: Agents Schema Sigma
+
+on:
+  workflow_call:
+    inputs:
+      sigma-dir:
+        description: 'Path to a directory containing *.sigma.yaml files'
+        type: string
+        required: true
+    secrets:
+      WAREHOUSE_CREDENTIALS:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run Sigma ingestion
+        uses: dbt-labs/agents_schema/.github/actions/agents-schema-sigma@v0.0.9
+        with:
+          sigma-dir: ${{ inputs.sigma-dir }}
+        env:
+          WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
