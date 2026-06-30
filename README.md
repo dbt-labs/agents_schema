@@ -19,7 +19,7 @@ repo already produces `target/manifest.json`, the workflow only needs the dbt
 project path and your warehouse credentials.
 
 After the first run, your warehouse has queryable metadata tables such as
-`AGENTS.DBT_MODEL`, `AGENTS.LOOKML_VIEW`, or `AGENTS.OSI_DATASET`. Agents can
+`AGENTS.DBT_MODEL`, `AGENTS.LOOKML_VIEW`, `AGENTS.OMNI_VIEW`, or `AGENTS.OSI_DATASET`. Agents can
 use those tables to understand which models and semantic objects exist, how
 they are documented, how they relate to the warehouse, and what context is
 available before writing or explaining queries.
@@ -31,6 +31,7 @@ available before writing or explaining queries.
 - [Guides](#guides)
   - [Sync dbt](#sync-dbt)
   - [Sync Looker](#sync-looker)
+  - [Sync Omni](#sync-omni)
   - [Sync OSI](#sync-osi)
   - [Sync Multiple Sources](#sync-multiple-sources)
 - [Query with an agent](#query-with-an-agent)
@@ -49,6 +50,7 @@ Supported sources:
 
 - dbt
 - Looker
+- Omni
 - OSI
 - Markdown skills
 
@@ -75,6 +77,11 @@ or an existing `target/manifest.json`.
 
 Use [Looker Setup Guide](looker-setup.md) when your repository contains LookML
 files.
+
+### Sync Omni
+
+Use [Omni Setup Guide](omni-setup.md) when your repository contains Omni YAML
+files synced via the Omni Git integration.
 
 ### Sync OSI
 
@@ -150,7 +157,7 @@ source-specific workflows.
 
 1. A workflow in your repository invokes one of this repo's workflows.
 2. The workflow checks out your repository and reads source metadata such as
-   dbt artifacts, LookML files, or OSI YAML files.
+   dbt artifacts, LookML files, Omni YAML files, or OSI YAML files.
 3. The workflow runs the `agents-schema` CLI at the pinned release tag.
 4. The CLI writes normalized metadata and warehouse-delivered skills into the
    warehouse under the `AGENTS` schema.
@@ -166,6 +173,7 @@ The GitHub Actions call the CLI with explicit source arguments:
 ```bash
 agents-schema dbt --project-dir dbt_project
 agents-schema looker --lookml-dir lookml
+agents-schema omni --omni-dir "omni/My Connection"
 agents-schema osi --osi-dir osi
 agents-schema skills --skills-dir skills
 agents-schema snowflake-semantic --semantic-view ANALYTICS.FINANCE.REVENUE
