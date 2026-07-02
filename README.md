@@ -89,31 +89,37 @@ and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.ym
 
 ## Query with an agent
 
-Once `AGENTS` is populated, the
-[`agents-schema-analyst`](examples/skills/agents-schema-analyst/SKILL.md) skill lets an AI agent
-answer questions about your warehouse — grounded in your real metric definitions from `AGENTS.*`,
-not guesses. It supports Snowflake, Databricks, and BigQuery; configure the matching local SQL
-client credentials in `agents.yml` before using it.
+Once `AGENTS` is populated, one of the per-warehouse `agents-schema-analyst` skills lets an AI
+agent answer questions about your warehouse — grounded in your real metric definitions from
+`AGENTS.*`, not guesses. Pick the skill matching your warehouse and configure the matching local
+SQL client credentials in `agents.yml` before using it:
+
+- [`agents-schema-analyst-snowflake`](examples/skills/agents-schema-analyst-snowflake/SKILL.md)
+- [`agents-schema-analyst-databricks`](examples/skills/agents-schema-analyst-databricks/SKILL.md)
+- [`agents-schema-analyst-bigquery`](examples/skills/agents-schema-analyst-bigquery/SKILL.md)
+
+The examples below use the Snowflake skill; swap `snowflake` for `databricks` or `bigquery` in
+the paths to match your warehouse.
 
 **Claude Code**
 
 ```bash
 curl -fsSL --create-dirs \
-  -o ~/.claude/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/examples/skills/agents-schema-analyst/SKILL.md
+  -o ~/.claude/skills/agents-schema-analyst-snowflake/SKILL.md \
+  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/examples/skills/agents-schema-analyst-snowflake/SKILL.md
 ```
 
-Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
+Then ask: `/agents-schema-analyst-snowflake "What is our total MRR this month?"`
 
 **Codex**
 
 ```bash
 curl -fsSL --create-dirs \
-  -o ~/.codex/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/examples/skills/agents-schema-analyst/SKILL.md
+  -o ~/.codex/skills/agents-schema-analyst-snowflake/SKILL.md \
+  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/examples/skills/agents-schema-analyst-snowflake/SKILL.md
 ```
 
-Then ask: `$agents-schema-analyst "What is our total MRR this month?"`
+Then ask: `$agents-schema-analyst-snowflake "What is our total MRR this month?"`
 
 ## Why Agents Schema
 
