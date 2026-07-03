@@ -135,6 +135,13 @@ are present and explains what provider-contributed tables mean. Consumers can
 start there for generic discovery, or query well-known extension tables directly
 when they already know the shape they need.
 
+Agents Schema assumes its consumer is an AI agent, not a deterministic
+application that needs a fixed contract from providers. Because an agent can
+interpret loosely structured content, provider data is free to be
+semi-structured, denormalized, or concatenated into markdown, and free to
+change shape as providers and models evolve, rather than conforming to a
+rigid schema every provider and consumer must agree on in advance.
+
 Agents Schema is not a replacement for specialized systems, source-native
 metadata APIs, or development-time tooling. A dbt MCP server helping an agent
 edit a dbt repository should still use dbt source files and artifacts directly.
