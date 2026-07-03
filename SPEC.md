@@ -46,7 +46,7 @@ CREATE TABLE AGENTS.ROOT (
 
 ### What goes in `ROOT`
 
-A row in `AGENTS.ROOT` can hold any text a provider wants discoverable from inside the warehouse. The only hard rule is that `(provider, key)` is unique. Beyond that, providers are free to use rows however they like: for an overview, conventions, per-table notes, skills, query recipes, deprecation notices, or anything else worth publishing alongside the data. Markdown is a natural fit because consumers are often LLMs, but the column is plain text and any shape works.
+A row in `AGENTS.ROOT` can hold any text a provider wants discoverable from inside the warehouse. The only hard rule is that `(provider, key)` is unique. Beyond that, providers are free to use rows however they like: for an overview, conventions, per-table notes, skills, query recipes, deprecation notices, or anything else worth publishing alongside the data. The intended consumer is an AI agent rather than a deterministic application requiring a fixed schema, so `content` can be semi-structured, denormalized, or free-form, and is free to change shape as providers and models evolve. Markdown is a natural fit, but the column is plain text and any shape works.
 
 It is strongly recommended that when a row is meant to document a specific contributed table, its key match the unprefixed table name. For example, `(dbt, model)` documents `AGENTS.DBT_MODEL`, and `(lookml, explore)` documents `AGENTS.LOOKML_EXPLORE`. This is not enforced, but following the convention keeps consumers, especially LLM agents, from getting confused about whether a row describes a table or is freeform context.
 
