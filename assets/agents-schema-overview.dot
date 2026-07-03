@@ -44,12 +44,15 @@ digraph AgentsSchemaOverview {
     style="invis";
     margin=50;
 
-    observability [label="Observability", shape=box, style="rounded,filled", fillcolor="#ecfccb", color="#1f2937"];
+    agents [label="Agents", shape=box, style="rounded,filled", fillcolor="#fee2e2", color="#dc2626"];
+    chat [label="Chat", shape=box, style="rounded,filled", fillcolor="#ede9fe", color="#1f2937"];
     bi [label="BI", shape=box, style="rounded,filled", fillcolor="#fefce8", color="#1f2937"];
-    agents [label="Agents", shape=box, style="rounded,filled", fillcolor="#f1f5f9", color="#1f2937"];
-    { rank=same; agents; bi; observability; }
+    observability [label="Observability", shape=box, style="rounded,filled", fillcolor="#ecfccb", color="#1f2937"];
+    { rank=same; observability; bi; chat; }
+    observability -> bi [style=invis];
+    bi -> chat [style=invis];
   }
-  
+
   compound=true;
 
   looker_provider -> root [lhead=cluster_schema];
@@ -57,6 +60,7 @@ digraph AgentsSchemaOverview {
   other_providers -> root [lhead=cluster_schema];
 
   egress -> agents [ltail=cluster_schema];
-  egress -> observability [ltail=cluster_schema];
-  egress -> bi [ltail=cluster_schema];
+  agents -> chat;
+  agents -> bi;
+  agents -> observability;
 }
