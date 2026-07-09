@@ -10,7 +10,7 @@ import yaml
 
 import importlib.resources
 
-from .config import ConfigError
+from .config import ConfigError, warehouse_type
 from .destinations import Column, Destination, TableSchema, open_destination
 from .root import ROOT, upsert_provider_root
 
@@ -58,6 +58,7 @@ def run(cfg: dict) -> None:
         dest.replace_table(SKILL_USE)
         if use_rows:
             dest.insert_rows(SKILL_USE, use_rows)
+        publish_builtin_skill(dest, warehouse_type(cfg))
 
     print(f"  skills:   {len(root_rows)} skills, {len(use_rows)} uses")
 

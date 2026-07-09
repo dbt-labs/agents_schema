@@ -4,8 +4,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .config import warehouse_type
 from .destinations import Column, Destination, TableSchema, open_destination
 from .root import upsert_provider_root
+from .skills import publish_builtin_skill
 
 __all__ = ["run"]
 
@@ -53,6 +55,7 @@ def run(cfg: dict) -> None:
         upsert_provider_root(dest, "dbt")
         _create_tables(dest)
         _ingest(dest, manifest)
+        publish_builtin_skill(dest, warehouse_type(cfg))
 
 
 def _load_manifest(path: Path) -> dict:
