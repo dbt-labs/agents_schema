@@ -101,7 +101,7 @@ on:
 
 jobs:
   agents-schema-dbt:
-    uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.9
+    uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.10
     with:
       dbt-project-dir: dbt_project
     secrets:

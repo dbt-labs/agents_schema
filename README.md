@@ -104,7 +104,7 @@ credentials in `agents.yml` before using it.
 ```bash
 curl -fsSL --create-dirs \
   -o ~/.claude/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/src/agents_schema/builtin_skills/agents-schema-analyst-snowflake.md
+  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.10/src/agents_schema/builtin_skills/agents-schema-analyst-snowflake.md
 ```
 
 Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
@@ -114,12 +114,12 @@ Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
 ```bash
 curl -fsSL --create-dirs \
   -o ~/.codex/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/src/agents_schema/builtin_skills/agents-schema-analyst-snowflake.md
+  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.10/src/agents_schema/builtin_skills/agents-schema-analyst-snowflake.md
 ```
 
 Then ask: `$agents-schema-analyst "What is our total MRR this month?"`
 
-Note: the `v0.0.9` tag in these URLs is bumped as part of the normal release process
+Note: the `v0.0.10` tag in these URLs is bumped as part of the normal release process
 (`RELEASING.md`), the same as every other pinned reference in the repo.
 
 ## Why Agents Schema
@@ -211,11 +211,11 @@ source, examples, README, and spec.
 Pin exact tags in your workflows:
 
 ```yaml
-uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.9
+uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.10
 ```
 
 To upgrade, change only the tag in the `uses:` line. The current release tag is
-`v0.0.9`.
+`v0.0.10`.
 
 ### Specification
 

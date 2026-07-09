@@ -40,7 +40,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run dbt ingestion
-        uses: dbt-labs/agents_schema/.github/actions/agents-schema-dbt@v0.0.9
+        uses: dbt-labs/agents_schema/.github/actions/agents-schema-dbt@v0.0.10
         with:
           dbt-project-dir: ${{ inputs.dbt-project-dir }}
           dbt-profile-name: ${{ inputs.dbt-profile-name }}
