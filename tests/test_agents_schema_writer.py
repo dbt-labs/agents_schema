@@ -145,6 +145,7 @@ class DatabricksAgentsSchemaWriterTests(unittest.TestCase):
         insert_sql, params = calls[0]
         self.assertIn("INSERT INTO `agents`.`dbt_model`", insert_sql)
         self.assertIn("from_json(?, 'array<string>')", insert_sql)
+        self.assertEqual(params[-2], '["finance"]')
         self.assertEqual(params[-1], '{}')
 
     def test_reconcile_rows_deletes_absent_primary_keys(self):
