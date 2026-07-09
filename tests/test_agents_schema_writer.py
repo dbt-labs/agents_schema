@@ -20,15 +20,17 @@ class BigQueryAgentsSchemaWriterTests(unittest.TestCase):
             writer.upsert_rows(
                 DBT_MODEL,
                 [
-                    ("model.pkg.orders", "orders", "analytics", "table", "", "models/orders.sql", []),
+                    ("model.pkg.orders", "orders", None, "analytics", "table", "", "models/orders.sql", [], "{}"),
                     (
                         "model.pkg.customers",
                         "customers",
+                        None,
                         "analytics",
                         "view",
                         "desc",
                         "models/customers.sql",
                         ["mart"],
+                        "{}",
                     ),
                 ],
             )
@@ -52,7 +54,7 @@ class BigQueryAgentsSchemaWriterTests(unittest.TestCase):
 
             writer.reconcile_rows(
                 DBT_MODEL,
-                [("model.pkg.orders", "orders", "analytics", "table", "", "models/orders.sql", [])],
+                [("model.pkg.orders", "orders", None, "analytics", "table", "", "models/orders.sql", [], "{}")],
             )
 
         query_sql = next(call[1] for call in calls if call[0] == "query")
@@ -92,8 +94,8 @@ class DatabricksAgentsSchemaWriterTests(unittest.TestCase):
         writer.upsert_rows(
             DBT_MODEL,
             [
-                ("model.pkg.orders", "orders", "analytics", "table", "", "models/orders.sql", []),
-                ("model.pkg.customers", "customers", "analytics", "view", "desc", "models/customers.sql", ["mart"]),
+                ("model.pkg.orders", "orders", None, "analytics", "table", "", "models/orders.sql", [], "{}"),
+                ("model.pkg.customers", "customers", None, "analytics", "view", "desc", "models/customers.sql", ["mart"], "{}"),
             ],
         )
 
@@ -111,18 +113,22 @@ class DatabricksAgentsSchemaWriterTests(unittest.TestCase):
             [
                 "model.pkg.orders",
                 "orders",
+                None,
                 "analytics",
                 "table",
                 "",
                 "models/orders.sql",
                 "[]",
+                "{}",
                 "model.pkg.customers",
                 "customers",
+                None,
                 "analytics",
                 "view",
                 "desc",
                 "models/customers.sql",
                 '["mart"]',
+                "{}",
             ],
         )
 
@@ -132,14 +138,15 @@ class DatabricksAgentsSchemaWriterTests(unittest.TestCase):
 
         writer.insert_rows(
             DBT_MODEL,
-            [("model.pkg.orders", "orders", "analytics", "table", "", "models/orders.sql", ["finance"])],
+            [("model.pkg.orders", "orders", None, "analytics", "table", "", "models/orders.sql", ["finance"], "{}")],
         )
 
         self.assertEqual(len(calls), 1)
         insert_sql, params = calls[0]
         self.assertIn("INSERT INTO `agents`.`dbt_model`", insert_sql)
         self.assertIn("from_json(?, 'array<string>')", insert_sql)
-        self.assertEqual(params[-1], '["finance"]')
+        self.assertEqual(params[-2], '["finance"]')
+        self.assertEqual(params[-1], '{}')
 
     def test_reconcile_rows_deletes_absent_primary_keys(self):
         calls = []
@@ -147,7 +154,7 @@ class DatabricksAgentsSchemaWriterTests(unittest.TestCase):
 
         writer.reconcile_rows(
             DBT_MODEL,
-            [("model.pkg.orders", "orders", "analytics", "table", "", "models/orders.sql", [])],
+            [("model.pkg.orders", "orders", None, "analytics", "table", "", "models/orders.sql", [], "{}")],
         )
 
         delete_calls = [call for call in calls if call[0].startswith("DELETE FROM")]

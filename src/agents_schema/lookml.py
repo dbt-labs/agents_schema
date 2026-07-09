@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from .config import warehouse_type
 from .destinations import Column, Destination, TableSchema, open_destination
 from .root import upsert_provider_root
+from .skills import publish_builtin_skill
 
 __all__ = ["run"]
 
@@ -86,6 +88,7 @@ def run(cfg: dict) -> None:
         upsert_provider_root(dest, "lookml")
         _create_tables(dest)
         _ingest(dest, files, lookml_dir)
+        publish_builtin_skill(dest, warehouse_type(cfg))
 
 
 def _load_lookml_files(lookml_dir: Path) -> list[Path]:

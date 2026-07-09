@@ -36,12 +36,13 @@ class DestinationContext:
 class ConnectorRootTests(unittest.TestCase):
     def test_dbt_run_upserts_root_before_source_tables(self):
         dest = FakeDestination()
-        cfg = {"metadata_connection": {"path": "."}}
+        cfg = {"warehouse": {"type": "snowflake"}, "metadata_connection": {"path": "."}}
 
         with (
             patch("agents_schema.dbt.open_destination", return_value=DestinationContext(dest)),
             patch("agents_schema.dbt._load_manifest", return_value={"nodes": {}}),
             patch("builtins.print"),
+            patch("agents_schema.dbt.publish_builtin_skill"),
         ):
             dbt.run(cfg)
 
@@ -51,12 +52,13 @@ class ConnectorRootTests(unittest.TestCase):
 
     def test_lookml_run_upserts_root_before_source_tables(self):
         dest = FakeDestination()
-        cfg = {"metadata_connection": {"path": "."}}
+        cfg = {"warehouse": {"type": "snowflake"}, "metadata_connection": {"path": "."}}
 
         with (
             patch("agents_schema.lookml.open_destination", return_value=DestinationContext(dest)),
             patch("agents_schema.lookml._load_lookml_files", return_value=[]),
             patch("builtins.print"),
+            patch("agents_schema.lookml.publish_builtin_skill"),
         ):
             lookml.run(cfg)
 
@@ -66,12 +68,13 @@ class ConnectorRootTests(unittest.TestCase):
 
     def test_osi_run_upserts_root_before_source_tables(self):
         dest = FakeDestination()
-        cfg = {"metadata_connection": {"path": "."}}
+        cfg = {"warehouse": {"type": "snowflake"}, "metadata_connection": {"path": "."}}
 
         with (
             patch("agents_schema.osi.open_destination", return_value=DestinationContext(dest)),
             patch("agents_schema.osi._load_osi_files", return_value=[]),
             patch("builtins.print"),
+            patch("agents_schema.osi.publish_builtin_skill"),
         ):
             osi.run(cfg)
 
@@ -81,7 +84,10 @@ class ConnectorRootTests(unittest.TestCase):
 
     def test_skills_run_upserts_root_before_source_tables(self):
         dest = FakeDestination()
-        cfg = {"metadata_connection": {"path": ".", "provider": "fivetran"}}
+        cfg = {
+            "warehouse": {"type": "snowflake"},
+            "metadata_connection": {"path": ".", "provider": "fivetran"},
+        }
         skill = SkillFile(
             key="skill/revenue",
             content="# Revenue\n",
@@ -92,6 +98,7 @@ class ConnectorRootTests(unittest.TestCase):
             patch("agents_schema.skills.open_destination", return_value=DestinationContext(dest)),
             patch("agents_schema.skills._load_skill_files", return_value=[skill]),
             patch("builtins.print"),
+            patch("agents_schema.skills.publish_builtin_skill"),
         ):
             skills.run(cfg)
 
@@ -106,7 +113,10 @@ class ConnectorRootTests(unittest.TestCase):
 
     def test_snowflake_semantic_run_upserts_root_overview_then_pointer_rows(self):
         dest = FakeDestination()
-        cfg = {"metadata_connection": {"semantic_views": ["ANALYTICS.FINANCE.REVENUE"]}}
+        cfg = {
+            "warehouse": {"type": "snowflake"},
+            "metadata_connection": {"semantic_views": ["ANALYTICS.FINANCE.REVENUE"]},
+        }
 
         with (
             patch(
@@ -114,6 +124,7 @@ class ConnectorRootTests(unittest.TestCase):
                 return_value=DestinationContext(dest),
             ),
             patch("builtins.print"),
+            patch("agents_schema.snowflake_semantic.publish_builtin_skill"),
         ):
             snowflake_semantic.run(cfg)
 

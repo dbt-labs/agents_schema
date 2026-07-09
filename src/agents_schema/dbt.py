@@ -4,8 +4,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .config import warehouse_type
 from .destinations import Column, Destination, TableSchema, open_destination
 from .root import upsert_provider_root
+from .skills import publish_builtin_skill
 
 __all__ = ["run"]
 
@@ -14,11 +16,13 @@ DBT_MODEL = TableSchema(
     (
         Column("unique_id", "varchar", nullable=False),
         Column("name", "varchar", nullable=False),
+        Column("database_name", "varchar"),
         Column("schema_name", "varchar"),
         Column("materialization", "varchar"),
         Column("description", "text"),
         Column("file_path", "varchar"),
         Column("tags", "array"),
+        Column("meta", "text"),
     ),
     primary_key=("unique_id",),
 )
@@ -51,6 +55,7 @@ def run(cfg: dict) -> None:
         upsert_provider_root(dest, "dbt")
         _create_tables(dest)
         _ingest(dest, manifest)
+        publish_builtin_skill(dest, warehouse_type(cfg))
 
 
 def _load_manifest(path: Path) -> dict:
@@ -78,11 +83,13 @@ def _ingest(dest: Destination, manifest: dict) -> None:
         models.append((
             uid,
             node["name"],
+            node.get("database"),
             node.get("schema"),
             node.get("config", {}).get("materialized"),
             node.get("description") or "",
             node.get("original_file_path"),
             list(node.get("tags", [])),
+            json.dumps(node.get("config", {}).get("meta") or node.get("meta") or {}),
         ))
 
         for col_name, col_info in node.get("columns", {}).items():
