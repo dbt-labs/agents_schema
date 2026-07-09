@@ -42,6 +42,7 @@ class ConnectorRootTests(unittest.TestCase):
             patch("agents_schema.dbt.open_destination", return_value=DestinationContext(dest)),
             patch("agents_schema.dbt._load_manifest", return_value={"nodes": {}}),
             patch("builtins.print"),
+            patch("agents_schema.dbt.publish_builtin_skill"),
         ):
             dbt.run(cfg)
 
@@ -57,6 +58,7 @@ class ConnectorRootTests(unittest.TestCase):
             patch("agents_schema.lookml.open_destination", return_value=DestinationContext(dest)),
             patch("agents_schema.lookml._load_lookml_files", return_value=[]),
             patch("builtins.print"),
+            patch("agents_schema.lookml.publish_builtin_skill"),
         ):
             lookml.run(cfg)
 
@@ -72,6 +74,7 @@ class ConnectorRootTests(unittest.TestCase):
             patch("agents_schema.osi.open_destination", return_value=DestinationContext(dest)),
             patch("agents_schema.osi._load_osi_files", return_value=[]),
             patch("builtins.print"),
+            patch("agents_schema.osi.publish_builtin_skill"),
         ):
             osi.run(cfg)
 
@@ -95,6 +98,7 @@ class ConnectorRootTests(unittest.TestCase):
             patch("agents_schema.skills.open_destination", return_value=DestinationContext(dest)),
             patch("agents_schema.skills._load_skill_files", return_value=[skill]),
             patch("builtins.print"),
+            patch("agents_schema.skills.publish_builtin_skill"),
         ):
             skills.run(cfg)
 
@@ -120,13 +124,11 @@ class ConnectorRootTests(unittest.TestCase):
                 return_value=DestinationContext(dest),
             ),
             patch("builtins.print"),
+            patch("agents_schema.snowflake_semantic.publish_builtin_skill"),
         ):
             snowflake_semantic.run(cfg)
 
-        # run() also publishes the built-in analyst skill as its last step (unmocked
-        # here), which appends further agents.root/agents.skill_use calls; assert on
-        # the first two calls' ordering and content rather than an exact total count.
-        self.assertGreaterEqual(len(dest.calls), 2)
+        self.assertEqual(len(dest.calls), 2)
         # first call: overview row
         self.assertEqual(dest.calls[0][0], "upsert")
         self.assertEqual(dest.calls[0][1], "agents.root")
