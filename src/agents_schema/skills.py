@@ -8,10 +8,13 @@ from typing import Any
 
 import yaml
 
+import importlib.resources
+
+from .config import ConfigError
 from .destinations import Column, Destination, TableSchema, open_destination
 from .root import ROOT, upsert_provider_root
 
-__all__ = ["SKILL_USE", "publish_skill", "run"]
+__all__ = ["SKILL_USE", "publish_builtin_skill", "publish_skill", "run"]
 
 SKILL_USE = TableSchema(
     "agents.skill_use",
@@ -57,6 +60,31 @@ def run(cfg: dict) -> None:
             dest.insert_rows(SKILL_USE, use_rows)
 
     print(f"  skills:   {len(root_rows)} skills, {len(use_rows)} uses")
+
+
+BUILTIN_ANALYST_KEY = "skill/agents-schema-analyst"
+_ANALYST_SKILL_FILES = {
+    "snowflake": "agents-schema-analyst-snowflake.md",
+    "databricks": "agents-schema-analyst-databricks.md",
+    "bigquery": "agents-schema-analyst-bigquery.md",
+    "big_query": "agents-schema-analyst-bigquery.md",
+}
+
+
+def publish_builtin_skill(dest: Destination, warehouse_type: str) -> None:
+    content = _load_builtin_analyst_skill(warehouse_type)
+    publish_skill(dest, "skills", BUILTIN_ANALYST_KEY, content)
+
+
+def _load_builtin_analyst_skill(warehouse_type: str) -> str:
+    filename = _ANALYST_SKILL_FILES.get(warehouse_type)
+    if filename is None:
+        raise ConfigError(f"no built-in analyst skill for warehouse type: {warehouse_type}")
+    return (
+        importlib.resources.files("agents_schema.builtin_skills")
+        .joinpath(filename)
+        .read_text(encoding="utf-8")
+    )
 
 
 def publish_skill(dest: Destination, provider: str, skill_key: str, content: str) -> SkillFile:
