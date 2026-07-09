@@ -89,31 +89,38 @@ and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.ym
 
 ## Query with an agent
 
-Once `AGENTS` is populated, the
-[`agents-schema-analyst`](examples/skills/agents-schema-analyst/SKILL.md) skill lets an AI agent
-answer questions about your warehouse — grounded in your real metric definitions from `AGENTS.*`,
-not guesses. It supports Snowflake, Databricks, and BigQuery; configure the matching local SQL
-client credentials in `agents.yml` before using it.
+Once `AGENTS` is populated, the `agents-schema-analyst` skill lets an AI agent answer
+questions about your warehouse — grounded in your real metric definitions from `AGENTS.*`,
+not guesses. Every CLI run also publishes the skill matching your destination into
+`AGENTS.ROOT` under `provider = skills`, `key = skill/agents-schema-analyst`, so agents already
+querying the warehouse can discover it there.
 
-**Claude Code**
+To install it into a local agent, pick the variant for your warehouse
+(`snowflake`, `databricks`, or `bigquery`) and configure the matching local SQL client
+credentials in `agents.yml` before using it.
+
+**Claude Code** (Snowflake shown; swap the `-snowflake` suffix for your warehouse)
 
 ```bash
 curl -fsSL --create-dirs \
   -o ~/.claude/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/examples/skills/agents-schema-analyst/SKILL.md
+  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/src/agents_schema/builtin_skills/agents-schema-analyst-snowflake.md
 ```
 
 Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
 
-**Codex**
+**Codex** (Snowflake shown; swap the `-snowflake` suffix for your warehouse)
 
 ```bash
 curl -fsSL --create-dirs \
   -o ~/.codex/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/examples/skills/agents-schema-analyst/SKILL.md
+  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/src/agents_schema/builtin_skills/agents-schema-analyst-snowflake.md
 ```
 
 Then ask: `$agents-schema-analyst "What is our total MRR this month?"`
+
+Note: the `v0.0.9` tag in these URLs is bumped as part of the normal release process
+(`RELEASING.md`), the same as every other pinned reference in the repo.
 
 ## Why Agents Schema
 
