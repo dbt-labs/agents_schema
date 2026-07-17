@@ -60,7 +60,7 @@ runs:
             adapter_args+=(--target "$DBT_TARGET")
           fi
           DBT_ADAPTER_PACKAGE="$(
-            uvx --from "agents-schema==0.0.9" \
+            uvx --from "agents-schema==0.0.10" \
               agents-schema-dbt-adapter-package "${adapter_args[@]}"
           )"
           echo "Using dbt adapter package $DBT_ADAPTER_PACKAGE from DBT_PROFILES_YML"
@@ -115,5 +115,5 @@ runs:
       env:
         AGENTS_SCHEMA_DBT_PROJECT_DIR: ${{ inputs.dbt-project-dir }}
       run: |
-        uvx --from "agents-schema==0.0.9" \
+        uvx --from "agents-schema==0.0.10" \
           agents-schema dbt --project-dir "$AGENTS_SCHEMA_DBT_PROJECT_DIR"

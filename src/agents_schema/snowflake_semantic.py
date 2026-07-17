@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from .config import ConfigError
+from .config import ConfigError, warehouse_type
 from .destinations import Destination, open_destination
 from .root import ROOT, upsert_provider_root
+from .skills import publish_builtin_skill
 
 __all__ = ["publish_semantic_view_pointers", "run"]
 
@@ -17,6 +18,7 @@ def run(cfg: dict) -> None:
     semantic_views = _semantic_views_from_config(cfg)
     with open_destination(cfg) as dest:
         publish_semantic_view_pointers(dest, semantic_views)
+        publish_builtin_skill(dest, warehouse_type(cfg))
 
 
 def publish_semantic_view_pointers(dest: Destination, semantic_views: Iterable[str]) -> None:

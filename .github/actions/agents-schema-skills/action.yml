@@ -21,7 +21,7 @@ runs:
     - name: Run skills ingestion
       shell: bash
       run: |
-        uvx --from "agents-schema==0.0.9" \
+        uvx --from "agents-schema==0.0.10" \
           agents-schema skills \
             --skills-dir "${{ inputs.skills-dir }}" \
             --provider "${{ inputs.provider }}"

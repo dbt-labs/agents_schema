@@ -96,31 +96,38 @@ and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.ym
 
 ## Query with an agent
 
-Once `AGENTS` is populated, the
-[`agents-schema-analyst`](examples/skills/agents-schema-analyst/SKILL.md) skill lets an AI agent
-answer questions about your warehouse — grounded in your real metric definitions from `AGENTS.*`,
-not guesses. It supports Snowflake, Databricks, and BigQuery; configure the matching local SQL
-client credentials in `agents.yml` before using it.
+Once `AGENTS` is populated, the `agents-schema-analyst` skill lets an AI agent answer
+questions about your warehouse — grounded in your real metric definitions from `AGENTS.*`,
+not guesses. Every CLI run also publishes the skill matching your destination into
+`AGENTS.ROOT` under `provider = skills`, `key = skill/agents-schema-analyst`, so agents already
+querying the warehouse can discover it there.
 
-**Claude Code**
+To install it into a local agent, pick the variant for your warehouse
+(`snowflake`, `databricks`, or `bigquery`) and configure the matching local SQL client
+credentials in `agents.yml` before using it.
+
+**Claude Code** (Snowflake shown; swap the `-snowflake` suffix for your warehouse)
 
 ```bash
 curl -fsSL --create-dirs \
   -o ~/.claude/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/examples/skills/agents-schema-analyst/SKILL.md
+  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.10/src/agents_schema/builtin_skills/agents-schema-analyst-snowflake.md
 ```
 
 Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
 
-**Codex**
+**Codex** (Snowflake shown; swap the `-snowflake` suffix for your warehouse)
 
 ```bash
 curl -fsSL --create-dirs \
   -o ~/.codex/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/examples/skills/agents-schema-analyst/SKILL.md
+  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.10/src/agents_schema/builtin_skills/agents-schema-analyst-snowflake.md
 ```
 
 Then ask: `$agents-schema-analyst "What is our total MRR this month?"`
+
+Note: the `v0.0.10` tag in these URLs is bumped as part of the normal release process
+(`RELEASING.md`), the same as every other pinned reference in the repo.
 
 ## Why Agents Schema
 
@@ -141,6 +148,13 @@ The schema is self-documenting. `AGENTS.ROOT` tells consumers which providers
 are present and explains what provider-contributed tables mean. Consumers can
 start there for generic discovery, or query well-known extension tables directly
 when they already know the shape they need.
+
+Agents Schema assumes its consumer is an AI agent, not a deterministic
+application that needs a fixed contract from providers. Because an agent can
+interpret loosely structured content, provider data is free to be
+semi-structured, denormalized, or concatenated into markdown, and free to
+change shape as providers and models evolve, rather than conforming to a
+rigid schema every provider and consumer must agree on in advance.
 
 Agents Schema is not a replacement for specialized systems, source-native
 metadata APIs, or development-time tooling. A dbt MCP server helping an agent
@@ -205,11 +219,11 @@ source, examples, README, and spec.
 Pin exact tags in your workflows:
 
 ```yaml
-uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.9
+uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.10
 ```
 
 To upgrade, change only the tag in the `uses:` line. The current release tag is
-`v0.0.9`.
+`v0.0.10`.
 
 ### Specification
 
