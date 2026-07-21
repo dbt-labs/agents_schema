@@ -34,6 +34,7 @@ available before writing or explaining queries.
   - [Sync OSI](#sync-osi)
   - [Sync Multiple Sources](#sync-multiple-sources)
 - [Query with an agent](#query-with-an-agent)
+  - [Install the Codex plugin](#install-the-codex-plugin)
 - [Why Agents Schema](#why-agents-schema)
   - [How it works](#how-it-works)
 - [Reference](#reference)
@@ -89,38 +90,30 @@ and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.ym
 
 ## Query with an agent
 
-Once `AGENTS` is populated, the `agents-schema-analyst` skill lets an AI agent answer
-questions about your warehouse — grounded in your real metric definitions from `AGENTS.*`,
-not guesses. Every CLI run also publishes the skill matching your destination into
-`AGENTS.ROOT` under `provider = skills`, `key = skill/agents-schema-analyst`, so agents already
-querying the warehouse can discover it there.
+This repository is also a Codex plugin marketplace. Its `agents-schema` plugin installs two
+independent skills before Codex connects to your warehouse:
 
-To install it into a local agent, pick the variant for your warehouse
-(`snowflake`, `databricks`, or `bigquery`) and configure the matching local SQL client
-credentials in `agents.yml` before using it.
+- `connect-warehouse` configures and verifies Snowflake, BigQuery, or Databricks access.
+- `agents-schema-search` discovers warehouse metadata through `AGENTS.ROOT` after a connection
+  is available.
 
-**Claude Code** (Snowflake shown; swap the `-snowflake` suffix for your warehouse)
+These plugin skills are local agent tooling. They do not replace the existing destination-matched
+`agents-schema-analyst` row that the ingestion CLI publishes into `AGENTS.ROOT`; that warehouse-side
+behavior remains unchanged. Teams can also continue publishing their own warehouse-delivered
+Markdown skills through the skills provider.
 
-```bash
-curl -fsSL --create-dirs \
-  -o ~/.claude/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.10/src/agents_schema/builtin_skills/agents-schema-analyst-snowflake.md
-```
+### Install the Codex plugin
 
-Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
-
-**Codex** (Snowflake shown; swap the `-snowflake` suffix for your warehouse)
+Add this GitHub repository as a marketplace and install the plugin:
 
 ```bash
-curl -fsSL --create-dirs \
-  -o ~/.codex/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.10/src/agents_schema/builtin_skills/agents-schema-analyst-snowflake.md
+codex plugin marketplace add dbt-labs/agents_schema
+codex plugin add agents-schema@agents-schema
 ```
 
-Then ask: `$agents-schema-analyst "What is our total MRR this month?"`
-
-Note: the `v0.0.10` tag in these URLs is bumped as part of the normal release process
-(`RELEASING.md`), the same as every other pinned reference in the repo.
+Start a new Codex task after installation so the new skills are available. The marketplace lives
+at `.agents/plugins/marketplace.json`, and additional Agents Schema plugins can be added under
+`plugins/` over time.
 
 ## Why Agents Schema
 

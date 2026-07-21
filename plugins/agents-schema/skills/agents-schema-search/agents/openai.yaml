@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agents Schema Search"
+  short_description: "Discover warehouse metadata via AGENTS.ROOT"
+  default_prompt: "Use $agents-schema-search to discover metadata for this warehouse question."

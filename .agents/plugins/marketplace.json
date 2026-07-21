@@ -1,0 +1,20 @@
+{
+  "name": "agents-schema",
+  "interface": {
+    "displayName": "Agents Schema"
+  },
+  "plugins": [
+    {
+      "name": "agents-schema",
+      "source": {
+        "source": "local",
+        "path": "./plugins/agents-schema"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
