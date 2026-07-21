@@ -1,6 +1,6 @@
 ---
 name: connect-warehouse
-description: Connect Codex to Snowflake, BigQuery, or Databricks so it can run SQL. Use when warehouse access is missing, authentication or connection selection is required, or before using a warehouse-data skill such as agents-schema-search.
+description: Connect an AI coding agent to Snowflake, BigQuery, or Databricks so it can run SQL. Use when warehouse access is missing, authentication or connection selection is required, or before using a warehouse-data skill such as agents-schema-search.
 ---
 
 # Connect Warehouse

@@ -35,6 +35,7 @@ available before writing or explaining queries.
   - [Sync Multiple Sources](#sync-multiple-sources)
 - [Query with an agent](#query-with-an-agent)
   - [Install the Codex plugin](#install-the-codex-plugin)
+  - [Install the Claude Code plugin](#install-the-claude-code-plugin)
 - [Why Agents Schema](#why-agents-schema)
   - [How it works](#how-it-works)
 - [Reference](#reference)
@@ -90,8 +91,8 @@ and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.ym
 
 ## Query with an agent
 
-This repository is also a Codex plugin marketplace. Its `agents-schema` plugin installs two
-independent skills before Codex connects to your warehouse:
+This repository is also a plugin marketplace for Codex and Claude Code. Its `agents-schema`
+plugin installs two independent skills before an agent connects to your warehouse:
 
 - `connect-warehouse` configures and verifies Snowflake, BigQuery, or Databricks access.
 - `agents-schema-search` discovers warehouse metadata through `AGENTS.ROOT` after a connection
@@ -114,6 +115,21 @@ codex plugin add agents-schema@agents-schema
 Start a new Codex task after installation so the new skills are available. The marketplace lives
 at `.agents/plugins/marketplace.json`, and additional Agents Schema plugins can be added under
 `plugins/` over time.
+
+### Install the Claude Code plugin
+
+Add this GitHub repository as a marketplace and install the plugin:
+
+```bash
+claude plugin marketplace add dbt-labs/agents_schema
+claude plugin install agents-schema@agents-schema
+```
+
+Start a new Claude Code session after installation, or run `/reload-plugins` in the current
+session. Claude Code exposes the skills as `/agents-schema:connect-warehouse` and
+`/agents-schema:agents-schema-search`; it can also invoke them automatically when relevant.
+The Claude Code marketplace lives at `.claude-plugin/marketplace.json`. Both Claude Code and
+Codex install the same skill definitions under `plugins/agents-schema/skills/`.
 
 ## Why Agents Schema
 
