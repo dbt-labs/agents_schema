@@ -1,0 +1,15 @@
+{
+  "name": "agents-schema",
+  "owner": {
+    "name": "dbt Labs",
+    "url": "https://github.com/dbt-labs"
+  },
+  "description": "Plugins for connecting coding agents to warehouse metadata published through Agents Schema.",
+  "plugins": [
+    {
+      "name": "agents-schema",
+      "source": "./plugins/agents-schema",
+      "description": "Connect to a data warehouse and discover metadata through its AGENTS schema."
+    }
+  ]
+}

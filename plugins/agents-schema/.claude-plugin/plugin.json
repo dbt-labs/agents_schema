@@ -1,0 +1,13 @@
+{
+  "name": "agents-schema",
+  "version": "0.1.0",
+  "description": "Connect to a data warehouse and discover metadata through its AGENTS schema.",
+  "author": {
+    "name": "dbt Labs",
+    "url": "https://github.com/dbt-labs"
+  },
+  "homepage": "https://github.com/dbt-labs/agents_schema",
+  "repository": "https://github.com/dbt-labs/agents_schema",
+  "license": "MIT",
+  "keywords": ["agents-schema", "snowflake", "bigquery", "databricks", "metadata"]
+}
