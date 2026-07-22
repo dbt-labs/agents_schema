@@ -32,6 +32,22 @@ class RootTests(unittest.TestCase):
         _, rows = dest.upserts[0]
         self.assertEqual({row[1] for row in rows}, {"overview", "model", "dataset", "field", "metric", "relationship"})
 
+    def test_upsert_provider_root_has_lookml_entries(self):
+        dest = FakeDestination()
+
+        upsert_provider_root(dest, "lookml")
+
+        _, rows = dest.upserts[0]
+        self.assertEqual({row[1] for row in rows}, {"overview", "view", "dimension", "measure", "explore"})
+
+    def test_upsert_provider_root_has_omni_entries(self):
+        dest = FakeDestination()
+
+        upsert_provider_root(dest, "omni")
+
+        _, rows = dest.upserts[0]
+        self.assertEqual({row[1] for row in rows}, {"overview", "view", "dimension", "measure", "topic", "topic_join"})
+
     def test_upsert_provider_root_has_skills_entries(self):
         dest = FakeDestination()
 

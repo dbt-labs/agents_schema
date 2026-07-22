@@ -29,6 +29,14 @@ ROOT_ENTRIES = {
         ("measure", "One row per LookML measure. See AGENTS.LOOKML_MEASURE."),
         ("explore", "One row per LookML explore. See AGENTS.LOOKML_EXPLORE."),
     ),
+    "omni": (
+        ("overview", "# Omni\nSemantic metadata parsed from Omni YAML files."),
+        ("view", "One row per Omni view. See AGENTS.OMNI_VIEW."),
+        ("dimension", "One row per Omni dimension. See AGENTS.OMNI_DIMENSION."),
+        ("measure", "One row per Omni measure. See AGENTS.OMNI_MEASURE."),
+        ("topic", "One row per Omni topic. See AGENTS.OMNI_TOPIC."),
+        ("topic_join", "One row per join edge within a topic. See AGENTS.OMNI_TOPIC_JOIN."),
+    ),
     "osi": (
         ("overview", "# OSI\nOpen Semantic Interchange metadata parsed from *.osi.yaml files. The canonical semantic-layer source; other formats (e.g. LookML) reach AGENTS.OSI_* by being converted to OSI first."),
         ("model", "One row per OSI semantic model. See AGENTS.OSI_MODEL."),

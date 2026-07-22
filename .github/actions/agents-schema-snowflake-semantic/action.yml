@@ -27,5 +27,5 @@ runs:
           [ -n "$view" ] && args+=(--semantic-view "$view")
         done <<< "$AGENTS_SCHEMA_SEMANTIC_VIEWS"
 
-        uvx --from "agents-schema==0.0.9" \
+        uvx --from "agents-schema==0.0.10" \
           agents-schema snowflake-semantic "${args[@]}"

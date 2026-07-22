@@ -44,6 +44,7 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
          LIKE '%<keyword>%';
    ```
    Use `AGENTS.lookml_measure` (`sql`, `description`, `ai_context`) when the provider is LookML.
+   Use `AGENTS.omni_measure` (`sql`, `description`) when the provider is Omni.
    **If no rows match, stop and tell the user** — do not proceed to Step 3 without a metric
    definition. Try a shorter or alternate keyword if the first search returns nothing.
 
@@ -51,6 +52,8 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
    in the dataset/view metadata, and obey each `ai_context` instruction exactly:
    - OSI: `AGENTS.osi_dataset` (`source`, `ai_context`), `AGENTS.osi_field`
    - LookML: `AGENTS.lookml_view` (`sql_table_name`), `AGENTS.lookml_dimension`
+   - Omni: `AGENTS.omni_view` (`schema`, `table_name`, `description`), `AGENTS.omni_dimension`;
+     use `AGENTS.omni_topic_join` to understand which views are reachable within a topic.
    - dbt, *only if present in root*: `AGENTS.dbt_model` / `AGENTS.dbt_column` add model and
      column descriptions.
    Use the source table named in the metadata — not a same-named table you assume exists elsewhere.
@@ -58,7 +61,8 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
 4. **Translate the formula to SQL.** OSI `expression` is usually plain SQL (e.g. `SUM(amount)`)
    — use it as-is against the resolved table. For LookML `sql`: `${TABLE}.col` → `col`;
    `${other_field}` → look that field up and substitute recursively; `{% if %}…{% else %} X {% endif %}`
-   → use the `{% else %}` branch.
+   → use the `{% else %}` branch. For Omni `sql`: the value is a quoted column reference
+   (e.g. `'"AMOUNT"'`) — strip the outer quotes and use the inner identifier directly.
 
 5. **Pick the time grain from metadata.** Use the time dimension the metadata marks
    (`osi_field.is_time_dimension`, or a LookML `dimension_group`). For "current"/snapshot
@@ -94,6 +98,11 @@ be UPPERCASE when you query them.
 | `AGENTS.lookml_measure` | `view_name`, `measure_name`, `type`, `sql`, `description`, `ai_context` |
 | `AGENTS.lookml_view` | `name`, `sql_table_name`, `description`, `ai_context` |
 | `AGENTS.lookml_dimension` | `view_name`, `field_name`, `field_kind`, `type`, `sql`, `description`, `ai_context` |
+| `AGENTS.omni_measure` | `view_name`, `measure_name`, `aggregate_type`, `sql`, `description` |
+| `AGENTS.omni_view` | `view_name`, `schema`, `table_name`, `description` |
+| `AGENTS.omni_dimension` | `view_name`, `field_name`, `sql`, `description` |
+| `AGENTS.omni_topic` | `topic_name`, `base_view`, `label`, `group_label`, `description`, `ai_context` |
+| `AGENTS.omni_topic_join` | `topic_name`, `from_view`, `to_view` |
 | `AGENTS.dbt_model` | `unique_id`, `name`, `schema_name`, `description` |
 | `AGENTS.dbt_column` | `model_id`, `column_name`, `data_type`, `description` |
 

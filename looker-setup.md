@@ -99,7 +99,7 @@ on:
 
 jobs:
   agents-schema-looker:
-    uses: dbt-labs/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.9
+    uses: dbt-labs/agents_schema/.github/workflows/agents-schema-looker.yml@v0.0.10
     with:
       lookml-dir: lookml
     secrets:

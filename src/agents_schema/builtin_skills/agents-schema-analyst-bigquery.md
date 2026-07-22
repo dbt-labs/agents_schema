@@ -54,6 +54,7 @@ SQLEOF
          LIKE '%<keyword>%';
    ```
    Use `` `<project_id>.agents.lookml_measure` `` (`sql`, `description`, `ai_context`) when the provider is LookML.
+   Use `` `<project_id>.agents.omni_measure` `` (`sql`, `description`) when the provider is Omni.
    **If no rows match, stop and tell the user** — do not proceed to Step 3 without a metric
    definition. Try a shorter or alternate keyword if the first search returns nothing.
 
@@ -61,6 +62,8 @@ SQLEOF
    in the dataset/view metadata, and obey each `ai_context` instruction exactly:
    - OSI: `` `<project_id>.agents.osi_dataset` `` (`source`, `ai_context`), `` `<project_id>.agents.osi_field` ``
    - LookML: `` `<project_id>.agents.lookml_view` `` (`sql_table_name`), `` `<project_id>.agents.lookml_dimension` ``
+   - Omni: `` `<project_id>.agents.omni_view` `` (`schema`, `table_name`, `description`), `` `<project_id>.agents.omni_dimension` ``;
+     use `` `<project_id>.agents.omni_topic_join` `` to understand which views are reachable within a topic.
    - dbt, *only if present in root*: `` `<project_id>.agents.dbt_model` `` / `` `<project_id>.agents.dbt_column` ``
      add model and column descriptions.
    Use the source table named in the metadata — not a same-named table you assume exists elsewhere.
@@ -70,7 +73,8 @@ SQLEOF
    (e.g. `SUM(amount) AS value`) so `bq query --format=json` returns a named key instead of the
    auto-generated `f0_`. For LookML `sql`: `${TABLE}.col` → `col`;
    `${other_field}` → look that field up and substitute recursively; `{% if %}…{% else %} X {% endif %}`
-   → use the `{% else %}` branch.
+   → use the `{% else %}` branch. For Omni `sql`: the value is a quoted column reference
+   (e.g. `'"AMOUNT"'`) — strip the outer quotes and use the inner identifier directly.
 
 5. **Pick the time grain from metadata.** Use the time dimension the metadata marks
    (`osi_field.is_time_dimension`, or a LookML `dimension_group`). For "current"/snapshot
@@ -105,6 +109,11 @@ Replace `<project_id>` with the actual project ID from `agents.yml` throughout.
 | `` `<project_id>.agents.lookml_measure` `` | `view_name`, `measure_name`, `type`, `sql`, `description`, `ai_context` |
 | `` `<project_id>.agents.lookml_view` `` | `name`, `sql_table_name`, `description`, `ai_context` |
 | `` `<project_id>.agents.lookml_dimension` `` | `view_name`, `field_name`, `field_kind`, `type`, `sql`, `description`, `ai_context` |
+| `` `<project_id>.agents.omni_measure` `` | `view_name`, `measure_name`, `aggregate_type`, `sql`, `description` |
+| `` `<project_id>.agents.omni_view` `` | `view_name`, `schema`, `table_name`, `description` |
+| `` `<project_id>.agents.omni_dimension` `` | `view_name`, `field_name`, `sql`, `description` |
+| `` `<project_id>.agents.omni_topic` `` | `topic_name`, `base_view`, `label`, `group_label`, `description`, `ai_context` |
+| `` `<project_id>.agents.omni_topic_join` `` | `topic_name`, `from_view`, `to_view` |
 | `` `<project_id>.agents.dbt_model` `` | `unique_id`, `name`, `schema_name`, `description` |
 | `` `<project_id>.agents.dbt_column` `` | `model_id`, `column_name`, `data_type`, `description` |
 

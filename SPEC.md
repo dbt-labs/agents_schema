@@ -46,7 +46,7 @@ CREATE TABLE AGENTS.ROOT (
 
 ### What goes in `ROOT`
 
-A row in `AGENTS.ROOT` can hold any text a provider wants discoverable from inside the warehouse. The only hard rule is that `(provider, key)` is unique. Beyond that, providers are free to use rows however they like: for an overview, conventions, per-table notes, skills, query recipes, deprecation notices, or anything else worth publishing alongside the data. Markdown is a natural fit because consumers are often LLMs, but the column is plain text and any shape works.
+A row in `AGENTS.ROOT` can hold any text a provider wants discoverable from inside the warehouse. The only hard rule is that `(provider, key)` is unique. Beyond that, providers are free to use rows however they like: for an overview, conventions, per-table notes, skills, query recipes, deprecation notices, or anything else worth publishing alongside the data. The intended consumer is an AI agent rather than a deterministic application requiring a fixed schema, so `content` can be semi-structured, denormalized, or free-form, and is free to change shape as providers and models evolve. Markdown is a natural fit, but the column is plain text and any shape works.
 
 It is strongly recommended that when a row is meant to document a specific contributed table, its key match the unprefixed table name. For example, `(dbt, model)` documents `AGENTS.DBT_MODEL`, and `(lookml, explore)` documents `AGENTS.LOOKML_EXPLORE`. This is not enforced, but following the convention keeps consumers, especially LLM agents, from getting confused about whether a row describes a table or is freeform context.
 
@@ -85,6 +85,21 @@ WHERE key LIKE 'skill/%'
 ORDER BY provider, key;
 ```
 
+### Built-in analyst skill
+
+The `agents-schema` CLI publishes one built-in skill on every run, matched to the destination
+warehouse:
+
+```
+provider = skills
+key      = skill/agents-schema-analyst
+content  = the agents-schema-analyst skill body for the active destination
+```
+
+Because the key is fixed and only the destination-matched body is written, switching destinations
+replaces the body rather than adding rows. Snowflake destinations receive the Snowflake variant,
+Databricks the Databricks variant, and BigQuery the BigQuery variant.
+
 ### Example rows
 
 ```
@@ -103,6 +118,7 @@ osi        metric                    One row per OSI metric. See AGENTS.OSI_METR
 snowflake_semantic semantic_view/... Pointer to a native Snowflake semantic view.
 skills     overview                  # Skills\nWarehouse-delivered agent skills...
 skills     skill_use                 Optional parsed skill data-use declarations.
+skills     skill/agents-schema-analyst  # Agents Schema Analyst (destination-matched)
 acme_corp  skill/refund_workflow     # Refund Workflow\nWhen a user asks about refunds...
 acme_corp  costs                     # Query Costs\nUse this before running expensive joins.
 ```
@@ -168,11 +184,13 @@ One row per dbt model from `manifest.json` entries where `resource_type = 'model
 CREATE OR REPLACE TABLE AGENTS.DBT_MODEL (
   unique_id       VARCHAR NOT NULL,
   name            VARCHAR NOT NULL,
+  database_name   VARCHAR,
   schema_name     VARCHAR,
   materialization VARCHAR,
   description     TEXT,
   file_path       VARCHAR,
   tags            VARIANT,
+  meta            TEXT,
   PRIMARY KEY (unique_id)
 );
 ```
@@ -181,11 +199,13 @@ CREATE OR REPLACE TABLE AGENTS.DBT_MODEL (
 |---|---|
 | `unique_id` | Manifest node key, for example `model.package.model_name`. |
 | `name` | `node.name`. |
+| `database_name` | `node.database`. |
 | `schema_name` | `node.schema`. |
 | `materialization` | `node.config.materialized`. |
 | `description` | `node.description`; empty string when missing. |
 | `file_path` | `node.original_file_path`. |
 | `tags` | `node.tags`, serialized as JSON into a Snowflake `VARIANT`. |
+| `meta` | `node.config.meta` when set, else top-level `node.meta`, else `{}`; serialized as a JSON string. |
 
 ### `AGENTS.DBT_COLUMN`
 
@@ -605,7 +625,7 @@ The following provider names are reserved:
 |---|---|---|
 | `AGENTS.ROOT` | core | Provider registry and skill delivery surface upserted by source workflows |
 | `AGENTS.SKILL_USE` | skills | Parsed skill schema and table use declarations |
-| `AGENTS.DBT_MODEL` | dbt | dbt models with schema, materialization, documentation, path, and tags |
+| `AGENTS.DBT_MODEL` | dbt | dbt models with database, schema, materialization, documentation, path, tags, and meta |
 | `AGENTS.DBT_COLUMN` | dbt | Documented dbt model columns |
 | `AGENTS.DBT_DEPENDENCY` | dbt | Direct dbt dependency edges |
 | `AGENTS.LOOKML_VIEW` | LookML | LookML views and view-level context |

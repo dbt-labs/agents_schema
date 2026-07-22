@@ -23,8 +23,10 @@ from typing import Any
 import jsonschema
 import yaml
 
+from .config import warehouse_type
 from .destinations import Column, Destination, TableSchema, open_destination
 from .root import upsert_provider_root
+from .skills import publish_builtin_skill
 
 __all__ = ["run"]
 
@@ -111,6 +113,7 @@ def run(cfg: dict) -> None:
         upsert_provider_root(dest, "osi")
         _create_tables(dest)
         _ingest(dest, docs)
+        publish_builtin_skill(dest, warehouse_type(cfg))
 
 
 def _load_osi_files(osi_dir: Path) -> list[dict]:

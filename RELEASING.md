@@ -37,7 +37,7 @@ GitHub `release: published` event.
 5. Tag the release:
 
    ```bash
-   git tag v0.0.9
+   git tag v0.0.10
    git push origin main --tags
    ```
 

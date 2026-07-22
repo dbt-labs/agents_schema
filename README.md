@@ -19,7 +19,7 @@ repo already produces `target/manifest.json`, the workflow only needs the dbt
 project path and your warehouse credentials.
 
 After the first run, your warehouse has queryable metadata tables such as
-`AGENTS.DBT_MODEL`, `AGENTS.LOOKML_VIEW`, or `AGENTS.OSI_DATASET`. Agents can
+`AGENTS.DBT_MODEL`, `AGENTS.LOOKML_VIEW`, `AGENTS.OMNI_VIEW`, or `AGENTS.OSI_DATASET`. Agents can
 use those tables to understand which models and semantic objects exist, how
 they are documented, how they relate to the warehouse, and what context is
 available before writing or explaining queries.
@@ -31,9 +31,12 @@ available before writing or explaining queries.
 - [Guides](#guides)
   - [Sync dbt](#sync-dbt)
   - [Sync Looker](#sync-looker)
+  - [Sync Omni](#sync-omni)
   - [Sync OSI](#sync-osi)
   - [Sync Multiple Sources](#sync-multiple-sources)
 - [Query with an agent](#query-with-an-agent)
+  - [Install the Codex plugin](#install-the-codex-plugin)
+  - [Install the Claude Code plugin](#install-the-claude-code-plugin)
 - [Why Agents Schema](#why-agents-schema)
   - [How it works](#how-it-works)
 - [Reference](#reference)
@@ -49,6 +52,7 @@ Supported sources:
 
 - dbt
 - Looker
+- Omni
 - OSI
 - Markdown skills
 
@@ -76,6 +80,11 @@ or an existing `target/manifest.json`.
 Use [Looker Setup Guide](looker-setup.md) when your repository contains LookML
 files.
 
+### Sync Omni
+
+Use [Omni Setup Guide](omni-setup.md) when your repository contains Omni YAML
+files synced via the Omni Git integration.
+
 ### Sync OSI
 
 Use [OSI Setup Guide](osi-setup.md) when your repository contains Open Semantic
@@ -89,31 +98,45 @@ and [examples/workflows/dbt-looker-osi.yml](examples/workflows/dbt-looker-osi.ym
 
 ## Query with an agent
 
-Once `AGENTS` is populated, the
-[`agents-schema-analyst`](examples/skills/agents-schema-analyst/SKILL.md) skill lets an AI agent
-answer questions about your warehouse — grounded in your real metric definitions from `AGENTS.*`,
-not guesses. It supports Snowflake, Databricks, and BigQuery; configure the matching local SQL
-client credentials in `agents.yml` before using it.
+This repository is also a plugin marketplace for Codex and Claude Code. Its `agents-schema`
+plugin installs two independent skills before an agent connects to your warehouse:
 
-**Claude Code**
+- `connect-warehouse` configures and verifies Snowflake, BigQuery, or Databricks access.
+- `agents-schema-search` discovers warehouse metadata through `AGENTS.ROOT` after a connection
+  is available.
 
-```bash
-curl -fsSL --create-dirs \
-  -o ~/.claude/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/examples/skills/agents-schema-analyst/SKILL.md
-```
+These plugin skills are local agent tooling. They do not replace the existing destination-matched
+`agents-schema-analyst` row that the ingestion CLI publishes into `AGENTS.ROOT`; that warehouse-side
+behavior remains unchanged. Teams can also continue publishing their own warehouse-delivered
+Markdown skills through the skills provider.
 
-Then ask: `/agents-schema-analyst "What is our total MRR this month?"`
+### Install the Codex plugin
 
-**Codex**
+Add this GitHub repository as a marketplace and install the plugin:
 
 ```bash
-curl -fsSL --create-dirs \
-  -o ~/.codex/skills/agents-schema-analyst/SKILL.md \
-  https://raw.githubusercontent.com/dbt-labs/agents_schema/v0.0.9/examples/skills/agents-schema-analyst/SKILL.md
+codex plugin marketplace add dbt-labs/agents_schema
+codex plugin add agents-schema@agents-schema
 ```
 
-Then ask: `$agents-schema-analyst "What is our total MRR this month?"`
+Start a new Codex task after installation so the new skills are available. The marketplace lives
+at `.agents/plugins/marketplace.json`, and additional Agents Schema plugins can be added under
+`plugins/` over time.
+
+### Install the Claude Code plugin
+
+Add this GitHub repository as a marketplace and install the plugin:
+
+```bash
+claude plugin marketplace add dbt-labs/agents_schema
+claude plugin install agents-schema@agents-schema
+```
+
+Start a new Claude Code session after installation, or run `/reload-plugins` in the current
+session. Claude Code exposes the skills as `/agents-schema:connect-warehouse` and
+`/agents-schema:agents-schema-search`; it can also invoke them automatically when relevant.
+The Claude Code marketplace lives at `.claude-plugin/marketplace.json`. Both Claude Code and
+Codex install the same skill definitions under `plugins/agents-schema/skills/`.
 
 ## Why Agents Schema
 
@@ -135,6 +158,13 @@ are present and explains what provider-contributed tables mean. Consumers can
 start there for generic discovery, or query well-known extension tables directly
 when they already know the shape they need.
 
+Agents Schema assumes its consumer is an AI agent, not a deterministic
+application that needs a fixed contract from providers. Because an agent can
+interpret loosely structured content, provider data is free to be
+semi-structured, denormalized, or concatenated into markdown, and free to
+change shape as providers and models evolve, rather than conforming to a
+rigid schema every provider and consumer must agree on in advance.
+
 Agents Schema is not a replacement for specialized systems, source-native
 metadata APIs, or development-time tooling. A dbt MCP server helping an agent
 edit a dbt repository should still use dbt source files and artifacts directly.
@@ -150,7 +180,7 @@ source-specific workflows.
 
 1. A workflow in your repository invokes one of this repo's workflows.
 2. The workflow checks out your repository and reads source metadata such as
-   dbt artifacts, LookML files, or OSI YAML files.
+   dbt artifacts, LookML files, Omni YAML files, or OSI YAML files.
 3. The workflow runs the `agents-schema` CLI at the pinned release tag.
 4. The CLI writes normalized metadata and warehouse-delivered skills into the
    warehouse under the `AGENTS` schema.
@@ -166,6 +196,7 @@ The GitHub Actions call the CLI with explicit source arguments:
 ```bash
 agents-schema dbt --project-dir dbt_project
 agents-schema looker --lookml-dir lookml
+agents-schema omni --omni-dir "omni/My Connection"
 agents-schema osi --osi-dir osi
 agents-schema skills --skills-dir skills
 agents-schema snowflake-semantic --semantic-view ANALYTICS.FINANCE.REVENUE
@@ -197,11 +228,11 @@ source, examples, README, and spec.
 Pin exact tags in your workflows:
 
 ```yaml
-uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.9
+uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.10
 ```
 
 To upgrade, change only the tag in the `uses:` line. The current release tag is
-`v0.0.9`.
+`v0.0.10`.
 
 ### Specification
 

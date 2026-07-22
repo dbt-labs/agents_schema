@@ -1,0 +1,26 @@
+{
+  "name": "agents-schema",
+  "version": "0.1.0",
+  "description": "Connect to a data warehouse and discover metadata through its AGENTS schema.",
+  "author": {
+    "name": "dbt Labs",
+    "url": "https://github.com/dbt-labs"
+  },
+  "homepage": "https://github.com/dbt-labs/agents_schema",
+  "repository": "https://github.com/dbt-labs/agents_schema",
+  "license": "MIT",
+  "keywords": ["agents-schema", "snowflake", "bigquery", "databricks", "metadata"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Agents Schema",
+    "shortDescription": "Connect to warehouses and search Agents Schema.",
+    "longDescription": "Connect Codex to Snowflake, BigQuery, or Databricks, then use the warehouse-native AGENTS schema to discover provider metadata.",
+    "developerName": "dbt Labs",
+    "category": "Data & Analytics",
+    "capabilities": ["Read"],
+    "defaultPrompt": [
+      "Help me connect to my data warehouse.",
+      "Use Agents Schema to answer this warehouse question."
+    ]
+  }
+}

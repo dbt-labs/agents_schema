@@ -1,0 +1,4 @@
+interface:
+  display_name: "Connect Warehouse"
+  short_description: "Configure Snowflake, BigQuery, or Databricks"
+  default_prompt: "Use $connect-warehouse to help me connect to my data warehouse."

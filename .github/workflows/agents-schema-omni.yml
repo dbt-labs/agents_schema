@@ -1,0 +1,30 @@
+name: Agents Schema Omni
+
+on:
+  workflow_call:
+    inputs:
+      omni-dir:
+        description: 'Path to an Omni connection directory containing *.view.yaml and *.topic.yaml files'
+        type: string
+        required: true
+    secrets:
+      WAREHOUSE_CREDENTIALS:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run Omni ingestion
+        uses: dbt-labs/agents_schema/.github/actions/agents-schema-omni@v0.0.9
+        with:
+          omni-dir: ${{ inputs.omni-dir }}
+        env:
+          WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
