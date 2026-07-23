@@ -7,7 +7,7 @@ requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Fivetran", email = "opensource@fivetran.com" }]
-keywords = ["dbt", "osi", "lookml", "snowflake", "databricks", "bigquery", "ai", "agents", "semantic-layer", "metadata"]
+keywords = ["dbt", "osi", "lookml", "sigma", "snowflake", "databricks", "bigquery", "ai", "agents", "semantic-layer", "metadata"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",

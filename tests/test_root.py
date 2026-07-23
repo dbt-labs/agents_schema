@@ -65,6 +65,15 @@ class RootTests(unittest.TestCase):
         self.assertEqual({row[1] for row in rows}, {"overview"})
         self.assertEqual({row[0] for row in rows}, {"snowflake_semantic"})
 
+    def test_upsert_provider_root_has_sigma_entries(self):
+        dest = FakeDestination()
+
+        upsert_provider_root(dest, "sigma")
+
+        _, rows = dest.upserts[0]
+        self.assertEqual({row[1] for row in rows}, {"overview", "data_model", "element", "column", "metric"})
+        self.assertEqual({row[0] for row in rows}, {"sigma"})
+
 
 if __name__ == "__main__":
     unittest.main()

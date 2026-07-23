@@ -33,6 +33,7 @@ available before writing or explaining queries.
   - [Sync Looker](#sync-looker)
   - [Sync Omni](#sync-omni)
   - [Sync OSI](#sync-osi)
+  - [Sync Sigma](#sync-sigma)
   - [Sync Multiple Sources](#sync-multiple-sources)
 - [Query with an agent](#query-with-an-agent)
   - [Install the Codex plugin](#install-the-codex-plugin)
@@ -54,6 +55,7 @@ Supported sources:
 - Looker
 - Omni
 - OSI
+- Sigma
 - Markdown skills
 
 Supported destinations:
@@ -89,6 +91,11 @@ files synced via the Omni Git integration.
 
 Use [OSI Setup Guide](osi-setup.md) when your repository contains Open Semantic
 Interchange `*.osi.yaml` files.
+
+### Sync Sigma
+
+Use [Sigma Setup Guide](sigma-setup.md) when your repository contains exported
+Sigma data model `*.sigma.yaml` files.
 
 ### Sync Multiple Sources
 
@@ -198,6 +205,7 @@ agents-schema dbt --project-dir dbt_project
 agents-schema looker --lookml-dir lookml
 agents-schema omni --omni-dir "omni/My Connection"
 agents-schema osi --osi-dir osi
+agents-schema sigma --sigma-dir sigma
 agents-schema skills --skills-dir skills
 agents-schema snowflake-semantic --semantic-view ANALYTICS.FINANCE.REVENUE
 ```
