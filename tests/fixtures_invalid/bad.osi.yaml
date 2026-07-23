@@ -1,0 +1,7 @@
+version: "0.2.0.dev0"
+semantic_model:
+  - name: bad_model
+    datasets:
+      # `source` is required by the OSI schema — omitting it must fail validation.
+      - name: dataset_without_source
+        primary_key: [id]

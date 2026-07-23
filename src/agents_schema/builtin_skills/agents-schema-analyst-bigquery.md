@@ -60,7 +60,7 @@ SQLEOF
 
 3. **Resolve the physical table and its rules.** Find the source table and every query caveat
    in the dataset/view metadata, and obey each `ai_context` instruction exactly:
-   - OSI: `` `<project_id>.agents.osi_dataset` `` (`source_table`, `ai_context`), `` `<project_id>.agents.osi_field` ``
+   - OSI: `` `<project_id>.agents.osi_dataset` `` (`source`, `ai_context`), `` `<project_id>.agents.osi_field` ``
    - LookML: `` `<project_id>.agents.lookml_view` `` (`sql_table_name`), `` `<project_id>.agents.lookml_dimension` ``
    - Omni: `` `<project_id>.agents.omni_view` `` (`schema`, `table_name`, `description`), `` `<project_id>.agents.omni_dimension` ``;
      use `` `<project_id>.agents.omni_topic_join` `` to understand which views are reachable within a topic.
@@ -103,9 +103,9 @@ Replace `<project_id>` with the actual project ID from `agents.yml` throughout.
 | Table | Key columns |
 |---|---|
 | `` `<project_id>.agents.root` `` | `provider`, `key`, `content` |
-| `` `<project_id>.agents.osi_metric` `` | `name`, `description`, `ai_context`, `expression` |
-| `` `<project_id>.agents.osi_dataset` `` | `name`, `source_table`, `primary_key`, `description`, `ai_context` |
-| `` `<project_id>.agents.osi_field` `` | `dataset_name`, `field_name`, `description`, `ai_context`, `is_time_dimension`, `expression` |
+| `` `<project_id>.agents.osi_metric` `` | `model_name`, `name`, `description`, `ai_context`, `expressions` |
+| `` `<project_id>.agents.osi_dataset` `` | `model_name`, `name`, `source`, `primary_key`, `unique_keys`, `description`, `synonyms`, `ai_context` |
+| `` `<project_id>.agents.osi_field` `` | `dataset_name`, `name`, `description`, `ai_context`, `is_time_dimension`, `expressions` |
 | `` `<project_id>.agents.lookml_measure` `` | `view_name`, `measure_name`, `type`, `sql`, `description`, `ai_context` |
 | `` `<project_id>.agents.lookml_view` `` | `name`, `sql_table_name`, `description`, `ai_context` |
 | `` `<project_id>.agents.lookml_dimension` `` | `view_name`, `field_name`, `field_kind`, `type`, `sql`, `description`, `ai_context` |
@@ -123,6 +123,6 @@ Replace `<project_id>` with the actual project ID from `agents.yml` throughout.
 |---|---|
 | Picking a plausible-looking column or table for a metric | Read the metric/dataset `ai_context` and use exactly the column, table, and filter it names. |
 | Reporting `$0` / no result for "year-to-date" | If current-year returns no rows, the data is historical — anchor to the latest year present and label it. |
-| Querying a metric from the wrong table | The dataset/view metadata names the `source_table` and any "use X not Y" caveat. Follow it. |
+| Querying a metric from the wrong table | The dataset/view metadata names the `source` and any "use X not Y" caveat. Follow it. |
 | Assuming a provider's tables exist | Check `` `<project_id>.agents.root` `` first; some warehouses have only OSI, only LookML, or only dbt. |
 | Broad `INFORMATION_SCHEMA` scans to explore | Use focused `SELECT`s against the known `` `<project_id>.agents.*` `` tables. |

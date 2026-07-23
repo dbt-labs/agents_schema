@@ -30,7 +30,7 @@ class RootTests(unittest.TestCase):
         upsert_provider_root(dest, "osi")
 
         _, rows = dest.upserts[0]
-        self.assertEqual({row[1] for row in rows}, {"overview", "dataset", "field", "metric", "relationship"})
+        self.assertEqual({row[1] for row in rows}, {"overview", "model", "dataset", "field", "metric", "relationship"})
 
     def test_upsert_provider_root_has_lookml_entries(self):
         dest = FakeDestination()
