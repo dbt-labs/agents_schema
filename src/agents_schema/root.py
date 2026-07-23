@@ -38,7 +38,8 @@ ROOT_ENTRIES = {
         ("topic_join", "One row per join edge within a topic. See AGENTS.OMNI_TOPIC_JOIN."),
     ),
     "osi": (
-        ("overview", "# OSI\nOpen Semantic Interchange metadata parsed from *.osi.yaml files."),
+        ("overview", "# OSI\nOpen Semantic Interchange metadata parsed from *.osi.yaml files. The canonical semantic-layer source; other formats (e.g. LookML) reach AGENTS.OSI_* by being converted to OSI first."),
+        ("model", "One row per OSI semantic model. See AGENTS.OSI_MODEL."),
         ("dataset", "One row per OSI dataset. See AGENTS.OSI_DATASET."),
         ("field", "One row per OSI dataset field. See AGENTS.OSI_FIELD."),
         ("metric", "One row per OSI metric. See AGENTS.OSI_METRIC."),

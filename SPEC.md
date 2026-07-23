@@ -111,7 +111,8 @@ dbt        dependency                Direct dbt DAG edges. See AGENTS.DBT_DEPEND
 lookml     overview                  # LookML\nSemantic metadata parsed from LookML files.
 lookml     view                      One row per LookML view. See AGENTS.LOOKML_VIEW.
 lookml     explore                   One row per LookML explore. See AGENTS.LOOKML_EXPLORE.
-osi        overview                  # OSI\nOpen Semantic Interchange metadata.
+osi        overview                  # OSI\nOpen Semantic Interchange metadata. The canonical semantic-layer source.
+osi        model                     One row per OSI semantic model. See AGENTS.OSI_MODEL.
 osi        dataset                   One row per OSI dataset. See AGENTS.OSI_DATASET.
 osi        metric                    One row per OSI metric. See AGENTS.OSI_METRIC.
 snowflake_semantic semantic_view/... Pointer to a native Snowflake semantic view.
@@ -132,7 +133,7 @@ The current package delivers one table family per metadata source:
 |---|---|
 | dbt | `AGENTS.DBT_MODEL`, `AGENTS.DBT_COLUMN`, `AGENTS.DBT_DEPENDENCY` |
 | LookML | `AGENTS.LOOKML_VIEW`, `AGENTS.LOOKML_DIMENSION`, `AGENTS.LOOKML_MEASURE`, `AGENTS.LOOKML_EXPLORE` |
-| OSI | `AGENTS.OSI_DATASET`, `AGENTS.OSI_FIELD`, `AGENTS.OSI_METRIC`, `AGENTS.OSI_RELATIONSHIP` |
+| OSI | `AGENTS.OSI_MODEL`, `AGENTS.OSI_DATASET`, `AGENTS.OSI_FIELD`, `AGENTS.OSI_METRIC`, `AGENTS.OSI_RELATIONSHIP` |
 | Skills | `AGENTS.SKILL_USE` |
 | Snowflake Semantic | `AGENTS.ROOT` only (pointer rows; no additional tables) |
 
@@ -385,32 +386,67 @@ CREATE OR REPLACE TABLE AGENTS.LOOKML_EXPLORE (
 
 ## Source: OSI
 
-The OSI ingestion scans direct `*.osi.yaml` files in the configured OSI directory and reads each file's top-level `semantic_model` object. It writes normalized dataset, field, metric, and relationship tables.
+The OSI ingestion scans `*.osi.yaml` files in the configured OSI directory. Each file's top-level `semantic_model` is an **array** of models (per the OSI spec); the ingester validates every file against the vendored OSI JSON schema (`src/agents_schema/osi-schema.json`, OSI `0.2.0.dev0`) before writing, and raises with the file and JSON-path on any violation — it never ingests a partial or empty model silently. It writes normalized model, dataset, field, metric, and relationship tables.
 
-Agents can use this extension to understand an Open Semantic Interchange model from inside the warehouse: which datasets exist, which fields and metrics are documented, and how datasets relate to each other.
+Agents can use this extension to understand an Open Semantic Interchange model from inside the warehouse: which models and datasets exist, which fields and metrics are documented, and how datasets relate to each other. OSI is the canonical semantic-layer source — other formats (e.g. LookML) are expected to reach `AGENTS.OSI_*` by being converted to OSI first.
 
-### `AGENTS.OSI_DATASET`
+Multi-dialect expressions and structured `ai_context` are preserved, not flattened: expression columns hold the full `[{dialect, expression}, …]` list as a `VARIANT`, `synonyms` are broken out as a queryable array, and the raw `ai_context` (a string or object) and `custom_extensions` array are kept as `VARIANT`.
 
-One row per OSI dataset from `semantic_model.datasets`.
+### `AGENTS.OSI_MODEL`
+
+One row per OSI semantic model (one or more per file).
 
 ```sql
-CREATE OR REPLACE TABLE AGENTS.OSI_DATASET (
-  name         VARCHAR NOT NULL,
-  source_table VARCHAR NOT NULL,
-  primary_key  VARIANT,
-  description  TEXT,
-  ai_context   TEXT,
+CREATE OR REPLACE TABLE AGENTS.OSI_MODEL (
+  name              VARCHAR NOT NULL,
+  version           VARCHAR,
+  description       TEXT,
+  synonyms          VARIANT,
+  ai_context        VARIANT,
+  custom_extensions VARIANT,
   PRIMARY KEY (name)
 );
 ```
 
 | Column | Source field |
 |---|---|
+| `name` | Model `name`. |
+| `version` | File-level OSI `version`. |
+| `description` | Model `description`; empty string when missing. |
+| `synonyms` | `ai_context.synonyms` when `ai_context` is an object; otherwise empty. |
+| `ai_context` | Raw model `ai_context` (string or object) as `VARIANT`. |
+| `custom_extensions` | Model `custom_extensions` array as `VARIANT`. |
+
+### `AGENTS.OSI_DATASET`
+
+One row per OSI dataset from `semantic_model[].datasets`.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OSI_DATASET (
+  model_name        VARCHAR NOT NULL,
+  name              VARCHAR NOT NULL,
+  source            VARCHAR NOT NULL,
+  primary_key       VARIANT,
+  unique_keys       VARIANT,
+  description       TEXT,
+  synonyms          VARIANT,
+  ai_context        VARIANT,
+  custom_extensions VARIANT,
+  PRIMARY KEY (model_name, name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `model_name` | Parent model `name`. |
 | `name` | Dataset `name`. |
-| `source_table` | Dataset `source`; empty string when missing. |
-| `primary_key` | Dataset `primary_key`, serialized as JSON into a Snowflake `VARIANT`. |
+| `source` | Dataset `source` (`database.schema.table` or query). |
+| `primary_key` | Dataset `primary_key` array as `VARIANT`. |
+| `unique_keys` | Dataset `unique_keys` (array of key tuples) as `VARIANT`. |
 | `description` | Dataset `description`; empty string when missing. |
-| `ai_context` | Dataset `ai_context`; empty string when missing. |
+| `synonyms` | `ai_context.synonyms` when present. |
+| `ai_context` | Raw dataset `ai_context` as `VARIANT`. |
+| `custom_extensions` | Dataset `custom_extensions` array as `VARIANT`. |
 
 ### `AGENTS.OSI_FIELD`
 
@@ -419,69 +455,87 @@ One row per field from each OSI dataset.
 ```sql
 CREATE OR REPLACE TABLE AGENTS.OSI_FIELD (
   dataset_name      VARCHAR NOT NULL,
-  field_name        VARCHAR NOT NULL,
+  name              VARCHAR NOT NULL,
   label             VARCHAR,
   description       TEXT,
-  ai_context        TEXT,
   is_time_dimension BOOLEAN,
-  expression        TEXT,
-  PRIMARY KEY (dataset_name, field_name)
+  expressions       VARIANT,
+  synonyms          VARIANT,
+  ai_context        VARIANT,
+  custom_extensions VARIANT,
+  PRIMARY KEY (dataset_name, name)
 );
 ```
 
 | Column | Source field |
 |---|---|
 | `dataset_name` | Parent dataset `name`. |
-| `field_name` | Field `name`. |
+| `name` | Field `name`. |
 | `label` | Field `label`. |
 | `description` | Field `description`; empty string when missing. |
-| `ai_context` | Field `ai_context`; empty string when missing. |
 | `is_time_dimension` | `true` when `field.dimension.is_time` is truthy; otherwise `false`. |
-| `expression` | First expression from `field.expression.dialects[].expression`, when present. |
+| `expressions` | Full `field.expression.dialects` list (`[{dialect, expression}, …]`) as `VARIANT`. |
+| `synonyms` | `ai_context.synonyms` when present. |
+| `ai_context` | Raw field `ai_context` as `VARIANT`. |
+| `custom_extensions` | Field `custom_extensions` array as `VARIANT`. |
 
 ### `AGENTS.OSI_METRIC`
 
-One row per OSI metric from `semantic_model.metrics`.
+One row per OSI metric from `semantic_model[].metrics`.
 
 ```sql
 CREATE OR REPLACE TABLE AGENTS.OSI_METRIC (
-  name        VARCHAR NOT NULL,
-  description TEXT,
-  ai_context  TEXT,
-  expression  TEXT,
-  PRIMARY KEY (name)
+  model_name        VARCHAR NOT NULL,
+  name              VARCHAR NOT NULL,
+  description       TEXT,
+  expressions       VARIANT,
+  synonyms          VARIANT,
+  ai_context        VARIANT,
+  custom_extensions VARIANT,
+  PRIMARY KEY (model_name, name)
 );
 ```
 
 | Column | Source field |
 |---|---|
+| `model_name` | Parent model `name`. |
 | `name` | Metric `name`. |
 | `description` | Metric `description`; empty string when missing. |
-| `ai_context` | Metric `ai_context`; empty string when missing. |
-| `expression` | First expression from `metric.expression.dialects[].expression`, when present. |
+| `expressions` | Full `metric.expression.dialects` list as `VARIANT`. |
+| `synonyms` | `ai_context.synonyms` when present. |
+| `ai_context` | Raw metric `ai_context` as `VARIANT`. |
+| `custom_extensions` | Metric `custom_extensions` array as `VARIANT`. |
 
 ### `AGENTS.OSI_RELATIONSHIP`
 
-One row per OSI relationship from `semantic_model.relationships`.
+One row per OSI relationship from `semantic_model[].relationships`.
 
 ```sql
 CREATE OR REPLACE TABLE AGENTS.OSI_RELATIONSHIP (
-  name         VARCHAR NOT NULL,
-  from_dataset VARCHAR NOT NULL,
-  to_dataset   VARCHAR NOT NULL,
-  from_columns VARIANT NOT NULL,
-  to_columns   VARIANT NOT NULL,
-  PRIMARY KEY (name)
+  model_name        VARCHAR NOT NULL,
+  name              VARCHAR NOT NULL,
+  from_dataset      VARCHAR NOT NULL,
+  to_dataset        VARCHAR NOT NULL,
+  from_columns      VARIANT NOT NULL,
+  to_columns        VARIANT NOT NULL,
+  synonyms          VARIANT,
+  ai_context        VARIANT,
+  custom_extensions VARIANT,
+  PRIMARY KEY (model_name, name)
 );
 ```
 
 | Column | Source field |
 |---|---|
+| `model_name` | Parent model `name`. |
 | `name` | Relationship `name`. |
 | `from_dataset` | Relationship `from`. |
 | `to_dataset` | Relationship `to`. |
-| `from_columns` | Relationship `from_columns`, serialized as JSON into a Snowflake `VARIANT`. |
-| `to_columns` | Relationship `to_columns`, serialized as JSON into a Snowflake `VARIANT`. |
+| `from_columns` | Relationship `from_columns` array as `VARIANT`. |
+| `to_columns` | Relationship `to_columns` array as `VARIANT`. |
+| `synonyms` | `ai_context.synonyms` when present. |
+| `ai_context` | Raw relationship `ai_context` as `VARIANT`. |
+| `custom_extensions` | Relationship `custom_extensions` array as `VARIANT`. |
 
 ---
 
