@@ -6,7 +6,7 @@ from .destinations import Column, Destination, TableSchema
 __all__ = ["ROOT", "upsert_provider_root"]
 
 ROOT = TableSchema(
-    "agents.root",
+    "AGENTS.ROOT",
     (
         Column("provider", "varchar", nullable=False),
         Column("key", "varchar", nullable=False),

@@ -13,7 +13,7 @@ from .root import upsert_provider_root
 __all__ = ["run"]
 
 SIGMA_DATA_MODEL = TableSchema(
-    "agents.sigma_data_model",
+    "AGENTS.SIGMA_DATA_MODEL",
     (
         Column("source_file", "varchar", nullable=False),
         Column("name", "varchar"),
@@ -22,7 +22,7 @@ SIGMA_DATA_MODEL = TableSchema(
     primary_key=("source_file",),
 )
 SIGMA_ELEMENT = TableSchema(
-    "agents.sigma_element",
+    "AGENTS.SIGMA_ELEMENT",
     (
         Column("source_path", "varchar", nullable=False),
         Column("source_file", "varchar", nullable=False),
@@ -34,7 +34,7 @@ SIGMA_ELEMENT = TableSchema(
     primary_key=("source_path",),
 )
 SIGMA_COLUMN = TableSchema(
-    "agents.sigma_column",
+    "AGENTS.SIGMA_COLUMN",
     (
         Column("source_path", "varchar", nullable=False),
         Column("name", "varchar", nullable=False),
@@ -45,7 +45,7 @@ SIGMA_COLUMN = TableSchema(
     primary_key=("source_path", "name"),
 )
 SIGMA_METRIC = TableSchema(
-    "agents.sigma_metric",
+    "AGENTS.SIGMA_METRIC",
     (
         Column("source_path", "varchar", nullable=False),
         Column("name", "varchar", nullable=False),

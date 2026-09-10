@@ -41,11 +41,11 @@ class BigQueryAgentsSchemaWriterTests(unittest.TestCase):
         self.assertEqual(len(load_calls[0][1]), 2)
         self.assertEqual(len(query_calls), 1)
         query_sql = query_calls[0][1]
-        self.assertIn("MERGE `p.agents.dbt_model` AS target", query_sql)
-        self.assertIn("USING `p.agents._staging_dbt_model_", query_sql)
+        self.assertIn("MERGE `p.AGENTS.DBT_MODEL` AS target", query_sql)
+        self.assertIn("USING `p.AGENTS._staging_DBT_MODEL_", query_sql)
         self.assertIn("WHEN MATCHED THEN UPDATE SET", query_sql)
         self.assertIn("WHEN NOT MATCHED THEN INSERT", query_sql)
-        self.assertTrue(any(call[0] == "delete_table" and call[1].startswith("p.agents._staging_dbt_model_") for call in calls))
+        self.assertTrue(any(call[0] == "delete_table" and call[1].startswith("p.AGENTS._staging_DBT_MODEL_") for call in calls))
 
     def test_reconcile_rows_deletes_stale_rows(self):
         calls = []
@@ -58,7 +58,7 @@ class BigQueryAgentsSchemaWriterTests(unittest.TestCase):
             )
 
         query_sql = next(call[1] for call in calls if call[0] == "query")
-        self.assertIn("MERGE `p.agents.dbt_model` AS target", query_sql)
+        self.assertIn("MERGE `p.AGENTS.DBT_MODEL` AS target", query_sql)
         self.assertIn("WHEN NOT MATCHED BY SOURCE THEN DELETE", query_sql)
 
     def test_reconcile_rows_deletes_all_when_empty(self):
@@ -68,7 +68,7 @@ class BigQueryAgentsSchemaWriterTests(unittest.TestCase):
 
             writer.reconcile_rows(DBT_MODEL, [])
 
-        self.assertIn(("query", "DELETE FROM `p.agents.dbt_model` WHERE TRUE", None), calls)
+        self.assertIn(("query", "DELETE FROM `p.AGENTS.DBT_MODEL` WHERE TRUE", None), calls)
 
     def test_array_columns_are_repeated_string_fields(self):
         calls = []
@@ -104,7 +104,7 @@ class DatabricksAgentsSchemaWriterTests(unittest.TestCase):
         merge_calls = [call for call in calls if call[0].startswith("MERGE")]
         self.assertEqual(len(merge_calls), 1)
         merge_sql, params = merge_calls[0]
-        self.assertIn("MERGE INTO `agents`.`dbt_model` AS target", merge_sql)
+        self.assertIn("MERGE INTO `AGENTS`.`DBT_MODEL` AS target", merge_sql)
         self.assertEqual(merge_sql.count("SELECT ? AS"), 2)
         self.assertIn("from_json(?, 'array<string>') AS `tags`", merge_sql)
         self.assertIn("parse_json(?) AS `meta`", merge_sql)
@@ -146,7 +146,7 @@ class DatabricksAgentsSchemaWriterTests(unittest.TestCase):
 
         self.assertEqual(len(calls), 1)
         insert_sql, params = calls[0]
-        self.assertIn("INSERT INTO `agents`.`dbt_model`", insert_sql)
+        self.assertIn("INSERT INTO `AGENTS`.`DBT_MODEL`", insert_sql)
         self.assertIn("from_json(?, 'array<string>')", insert_sql)
         self.assertEqual(params[-2], '["finance"]')
         self.assertEqual(params[-1], '{}')
@@ -163,7 +163,7 @@ class DatabricksAgentsSchemaWriterTests(unittest.TestCase):
         delete_calls = [call for call in calls if call[0].startswith("DELETE FROM")]
         self.assertEqual(len(delete_calls), 1)
         delete_sql, params = delete_calls[0]
-        self.assertIn("DELETE FROM `agents`.`dbt_model` AS target", delete_sql)
+        self.assertIn("DELETE FROM `AGENTS`.`DBT_MODEL` AS target", delete_sql)
         self.assertIn("target.`unique_id` = source.`unique_id`", delete_sql)
         self.assertEqual(params, ["model.pkg.orders"])
 

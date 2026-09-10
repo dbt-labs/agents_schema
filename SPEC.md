@@ -10,7 +10,7 @@ This document describes the logical warehouse tables produced by this repository
 
 All Agents Schema tables live in a schema named `AGENTS`. The current writer creates the schema if it does not already exist.
 
-The implementation writes unquoted identifiers, so Snowflake stores table and column names in uppercase. The Python package defines them in lowercase internally, but the delivered warehouse objects are the uppercase `AGENTS.*` tables shown here.
+The canonical spelling of every delivered object is uppercase: the `AGENTS` schema and tables such as `AGENTS.ROOT` and `AGENTS.DBT_MODEL`. Writers emit unquoted identifiers, which Snowflake folds to uppercase on storage; case-sensitive destinations receive uppercase names directly. Query the tables exactly as spelled here, without quoting identifiers, so the same SQL resolves on every destination.
 
 ### Supported Types
 

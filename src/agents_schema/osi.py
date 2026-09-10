@@ -32,7 +32,7 @@ __all__ = ["run"]
 
 # VARIANT columns reuse the destinations' "array" kind (JSON-encoded on insert).
 OSI_MODEL = TableSchema(
-    "agents.osi_model",
+    "AGENTS.OSI_MODEL",
     (
         Column("name", "varchar", nullable=False),
         Column("version", "varchar"),
@@ -44,7 +44,7 @@ OSI_MODEL = TableSchema(
     primary_key=("name",),
 )
 OSI_DATASET = TableSchema(
-    "agents.osi_dataset",
+    "AGENTS.OSI_DATASET",
     (
         Column("model_name", "varchar", nullable=False),
         Column("name", "varchar", nullable=False),
@@ -59,7 +59,7 @@ OSI_DATASET = TableSchema(
     primary_key=("model_name", "name"),
 )
 OSI_FIELD = TableSchema(
-    "agents.osi_field",
+    "AGENTS.OSI_FIELD",
     (
         Column("dataset_name", "varchar", nullable=False),
         Column("name", "varchar", nullable=False),
@@ -74,7 +74,7 @@ OSI_FIELD = TableSchema(
     primary_key=("dataset_name", "name"),
 )
 OSI_METRIC = TableSchema(
-    "agents.osi_metric",
+    "AGENTS.OSI_METRIC",
     (
         Column("model_name", "varchar", nullable=False),
         Column("name", "varchar", nullable=False),
@@ -87,7 +87,7 @@ OSI_METRIC = TableSchema(
     primary_key=("model_name", "name"),
 )
 OSI_RELATIONSHIP = TableSchema(
-    "agents.osi_relationship",
+    "AGENTS.OSI_RELATIONSHIP",
     (
         Column("model_name", "varchar", nullable=False),
         Column("name", "varchar", nullable=False),

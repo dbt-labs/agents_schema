@@ -120,11 +120,11 @@ class ConnectorRootTests(unittest.TestCase):
         self.assertEqual(dest.calls[0][0], "upsert")
         self.assertEqual({row[0] for row in dest.calls[0][2]}, {"skills"})
         self.assertEqual(dest.calls[1][0], "upsert")
-        self.assertEqual(dest.calls[1][1], "agents.root")
+        self.assertEqual(dest.calls[1][1], "AGENTS.ROOT")
         self.assertEqual(dest.calls[1][2], [("fivetran", "skill/revenue", "# Revenue\n")])
-        self.assertEqual(dest.calls[2], ("replace", "agents.skill_use"))
+        self.assertEqual(dest.calls[2], ("replace", "AGENTS.SKILL_USE"))
         self.assertEqual(dest.calls[3][0], "insert")
-        self.assertEqual(dest.calls[3][1], "agents.skill_use")
+        self.assertEqual(dest.calls[3][1], "AGENTS.SKILL_USE")
 
     def test_sigma_run_upserts_root_before_source_tables(self):
         dest = FakeDestination()
@@ -161,12 +161,12 @@ class ConnectorRootTests(unittest.TestCase):
         self.assertEqual(len(dest.calls), 2)
         # first call: overview row
         self.assertEqual(dest.calls[0][0], "upsert")
-        self.assertEqual(dest.calls[0][1], "agents.root")
+        self.assertEqual(dest.calls[0][1], "AGENTS.ROOT")
         self.assertEqual({row[0] for row in dest.calls[0][2]}, {"snowflake_semantic"})
         self.assertEqual({row[1] for row in dest.calls[0][2]}, {"overview"})
         # second call: per-view pointer row
         self.assertEqual(dest.calls[1][0], "upsert")
-        self.assertEqual(dest.calls[1][1], "agents.root")
+        self.assertEqual(dest.calls[1][1], "AGENTS.ROOT")
         self.assertEqual(dest.calls[1][2][0][0], "snowflake_semantic")
         self.assertEqual(dest.calls[1][2][0][1], "semantic_view/ANALYTICS.FINANCE.REVENUE")
         self.assertIn("Snowflake object: `ANALYTICS.FINANCE.REVENUE`", dest.calls[1][2][0][2])
@@ -189,13 +189,13 @@ class ConnectorRootTests(unittest.TestCase):
         self.assertEqual(skill.uses, (("schema", "ZENDESK"), ("table", "ZENDESK.TICKET")))
         self.assertEqual(dest.calls[0][0], "upsert")
         self.assertEqual({row[0] for row in dest.calls[0][2]}, {"skills"})
-        self.assertEqual(dest.calls[1], ("upsert", "agents.root", [("fivetran", "skill/zendesk", content)]))
-        self.assertEqual(dest.calls[2], ("delete", "agents.skill_use", ("provider", "skill_key"), [("fivetran", "skill/zendesk")]))
+        self.assertEqual(dest.calls[1], ("upsert", "AGENTS.ROOT", [("fivetran", "skill/zendesk", content)]))
+        self.assertEqual(dest.calls[2], ("delete", "AGENTS.SKILL_USE", ("provider", "skill_key"), [("fivetran", "skill/zendesk")]))
         self.assertEqual(
             dest.calls[3],
             (
                 "upsert",
-                "agents.skill_use",
+                "AGENTS.SKILL_USE",
                 [
                     ("fivetran", "skill/zendesk", "schema", "ZENDESK"),
                     ("fivetran", "skill/zendesk", "table", "ZENDESK.TICKET"),
@@ -209,7 +209,7 @@ class ConnectorRootTests(unittest.TestCase):
         skill = skills.publish_skill(dest, "fivetran", "skill/zendesk", "# Zendesk\n")
 
         self.assertEqual(skill.uses, ())
-        self.assertEqual(dest.calls[-1], ("delete", "agents.skill_use", ("provider", "skill_key"), [("fivetran", "skill/zendesk")]))
+        self.assertEqual(dest.calls[-1], ("delete", "AGENTS.SKILL_USE", ("provider", "skill_key"), [("fivetran", "skill/zendesk")]))
 
 
 if __name__ == "__main__":

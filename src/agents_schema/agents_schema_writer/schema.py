@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-AGENTS_SCHEMA = "agents"
+AGENTS_SCHEMA = "AGENTS"
 
 
 @dataclass(frozen=True)
