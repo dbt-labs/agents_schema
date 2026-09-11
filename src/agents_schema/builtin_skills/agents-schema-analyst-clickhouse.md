@@ -1,6 +1,6 @@
 ---
 name: agents-schema-analyst-clickhouse
-description: Use when answering a business data question (revenue, MRR, ARR, churn, customer or connector counts, etc.) against a ClickHouse database that has an agents metadata database. Triggers on questions like "what is our current MRR", "net revenue year-to-date", "how many active customers", or any ask for a governed metric instead of a guessed one.
+description: Use when answering a business data question (revenue, MRR, ARR, churn, customer or connector counts, etc.) against a ClickHouse database that has an AGENTS metadata database. Triggers on questions like "what is our current MRR", "net revenue year-to-date", "how many active customers", or any ask for a governed metric instead of a guessed one.
 allowed-tools: "Bash(clickhouse:*), Bash(curl:*), Read"
 user-invocable: true
 argument-hint: "[business question]"
@@ -10,11 +10,11 @@ argument-hint: "[business question]"
 
 ## Overview
 
-Answer the question by first reading the governed definitions in the database's `agents`
+Answer the question by first reading the governed definitions in the database's `AGENTS`
 metadata database, then querying the business tables exactly as those definitions specify.
 
 **Core principle: the database tells you how to compute the answer. Your job is to find
-that instruction in `agents.*` and follow it — not to guess a formula, table, filter, or date rule.**
+that instruction in `AGENTS.*` and follow it — not to guess a formula, table, filter, or date rule.**
 
 ## Setup
 
@@ -23,16 +23,16 @@ that instruction in `agents.*` and follow it — not to guess a formula, table, 
   `curl -sS 'https://<host>:8443/?query=<url-encoded SQL>' -u <user>:<password>`.
 - **Connection:** read connection settings from an `agents.yml` in the working directory if
   present. Otherwise use the local default; if ambiguous, ask the user which connection to use.
-- **Metadata database:** `agents`. ClickHouse has a two-level namespace, so `agents.root` is a
-  table in the `agents` database. **Identifiers are case-sensitive** — the metadata objects are
-  lowercase (`agents.root`, not `AGENTS.ROOT`).
+- **Metadata database:** `AGENTS`. ClickHouse has a two-level namespace, so `AGENTS.ROOT` is a
+  table in the `AGENTS` database. **Identifiers are case-sensitive** — use the canonical
+  uppercase database and table names exactly as shown.
 - Only `SELECT`. Never `INSERT`, `ALTER`, `DELETE`, `CREATE`, or `DROP`.
 
 ## Procedure
 
 1. **Discover what metadata exists — don't assume which providers are present.**
    ```sql
-   SELECT provider, key, content FROM agents.root ORDER BY provider, key;
+   SELECT provider, key, content FROM AGENTS.ROOT ORDER BY provider, key;
    ```
    This lists the providers that published metadata (`osi`, `lookml`, `dbt`, or user-published) plus
    their overview/guidance rows. Only query tables for providers that actually appear here.
@@ -42,12 +42,12 @@ that instruction in `agents.*` and follow it — not to guess a formula, table, 
    Substitute a keyword from the question for `<keyword>`:
    ```sql
    SELECT name, description, ai_context, expressions
-   FROM agents.osi_metric
+   FROM AGENTS.OSI_METRIC
    WHERE lower(coalesce(name,'')||' '||coalesce(description,'')||' '||coalesce(toString(ai_context),''))
          LIKE '%<keyword>%';
    ```
-   Use `agents.lookml_measure` (`sql`, `description`, `ai_context`) when the provider is LookML.
-   Use `agents.omni_measure` (`sql`, `description`) when the provider is Omni.
+   Use `AGENTS.LOOKML_MEASURE` (`sql`, `description`, `ai_context`) when the provider is LookML.
+   Use `AGENTS.OMNI_MEASURE` (`sql`, `description`) when the provider is Omni.
    **If no rows match, stop and tell the user** — do not proceed to Step 3 without a metric
    definition. Try a shorter or alternate keyword if the first search returns nothing.
    OSI `expressions` holds a list of `{dialect, expression}` entries — prefer a `clickhouse`
@@ -55,11 +55,11 @@ that instruction in `agents.*` and follow it — not to guess a formula, table, 
 
 3. **Resolve the physical table and its rules.** Find the source table and every query caveat
    in the dataset/view metadata, and obey each `ai_context` instruction exactly:
-   - OSI: `agents.osi_dataset` (`source`, `ai_context`), `agents.osi_field`
-   - LookML: `agents.lookml_view` (`sql_table_name`), `agents.lookml_dimension`
-   - Omni: `agents.omni_view` (`schema`, `table_name`, `description`), `agents.omni_dimension`;
-     use `agents.omni_topic_join` to understand which views are reachable within a topic.
-   - dbt, *only if present in root*: `agents.dbt_model` / `agents.dbt_column` add model and
+   - OSI: `AGENTS.OSI_DATASET` (`source`, `ai_context`), `AGENTS.OSI_FIELD`
+   - LookML: `AGENTS.LOOKML_VIEW` (`sql_table_name`), `AGENTS.LOOKML_DIMENSION`
+   - Omni: `AGENTS.OMNI_VIEW` (`schema`, `table_name`, `description`), `AGENTS.OMNI_DIMENSION`;
+     use `AGENTS.OMNI_TOPIC_JOIN` to understand which views are reachable within a topic.
+   - dbt, *only if present in root*: `AGENTS.DBT_MODEL` / `AGENTS.DBT_COLUMN` add model and
      column descriptions. For dbt models, `schema_name` is the ClickHouse **database** of the
      model, so the relation is `schema_name.name`.
    Use the source table named in the metadata — not a same-named table you assume exists elsewhere.
@@ -102,7 +102,7 @@ that instruction in `agents.*` and follow it — not to guess a formula, table, 
 
 ## Hard rules — never hard-code
 
-- Discover every metric formula, source table, filter, and date column from `agents.*`. Do not
+- Discover every metric formula, source table, filter, and date column from `AGENTS.*`. Do not
   bake business facts into this skill, the prompt, or your reasoning.
 - Follow `ai_context` / `description` exactly. If it says to use one column or table and not
   another, do exactly that.
@@ -112,26 +112,26 @@ that instruction in `agents.*` and follow it — not to guess a formula, table, 
 
 ## Metadata table shapes (reference)
 
-A given database has only the families its `root` table lists.
+A given database has only the families its `ROOT` table lists.
 ClickHouse is case-sensitive and case-preserving — business table and column names appear
-exactly as they were created; the `agents.*` metadata objects are lowercase.
+exactly as they were created; the metadata objects use canonical uppercase database and table names.
 
 | Table | Key columns |
 |---|---|
-| `agents.root` | `provider`, `key`, `content` |
-| `agents.osi_metric` | `model_name`, `name`, `description`, `ai_context`, `expressions` |
-| `agents.osi_dataset` | `model_name`, `name`, `source`, `primary_key`, `unique_keys`, `description`, `synonyms`, `ai_context` |
-| `agents.osi_field` | `dataset_name`, `name`, `description`, `ai_context`, `is_time_dimension`, `expressions` |
-| `agents.lookml_measure` | `view_name`, `measure_name`, `type`, `sql`, `description`, `ai_context` |
-| `agents.lookml_view` | `name`, `sql_table_name`, `description`, `ai_context` |
-| `agents.lookml_dimension` | `view_name`, `field_name`, `field_kind`, `type`, `sql`, `description`, `ai_context` |
-| `agents.omni_measure` | `view_name`, `measure_name`, `aggregate_type`, `sql`, `description` |
-| `agents.omni_view` | `view_name`, `schema`, `table_name`, `description` |
-| `agents.omni_dimension` | `view_name`, `field_name`, `sql`, `description` |
-| `agents.omni_topic` | `topic_name`, `base_view`, `label`, `group_label`, `description`, `ai_context` |
-| `agents.omni_topic_join` | `topic_name`, `from_view`, `to_view` |
-| `agents.dbt_model` | `unique_id`, `name`, `schema_name`, `description`, `meta` |
-| `agents.dbt_column` | `model_id`, `column_name`, `data_type`, `description`, `meta` |
+| `AGENTS.ROOT` | `provider`, `key`, `content` |
+| `AGENTS.OSI_METRIC` | `model_name`, `name`, `description`, `ai_context`, `expressions` |
+| `AGENTS.OSI_DATASET` | `model_name`, `name`, `source`, `primary_key`, `unique_keys`, `description`, `synonyms`, `ai_context` |
+| `AGENTS.OSI_FIELD` | `dataset_name`, `name`, `description`, `ai_context`, `is_time_dimension`, `expressions` |
+| `AGENTS.LOOKML_MEASURE` | `view_name`, `measure_name`, `type`, `sql`, `description`, `ai_context` |
+| `AGENTS.LOOKML_VIEW` | `name`, `sql_table_name`, `description`, `ai_context` |
+| `AGENTS.LOOKML_DIMENSION` | `view_name`, `field_name`, `field_kind`, `type`, `sql`, `description`, `ai_context` |
+| `AGENTS.OMNI_MEASURE` | `view_name`, `measure_name`, `aggregate_type`, `sql`, `description` |
+| `AGENTS.OMNI_VIEW` | `view_name`, `schema`, `table_name`, `description` |
+| `AGENTS.OMNI_DIMENSION` | `view_name`, `field_name`, `sql`, `description` |
+| `AGENTS.OMNI_TOPIC` | `topic_name`, `base_view`, `label`, `group_label`, `description`, `ai_context` |
+| `AGENTS.OMNI_TOPIC_JOIN` | `topic_name`, `from_view`, `to_view` |
+| `AGENTS.DBT_MODEL` | `unique_id`, `name`, `schema_name`, `description`, `meta` |
+| `AGENTS.DBT_COLUMN` | `model_id`, `column_name`, `data_type`, `description`, `meta` |
 
 ## Common mistakes
 
@@ -140,7 +140,7 @@ exactly as they were created; the `agents.*` metadata objects are lowercase.
 | Picking a plausible-looking column or table for a metric | Read the metric/dataset `ai_context` and use exactly the column, table, and filter it names. |
 | Aggregating a `ReplacingMergeTree` table without `FINAL` | Check `system.tables.engine` first (match the suffix — Cloud reports `Shared*`); use `FINAL`/`argMax` for Replacing engines, `FINAL`/`Sign`-aware sums for Collapsing engines. |
 | Reporting `$0` / no result for "year-to-date" | If current-year returns no rows, the data is historical — anchor to the latest year present and label it. |
-| Querying `AGENTS.ROOT` in uppercase | ClickHouse identifiers are case-sensitive; the metadata objects are lowercase `agents.root`. |
+| Querying lowercase `agents.root` | ClickHouse identifiers are case-sensitive; use the canonical `AGENTS.ROOT`. |
 | Querying a metric from the wrong table | The dataset/view metadata names the `source` and any "use X not Y" caveat. Follow it. |
-| Assuming a provider's tables exist | Check `agents.root` first; some databases have only OSI, only LookML, or only dbt. |
-| `SHOW TABLES` to explore | Use focused `SELECT`s against the known `agents.*` tables. |
+| Assuming a provider's tables exist | Check `AGENTS.ROOT` first; some databases have only OSI, only LookML, or only dbt. |
+| `SHOW TABLES` to explore | Use focused `SELECT`s against the known `AGENTS.*` tables. |

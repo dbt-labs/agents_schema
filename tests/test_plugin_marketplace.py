@@ -29,8 +29,8 @@ class PluginMarketplaceTests(unittest.TestCase):
 
         self.assertEqual(skill_names, {"agents-schema-search", "connect-warehouse"})
         schema_skill = (skill_root / "agents-schema-search" / "SKILL.md").read_text()
-        self.assertIn("SELECT * FROM agents.root ORDER BY provider, key;", schema_skill)
-        self.assertNotIn("SELECT * FROM AGENTS.ROOT ORDER BY provider, key;", schema_skill)
+        self.assertIn("SELECT * FROM AGENTS.ROOT ORDER BY provider, key;", schema_skill)
+        self.assertNotIn("SELECT * FROM agents.root ORDER BY provider, key;", schema_skill)
         connection_references = {
             path.stem for path in (skill_root / "connect-warehouse" / "references").glob("*.md")
         }

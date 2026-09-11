@@ -16,12 +16,12 @@ secure: true                           # optional; defaults to true — set fals
 
 The connection uses the ClickHouse HTTP interface via
 [clickhouse-connect](https://github.com/ClickHouse/clickhouse-connect). The
-least-privilege setup is for an admin to create the `agents` database once and
+least-privilege setup is for an admin to create the `AGENTS` database once and
 grant the sync user rights only inside it:
 
 ```sql
-CREATE DATABASE IF NOT EXISTS agents;
-GRANT CREATE TABLE, DROP TABLE, TRUNCATE, SELECT, INSERT, ALTER DELETE, ALTER UPDATE ON agents.* TO agents_schema_bot;
+CREATE DATABASE IF NOT EXISTS AGENTS;
+GRANT CREATE TABLE, DROP TABLE, TRUNCATE, SELECT, INSERT, ALTER DELETE, ALTER UPDATE ON AGENTS.* TO agents_schema_bot;
 -- Only if the server sets table_engines_require_grant = true (off by default):
 GRANT TABLE ENGINE ON MergeTree TO agents_schema_bot;
 ```
@@ -35,29 +35,29 @@ default is `false`, and ClickHouse Cloud does not enable it, so most
 deployments can skip that line; granting it anyway is harmless.)
 
 (The writer checks `system.databases` first and only issues
-`CREATE DATABASE IF NOT EXISTS agents` when the database is missing — in
+`CREATE DATABASE IF NOT EXISTS AGENTS` when the database is missing — in
 ClickHouse, `IF NOT EXISTS` still requires the `CREATE DATABASE` grant even
-when the database already exists. Grant `CREATE DATABASE ON agents.*` to the
+when the database already exists. Grant `CREATE DATABASE ON AGENTS.*` to the
 sync user only if you want it to bootstrap the database itself.)
 
 Grant read access broadly so agents can consume the metadata:
 
 ```sql
-GRANT SELECT ON agents.* TO your_analyst_role;
+GRANT SELECT ON AGENTS.* TO your_analyst_role;
 ```
 
 ## How the AGENTS schema maps to ClickHouse
 
 ClickHouse has a two-level `database.table` namespace, so the `AGENTS` schema
-is a ClickHouse **database** named `agents`. ClickHouse identifiers are
-case-sensitive and the writer creates the package's canonical lowercase names:
-query `agents.root`, not `AGENTS.ROOT`.
+is a ClickHouse **database** named `AGENTS`. ClickHouse identifiers are
+case-sensitive, so query the canonical uppercase names exactly as specified,
+for example `AGENTS.ROOT`.
 
 Destination-specific mapping:
 
 | Spec concept | ClickHouse |
 |---|---|
-| `AGENTS` schema | `agents` database |
+| `AGENTS` schema | `AGENTS` database |
 | `varchar` / `text` columns | `String` (`Nullable(String)` when nullable) |
 | `boolean` columns | `Bool` |
 | `array` columns | `Array(String)`; non-string elements are stored as JSON text. A non-list value (OSI `ai_context` can be a plain string or an object) becomes a single element |
@@ -68,7 +68,7 @@ Destination-specific mapping:
 
 Because ClickHouse does not enforce primary keys, row uniqueness is maintained
 by the publish path (full table replacement per source family; delete-then-insert
-for `agents.root`), not by the engine. This assumes one sync process runs at a
+for `AGENTS.ROOT`), not by the engine. This assumes one sync process runs at a
 time — the same assumption the sequential sync workflows make. Publishing is not
 transactional: a concurrent reader can briefly observe an empty family table
 during replacement, or a missing `root` row between the delete and the insert.
@@ -102,5 +102,5 @@ idempotent). Treat the tables as generated metadata, not hand-edited state.
 docker run -d --name ch -p 8123:8123 -e CLICKHOUSE_PASSWORD=dev clickhouse/clickhouse-server
 export WAREHOUSE_CREDENTIALS='{"type":"clickhouse","host":"localhost","port":8123,"password":"dev","secure":false}'
 agents-schema dbt --project-dir path/to/dbt/project
-docker exec ch clickhouse-client --password dev --query "SELECT provider, key FROM agents.root"
+docker exec ch clickhouse-client --password dev --query "SELECT provider, key FROM AGENTS.ROOT"
 ```

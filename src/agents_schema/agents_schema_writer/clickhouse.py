@@ -21,13 +21,13 @@ _DELETE_SETTINGS = {"lightweight_deletes_sync": 2}
 
 
 class ClickHouseAgentsSchemaWriter(AgentsSchemaWriter):
-    """Writes agents.* tables to ClickHouse via a clickhouse-connect client.
+    """Writes AGENTS.* tables to ClickHouse via a clickhouse-connect client.
 
     ClickHouse-specific mapping decisions:
-    - The AGENTS schema maps to a ClickHouse *database* named ``agents``
+    - The AGENTS schema maps to a ClickHouse *database* named ``AGENTS``
       (ClickHouse has a two-level ``database.table`` namespace).
     - ClickHouse identifiers are case-sensitive; this writer quotes and creates
-      the package's canonical lowercase names.
+      the package's canonical uppercase database and table names.
     - Declared primary keys become the MergeTree ``ORDER BY`` key. ClickHouse
       does not enforce uniqueness, so upserts are implemented as a scoped
       lightweight ``DELETE`` of the incoming keys followed by an ``INSERT``.
@@ -59,7 +59,7 @@ class ClickHouseAgentsSchemaWriter(AgentsSchemaWriter):
         # CREATE DATABASE IF NOT EXISTS still requires the CREATE DATABASE
         # grant when the database already exists, so probe first: the
         # documented least-privilege setup grants the sync user rights only
-        # inside an admin-created agents database.
+        # inside an admin-created AGENTS database.
         exists = self._client.command(
             "SELECT count() FROM system.databases WHERE name = {db:String}",
             parameters={"db": AGENTS_SCHEMA},

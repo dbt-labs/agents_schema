@@ -11,6 +11,7 @@ from unittest.mock import patch
 from google.api_core.exceptions import Conflict, Forbidden, NotFound
 
 from agents_schema.agents_schema_writer import (
+    AGENTS_SCHEMA,
     BigQueryAgentsSchemaWriter,
     ClickHouseAgentsSchemaWriter,
     DatabricksAgentsSchemaWriter,
@@ -388,9 +389,12 @@ class ClickHouseAgentsSchemaWriterTests(unittest.TestCase):
 
         sqls = [call[1] for call in calls if call[0] == "command"]
         self.assertTrue(sqls[0].startswith("SELECT count() FROM system.databases"))
-        self.assertEqual(sqls[1], "CREATE DATABASE IF NOT EXISTS `agents`")
+        self.assertEqual(sqls[1], f"CREATE DATABASE IF NOT EXISTS `{AGENTS_SCHEMA}`")
         create_sql = sqls[2]
-        self.assertIn("CREATE OR REPLACE TABLE `agents`.`dbt_model`", create_sql)
+        self.assertIn(
+            f"CREATE OR REPLACE TABLE `{AGENTS_SCHEMA}`.`{DBT_MODEL.base_name}`",
+            create_sql,
+        )
         self.assertIn("`unique_id` String", create_sql)
         self.assertIn("`description` Nullable(String)", create_sql)
         self.assertIn("`tags` Array(String)", create_sql)
@@ -412,7 +416,10 @@ class ClickHouseAgentsSchemaWriterTests(unittest.TestCase):
         delete_calls = [call for call in calls if call[0] == "command" and call[1].startswith("DELETE")]
         self.assertEqual(len(delete_calls), 1)
         _, delete_sql, delete_settings, delete_params = delete_calls[0]
-        self.assertIn("DELETE FROM `agents`.`dbt_model`", delete_sql)
+        self.assertIn(
+            f"DELETE FROM `{AGENTS_SCHEMA}`.`{DBT_MODEL.base_name}`",
+            delete_sql,
+        )
         self.assertIn("`unique_id` IN {keys:Array(String)}", delete_sql)
         self.assertEqual(delete_params, {"keys": ["model.pkg.orders", "model.pkg.customers"]})
         self.assertEqual(delete_settings, {"lightweight_deletes_sync": 2})
@@ -420,7 +427,7 @@ class ClickHouseAgentsSchemaWriterTests(unittest.TestCase):
         insert_calls = [call for call in calls if call[0] == "insert"]
         self.assertEqual(len(insert_calls), 1)
         _, table, data, column_names, database = insert_calls[0]
-        self.assertEqual((database, table), ("agents", "dbt_model"))
+        self.assertEqual((database, table), (AGENTS_SCHEMA, DBT_MODEL.base_name))
         self.assertEqual(column_names[0], "unique_id")
         self.assertEqual(data[1][7], ["mart"])
         self.assertEqual(data[0][8], "{}")
@@ -464,7 +471,15 @@ class ClickHouseAgentsSchemaWriterTests(unittest.TestCase):
 
         writer.reconcile_rows(DBT_MODEL, [])
 
-        self.assertIn(("command", "TRUNCATE TABLE `agents`.`dbt_model`", None, None), calls)
+        self.assertIn(
+            (
+                "command",
+                f"TRUNCATE TABLE `{AGENTS_SCHEMA}`.`{DBT_MODEL.base_name}`",
+                None,
+                None,
+            ),
+            calls,
+        )
 
     def test_multi_column_key_deletes_use_tuples(self):
         from agents_schema.root import ROOT

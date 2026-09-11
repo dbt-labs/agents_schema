@@ -39,5 +39,5 @@ Use the clickhouse-connect driver over the HTTP interface.
    PYEOF
    ```
 
-Note: ClickHouse identifiers are case-sensitive and the metadata lives in the
-lowercase `agents` database (`agents.root`, not `AGENTS.ROOT`).
+Note: ClickHouse identifiers are case-sensitive. The writer creates the
+canonical uppercase metadata objects, including `AGENTS.ROOT`.
