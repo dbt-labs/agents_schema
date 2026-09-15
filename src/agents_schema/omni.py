@@ -1,4 +1,4 @@
-"""Omni connector: writes agents.omni_* from Omni YAML files."""
+"""Omni connector: writes AGENTS.OMNI_* from Omni YAML files."""
 from __future__ import annotations
 
 import re

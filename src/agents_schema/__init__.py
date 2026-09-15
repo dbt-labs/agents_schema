@@ -1,4 +1,4 @@
-"""agents-schema: populate the agents.* warehouse schema for AI consumption."""
+"""agents-schema: populate the AGENTS.* warehouse schema for AI consumption."""
 from importlib.metadata import PackageNotFoundError, version
 
 try:

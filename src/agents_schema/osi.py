@@ -1,4 +1,4 @@
-"""OSI connector: writes agents.osi_* from Open Semantic Interchange YAML files.
+"""OSI connector: writes AGENTS.OSI_* from Open Semantic Interchange YAML files.
 
 Spec: https://open-semantic-interchange.org/
 Vendored schema: src/agents_schema/osi-schema.json — copied verbatim from
