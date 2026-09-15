@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import sys
 import unittest
-from contextlib import contextmanager
+import warnings
+from contextlib import contextmanager, redirect_stdout
+from io import StringIO
 from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
-from google.api_core.exceptions import Conflict, NotFound
+from google.api_core.exceptions import Conflict, Forbidden, NotFound
 
 from agents_schema.agents_schema_writer import (
     BigQueryAgentsSchemaWriter,
@@ -41,9 +43,21 @@ class BigQueryAgentsSchemaWriterTests(unittest.TestCase):
 
     def test_prepare_creates_target_in_legacy_location(self):
         calls = []
+        legacy = _fake_dataset(
+            "p.agents",
+            "EU",
+            access_entries=["legacy-reader"],
+            default_encryption_configuration={"kmsKeyName": "legacy-key"},
+            default_partition_expiration_ms=1000,
+            default_table_expiration_ms=2000,
+            labels={"owner": "data"},
+            max_time_travel_hours=96,
+            resource_tags={"123/environment": "production"},
+            storage_billing_model="PHYSICAL",
+        )
         client = _FakeBigQueryClient(
             calls,
-            datasets={"p.agents": _fake_dataset("p.agents", "EU")},
+            datasets={"p.agents": legacy},
             tables={"p.agents": [_fake_table("root")]},
         )
 
@@ -51,10 +65,38 @@ class BigQueryAgentsSchemaWriterTests(unittest.TestCase):
             pass
 
         create_call = next(call for call in calls if call[0] == "create_dataset")
-        self.assertEqual(create_call[1].ref, "p.AGENTS")
-        self.assertEqual(create_call[1].location, "EU")
+        created_dataset = create_call[1]
+        self.assertEqual(created_dataset.ref, "p.AGENTS")
+        self.assertEqual(created_dataset.location, "EU")
+        self.assertEqual(created_dataset.access_entries, ["legacy-reader"])
+        self.assertIsNot(created_dataset.access_entries, legacy.access_entries)
+        self.assertEqual(
+            created_dataset.default_encryption_configuration,
+            {"kmsKeyName": "legacy-key"},
+        )
+        self.assertEqual(created_dataset.default_partition_expiration_ms, 1000)
+        self.assertEqual(created_dataset.default_table_expiration_ms, 2000)
+        self.assertEqual(created_dataset.labels, {"owner": "data"})
+        self.assertEqual(created_dataset.max_time_travel_hours, 96)
+        self.assertEqual(created_dataset.resource_tags, {"123/environment": "production"})
+        self.assertEqual(created_dataset.storage_billing_model, "PHYSICAL")
         copy_call = next(call for call in calls if call[0] == "copy_table")
         self.assertEqual(copy_call[1:3], ("p.agents.root", "p.AGENTS.ROOT"))
+
+    def test_prepare_does_not_change_existing_target_dataset_properties(self):
+        calls = []
+        legacy = _fake_dataset("p.agents", "US", labels={"source": "legacy"})
+        target = _fake_dataset("p.AGENTS", "US", labels={"source": "target"})
+        client = _FakeBigQueryClient(
+            calls,
+            datasets={"p.agents": legacy, "p.AGENTS": target},
+        )
+
+        with _fake_bigquery_module():
+            BigQueryAgentsSchemaWriter(client, "p").prepare()
+
+        self.assertEqual(target.labels, {"source": "target"})
+        self.assertFalse(any(call[0] == "create_dataset" for call in calls))
 
     def test_prepare_warns_for_unsupported_legacy_objects(self):
         calls = []
@@ -62,12 +104,39 @@ class BigQueryAgentsSchemaWriterTests(unittest.TestCase):
             calls,
             datasets={"p.agents": _fake_dataset("p.agents", "US")},
             tables={"p.agents": [_fake_table("custom_view", "VIEW")]},
+            routines={"p.agents": [_fake_routine("custom_routine")]},
+            models={"p.agents": [_fake_model("custom_model")]},
         )
 
-        with _fake_bigquery_module(), self.assertWarnsRegex(RuntimeWarning, "custom_view"):
+        with _fake_bigquery_module(), warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
             BigQueryAgentsSchemaWriter(client, "p").prepare()
 
+        messages = "\n".join(str(item.message) for item in caught)
+        self.assertIn("custom_view", messages)
+        self.assertIn("custom_routine", messages)
+        self.assertIn("custom_model", messages)
         self.assertFalse(any(call[0] == "copy_table" for call in calls))
+
+    def test_prepare_warns_when_unsupported_objects_cannot_be_inventoried(self):
+        calls = []
+        client = _FakeBigQueryClient(
+            calls,
+            datasets={"p.agents": _fake_dataset("p.agents", "US")},
+        )
+
+        def forbidden(_dataset_ref):
+            raise Forbidden("missing list permission")
+
+        client.list_routines = forbidden
+        client.list_models = forbidden
+        with _fake_bigquery_module(), warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            BigQueryAgentsSchemaWriter(client, "p").prepare()
+
+        messages = "\n".join(str(item.message) for item in caught)
+        self.assertIn("could not inventory legacy routines", messages)
+        self.assertIn("could not inventory legacy models", messages)
 
     def test_prepare_tolerates_copy_race_when_target_appears(self):
         calls = []
@@ -86,10 +155,48 @@ class BigQueryAgentsSchemaWriterTests(unittest.TestCase):
             raise Conflict(f"table already exists: {target_ref}")
 
         client.copy_table = racing_copy
-        with _fake_bigquery_module():
+        output = StringIO()
+        with _fake_bigquery_module(), redirect_stdout(output):
             BigQueryAgentsSchemaWriter(client, "p").prepare()
 
         self.assertEqual(len([call for call in calls if call[0] == "copy_table"]), 1)
+        self.assertNotIn("migrated", output.getvalue())
+
+    def test_prepare_propagates_copy_conflict_when_target_does_not_appear(self):
+        calls = []
+        client = _FakeBigQueryClient(
+            calls,
+            datasets={
+                "p.agents": _fake_dataset("p.agents", "US"),
+                "p.AGENTS": _fake_dataset("p.AGENTS", "US"),
+            },
+            tables={"p.agents": [_fake_table("root")]},
+        )
+
+        def conflicting_copy(source_ref, target_ref, job_config=None, location=None):
+            calls.append(("copy_table", source_ref, target_ref, job_config, location))
+            raise Conflict("unrelated conflict")
+
+        client.copy_table = conflicting_copy
+        with _fake_bigquery_module(), self.assertRaises(Conflict):
+            BigQueryAgentsSchemaWriter(client, "p").prepare()
+
+    def test_context_manager_closes_client_when_prepare_fails(self):
+        calls = []
+        client = _FakeBigQueryClient(calls)
+
+        def fail_prepare(_dataset_ref):
+            raise RuntimeError("prepare failed")
+
+        client.get_dataset = fail_prepare
+        with (
+            _fake_bigquery_module(),
+            self.assertRaisesRegex(RuntimeError, "prepare failed"),
+            BigQueryAgentsSchemaWriter(client, "p"),
+        ):
+            pass
+
+        self.assertIn(("close",), calls)
 
     def test_prepare_rejects_colliding_canonical_table_names(self):
         calls = []
@@ -289,10 +396,12 @@ class _Job:
 
 
 class _FakeBigQueryClient:
-    def __init__(self, calls, *, datasets=None, tables=None):
+    def __init__(self, calls, *, datasets=None, tables=None, routines=None, models=None):
         self.calls = calls
         self.datasets = dict(datasets or {})
         self.tables = {dataset_ref: list(items) for dataset_ref, items in (tables or {}).items()}
+        self.routines = {dataset_ref: list(items) for dataset_ref, items in (routines or {}).items()}
+        self.models = {dataset_ref: list(items) for dataset_ref, items in (models or {}).items()}
 
     def get_dataset(self, dataset_ref):
         self.calls.append(("get_dataset", dataset_ref))
@@ -310,6 +419,14 @@ class _FakeBigQueryClient:
     def list_tables(self, dataset_ref):
         self.calls.append(("list_tables", dataset_ref))
         return list(self.tables.get(dataset_ref, []))
+
+    def list_routines(self, dataset_ref):
+        self.calls.append(("list_routines", dataset_ref))
+        return list(self.routines.get(dataset_ref, []))
+
+    def list_models(self, dataset_ref):
+        self.calls.append(("list_models", dataset_ref))
+        return list(self.models.get(dataset_ref, []))
 
     def copy_table(self, source_ref, target_ref, job_config=None, location=None):
         self.calls.append(("copy_table", source_ref, target_ref, job_config, location))
@@ -345,6 +462,9 @@ class _FakeBigQueryClient:
         self.calls.append(("query", sql, job_config))
         return _Job()
 
+    def close(self):
+        self.calls.append(("close",))
+
 
 def _fake_bigquery_module():
     fake_google = ModuleType("google")
@@ -378,6 +498,18 @@ def _fake_bigquery_module():
             self.ref = ref
             self.project, self.dataset_id = ref.split(".", 1)
             self.location = None
+            self.access_entries = []
+            self.access_policy_version = None
+            self.default_encryption_configuration = None
+            self.default_partition_expiration_ms = None
+            self.default_rounding_mode = None
+            self.default_table_expiration_ms = None
+            self.description = None
+            self.friendly_name = None
+            self.labels = {}
+            self.max_time_travel_hours = None
+            self.resource_tags = {}
+            self.storage_billing_model = None
 
     class Table:
         def __init__(self, ref, schema=None):
@@ -404,18 +536,29 @@ def _fake_bigquery_module():
     )
 
 
-def _fake_dataset(ref, location):
+def _fake_dataset(ref, location, **properties):
     project, dataset_id = ref.split(".", 1)
-    return SimpleNamespace(
+    dataset = SimpleNamespace(
         ref=ref,
         project=project,
         dataset_id=dataset_id,
         location=location,
     )
+    for property_name, value in properties.items():
+        setattr(dataset, property_name, value)
+    return dataset
 
 
 def _fake_table(table_id, table_type="TABLE"):
     return SimpleNamespace(table_id=table_id, table_type=table_type)
+
+
+def _fake_routine(routine_id):
+    return SimpleNamespace(routine_id=routine_id)
+
+
+def _fake_model(model_id):
+    return SimpleNamespace(model_id=model_id)
 
 
 if __name__ == "__main__":

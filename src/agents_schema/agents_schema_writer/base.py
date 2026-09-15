@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
+from contextlib import suppress
 from typing import Any, Self
 
 from .schema import TableSchema
@@ -38,7 +39,12 @@ class AgentsSchemaWriter(ABC):
     def close(self) -> None: ...
 
     def __enter__(self) -> Self:
-        self.prepare()
+        try:
+            self.prepare()
+        except BaseException:
+            with suppress(Exception):
+                self.close()
+            raise
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
