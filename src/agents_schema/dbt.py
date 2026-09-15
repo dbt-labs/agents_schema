@@ -1,4 +1,4 @@
-"""dbt manifest connector: writes agents.dbt_* from a compiled dbt manifest."""
+"""dbt manifest connector: writes AGENTS.DBT_* from a compiled dbt manifest."""
 from __future__ import annotations
 
 import json

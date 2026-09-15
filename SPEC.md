@@ -10,7 +10,7 @@ This document describes the logical warehouse tables produced by this repository
 
 All Agents Schema tables live in a schema named `AGENTS`. The current writer creates the schema if it does not already exist.
 
-The canonical spelling of every delivered object is uppercase: the `AGENTS` schema and tables such as `AGENTS.ROOT` and `AGENTS.DBT_MODEL`. Writers emit unquoted identifiers, which Snowflake folds to uppercase on storage; case-sensitive destinations receive uppercase names directly. Query the tables exactly as spelled here, without quoting identifiers, so the same SQL resolves on every destination.
+The canonical spelling of every delivered object is uppercase: the `AGENTS` schema and tables such as `AGENTS.ROOT` and `AGENTS.DBT_MODEL`. Snowflake folds its unquoted identifiers to uppercase on storage, while case-sensitive destinations receive uppercase names directly. Use each destination's normal qualification and quoting rules while preserving the canonical uppercase spelling.
 
 ### Supported Types
 

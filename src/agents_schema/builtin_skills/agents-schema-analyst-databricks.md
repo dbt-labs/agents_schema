@@ -10,16 +10,16 @@ argument-hint: "[business question]"
 
 ## Overview
 
-Answer the question by first reading the governed definitions in the warehouse's `agents`
+Answer the question by first reading the governed definitions in the warehouse's `AGENTS`
 metadata schema, then querying the business tables exactly as those definitions specify.
 
 **Core principle: the warehouse tells you how to compute the answer. Your job is to find
-that instruction in the agents schema and follow it — not to guess a formula, table, filter, or date rule.**
+that instruction in the `AGENTS` schema and follow it — not to guess a formula, table, filter, or date rule.**
 
 ## Setup
 
 - Read `host`, `http_path`, `token`, and `catalog` from `agents.yml` in the working directory.
-- **Metadata schema:** `<catalog>.agents` where `catalog` is the value from `agents.yml`.
+- **Metadata schema:** `<catalog>.AGENTS` where `catalog` is the value from `agents.yml`.
   All queries below use this three-part naming — substitute your actual catalog name throughout.
 - Execute SQL by replacing `<SQL>` in the snippet below and running it:
   ```bash
@@ -49,7 +49,7 @@ that instruction in the agents schema and follow it — not to guess a formula, 
 
 1. **Discover what metadata exists — don't assume which providers are present.**
    ```sql
-   SELECT provider, key, content FROM <catalog>.agents.root ORDER BY provider, key;
+   SELECT provider, key, content FROM <catalog>.AGENTS.ROOT ORDER BY provider, key;
    ```
    This lists the providers that published metadata (`osi`, `lookml`, `dbt`, or user-published) plus
    their overview/guidance rows. Only query tables for providers that actually appear here.
@@ -59,22 +59,22 @@ that instruction in the agents schema and follow it — not to guess a formula, 
    Substitute a keyword from the question for `<keyword>`:
    ```sql
    SELECT name, description, ai_context, expression
-   FROM <catalog>.agents.osi_metric
+   FROM <catalog>.AGENTS.OSI_METRIC
    WHERE LOWER(COALESCE(name,'')||' '||COALESCE(description,'')||' '||COALESCE(ai_context,''))
          LIKE '%<keyword>%';
    ```
-   Use `<catalog>.agents.lookml_measure` (`sql`, `description`, `ai_context`) when the provider is LookML.
-   Use `<catalog>.agents.omni_measure` (`sql`, `description`) when the provider is Omni.
+   Use `<catalog>.AGENTS.LOOKML_MEASURE` (`sql`, `description`, `ai_context`) when the provider is LookML.
+   Use `<catalog>.AGENTS.OMNI_MEASURE` (`sql`, `description`) when the provider is Omni.
    **If no rows match, stop and tell the user** — do not proceed to Step 3 without a metric
    definition. Try a shorter or alternate keyword if the first search returns nothing.
 
 3. **Resolve the physical table and its rules.** Find the source table and every query caveat
    in the dataset/view metadata, and obey each `ai_context` instruction exactly:
-   - OSI: `<catalog>.agents.osi_dataset` (`source`, `ai_context`), `<catalog>.agents.osi_field`
-   - LookML: `<catalog>.agents.lookml_view` (`sql_table_name`), `<catalog>.agents.lookml_dimension`
-   - Omni: `<catalog>.agents.omni_view` (`schema`, `table_name`, `description`), `<catalog>.agents.omni_dimension`;
-     use `<catalog>.agents.omni_topic_join` to understand which views are reachable within a topic.
-   - dbt, *only if present in root*: `<catalog>.agents.dbt_model` / `<catalog>.agents.dbt_column`
+   - OSI: `<catalog>.AGENTS.OSI_DATASET` (`source`, `ai_context`), `<catalog>.AGENTS.OSI_FIELD`
+   - LookML: `<catalog>.AGENTS.LOOKML_VIEW` (`sql_table_name`), `<catalog>.AGENTS.LOOKML_DIMENSION`
+   - Omni: `<catalog>.AGENTS.OMNI_VIEW` (`schema`, `table_name`, `description`), `<catalog>.AGENTS.OMNI_DIMENSION`;
+     use `<catalog>.AGENTS.OMNI_TOPIC_JOIN` to understand which views are reachable within a topic.
+   - dbt, *only if present in root*: `<catalog>.AGENTS.DBT_MODEL` / `<catalog>.AGENTS.DBT_COLUMN`
      add model and column descriptions.
    Use the source table named in the metadata — not a same-named table you assume exists elsewhere.
 
@@ -96,7 +96,7 @@ that instruction in the agents schema and follow it — not to guess a formula, 
 
 ## Hard rules — never hard-code
 
-- Discover every metric formula, source table, filter, and date column from the agents schema.
+- Discover every metric formula, source table, filter, and date column from the `AGENTS` schema.
   Do not bake business facts into this skill, the prompt, or your reasoning.
 - Follow `ai_context` / `description` exactly. If it says to use one column or table and not
   another, do exactly that.
@@ -111,20 +111,20 @@ Replace `<catalog>` with the actual catalog name from `agents.yml` throughout.
 
 | Table | Key columns |
 |---|---|
-| `<catalog>.agents.root` | `provider`, `key`, `content` |
-| `<catalog>.agents.osi_metric` | `model_name`, `name`, `description`, `ai_context`, `expressions` |
-| `<catalog>.agents.osi_dataset` | `model_name`, `name`, `source`, `primary_key`, `unique_keys`, `description`, `synonyms`, `ai_context` |
-| `<catalog>.agents.osi_field` | `dataset_name`, `name`, `description`, `ai_context`, `is_time_dimension`, `expressions` |
-| `<catalog>.agents.lookml_measure` | `view_name`, `measure_name`, `type`, `sql`, `description`, `ai_context` |
-| `<catalog>.agents.lookml_view` | `name`, `sql_table_name`, `description`, `ai_context` |
-| `<catalog>.agents.lookml_dimension` | `view_name`, `field_name`, `field_kind`, `type`, `sql`, `description`, `ai_context` |
-| `<catalog>.agents.omni_measure` | `view_name`, `measure_name`, `aggregate_type`, `sql`, `description` |
-| `<catalog>.agents.omni_view` | `view_name`, `schema`, `table_name`, `description` |
-| `<catalog>.agents.omni_dimension` | `view_name`, `field_name`, `sql`, `description` |
-| `<catalog>.agents.omni_topic` | `topic_name`, `base_view`, `label`, `group_label`, `description`, `ai_context` |
-| `<catalog>.agents.omni_topic_join` | `topic_name`, `from_view`, `to_view` |
-| `<catalog>.agents.dbt_model` | `unique_id`, `name`, `schema_name`, `description`, `meta` |
-| `<catalog>.agents.dbt_column` | `model_id`, `column_name`, `data_type`, `description`, `meta` |
+| `<catalog>.AGENTS.ROOT` | `provider`, `key`, `content` |
+| `<catalog>.AGENTS.OSI_METRIC` | `model_name`, `name`, `description`, `ai_context`, `expressions` |
+| `<catalog>.AGENTS.OSI_DATASET` | `model_name`, `name`, `source`, `primary_key`, `unique_keys`, `description`, `synonyms`, `ai_context` |
+| `<catalog>.AGENTS.OSI_FIELD` | `dataset_name`, `name`, `description`, `ai_context`, `is_time_dimension`, `expressions` |
+| `<catalog>.AGENTS.LOOKML_MEASURE` | `view_name`, `measure_name`, `type`, `sql`, `description`, `ai_context` |
+| `<catalog>.AGENTS.LOOKML_VIEW` | `name`, `sql_table_name`, `description`, `ai_context` |
+| `<catalog>.AGENTS.LOOKML_DIMENSION` | `view_name`, `field_name`, `field_kind`, `type`, `sql`, `description`, `ai_context` |
+| `<catalog>.AGENTS.OMNI_MEASURE` | `view_name`, `measure_name`, `aggregate_type`, `sql`, `description` |
+| `<catalog>.AGENTS.OMNI_VIEW` | `view_name`, `schema`, `table_name`, `description` |
+| `<catalog>.AGENTS.OMNI_DIMENSION` | `view_name`, `field_name`, `sql`, `description` |
+| `<catalog>.AGENTS.OMNI_TOPIC` | `topic_name`, `base_view`, `label`, `group_label`, `description`, `ai_context` |
+| `<catalog>.AGENTS.OMNI_TOPIC_JOIN` | `topic_name`, `from_view`, `to_view` |
+| `<catalog>.AGENTS.DBT_MODEL` | `unique_id`, `name`, `schema_name`, `description`, `meta` |
+| `<catalog>.AGENTS.DBT_COLUMN` | `model_id`, `column_name`, `data_type`, `description`, `meta` |
 
 ## Common mistakes
 
@@ -133,5 +133,5 @@ Replace `<catalog>` with the actual catalog name from `agents.yml` throughout.
 | Picking a plausible-looking column or table for a metric | Read the metric/dataset `ai_context` and use exactly the column, table, and filter it names. |
 | Reporting `$0` / no result for "year-to-date" | If current-year returns no rows, the data is historical — anchor to the latest year present and label it. |
 | Querying a metric from the wrong table | The dataset/view metadata names the `source` and any "use X not Y" caveat. Follow it. |
-| Assuming a provider's tables exist | Check `<catalog>.agents.root` first; some warehouses have only OSI, only LookML, or only dbt. |
-| `SHOW TABLES IN` / `DESCRIBE TABLE` to explore | Use focused `SELECT`s against the known `<catalog>.agents.*` tables. |
+| Assuming a provider's tables exist | Check `<catalog>.AGENTS.ROOT` first; some warehouses have only OSI, only LookML, or only dbt. |
+| `SHOW TABLES IN` / `DESCRIBE TABLE` to explore | Use focused `SELECT`s against the known `<catalog>.AGENTS.*` tables. |

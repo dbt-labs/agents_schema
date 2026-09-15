@@ -242,6 +242,19 @@ uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.11
 To upgrade, change only the tag in the `uses:` line. The current release tag is
 `v0.0.11`.
 
+#### BigQuery uppercase dataset migration
+
+Older releases created a lowercase `agents` dataset. After upgrading to a release
+that delivers the canonical uppercase names, run every configured ingestion
+workflow to populate the new `AGENTS` dataset, then update and verify consumers
+against `<project_id>.AGENTS.*`.
+
+Before deleting the old `agents` dataset, inventory its providers, tables, and
+skills and confirm that each one exists in `AGENTS`. Package-managed workflows can
+be rebuilt from their source artifacts, but custom providers, manually published
+skills, and other user-managed content may need to be republished or copied. Drop
+the old dataset only after that verification is complete.
+
 ### Specification
 
 The full schema contract is in [SPEC.md](./SPEC.md). Keep schema definitions and

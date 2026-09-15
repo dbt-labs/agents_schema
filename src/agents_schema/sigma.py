@@ -1,4 +1,4 @@
-"""Sigma connector: writes agents.sigma_* from Sigma data model YAML files."""
+"""Sigma connector: writes AGENTS.SIGMA_* from Sigma data model YAML files."""
 from __future__ import annotations
 
 import re

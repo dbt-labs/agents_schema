@@ -34,6 +34,15 @@ class DestinationContext:
 
 
 class ConnectorRootTests(unittest.TestCase):
+    def test_builtin_analyst_skills_use_canonical_object_names(self):
+        for warehouse_type in ("snowflake", "databricks", "bigquery"):
+            with self.subTest(warehouse_type=warehouse_type):
+                content = skills._load_builtin_analyst_skill(warehouse_type)
+
+                self.assertIn("AGENTS.ROOT", content)
+                self.assertNotRegex(content, r"\bagents\.(?!yml\b)[A-Za-z_*]+")
+                self.assertNotRegex(content, r"\bAGENTS\.[a-z_]")
+
     def test_dbt_run_upserts_root_before_source_tables(self):
         dest = FakeDestination()
         cfg = {"warehouse": {"type": "snowflake"}, "metadata_connection": {"path": "."}}

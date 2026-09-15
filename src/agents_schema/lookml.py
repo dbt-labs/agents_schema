@@ -1,4 +1,4 @@
-"""LookML connector: writes agents.lookml_* from LookML files."""
+"""LookML connector: writes AGENTS.LOOKML_* from LookML files."""
 from __future__ import annotations
 
 import re
