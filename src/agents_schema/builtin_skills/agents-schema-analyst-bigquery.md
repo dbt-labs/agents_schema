@@ -45,12 +45,12 @@ SQLEOF
    their overview/guidance rows. Only query tables for providers that actually appear here.
 
 2. **Find the metric.** Search the semantic definition tables for keywords from the question
-   and read `description`, `ai_context`, and the formula (`expression` for OSI, `sql` for LookML).
+   and read `description`, `ai_context`, and the formula (`expressions` for OSI, `sql` for LookML).
    Substitute a keyword from the question for `<keyword>`:
    ```sql
-   SELECT name, description, ai_context, expression
+   SELECT name, description, ai_context, expressions
    FROM `<project_id>.AGENTS.OSI_METRIC`
-   WHERE LOWER(CONCAT(COALESCE(name, ''), ' ', COALESCE(description, ''), ' ', COALESCE(ai_context, '')))
+   WHERE LOWER(CONCAT(COALESCE(name, ''), ' ', COALESCE(description, ''), ' ', COALESCE(TO_JSON_STRING(ai_context), '')))
          LIKE '%<keyword>%';
    ```
    Use `` `<project_id>.AGENTS.LOOKML_MEASURE` `` (`sql`, `description`, `ai_context`) when the provider is LookML.
@@ -68,8 +68,9 @@ SQLEOF
      add model and column descriptions.
    Use the source table named in the metadata — not a same-named table you assume exists elsewhere.
 
-4. **Translate the formula to SQL.** OSI `expression` is usually plain SQL (e.g. `SUM(amount)`)
-   — use it as-is against the resolved table. **Always alias aggregate expressions**
+4. **Translate the formula to SQL.** OSI `expressions` is a list of `{dialect, expression}`
+   objects. Choose the expression for BigQuery, falling back to `ANSI_SQL` only when compatible,
+   and use its `expression` value against the resolved table. **Always alias aggregate expressions**
    (e.g. `SUM(amount) AS value`) so `bq query --format=json` returns a named key instead of the
    auto-generated `f0_`. For LookML `sql`: `${TABLE}.col` → `col`;
    `${other_field}` → look that field up and substitute recursively; `{% if %}…{% else %} X {% endif %}`

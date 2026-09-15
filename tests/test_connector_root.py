@@ -35,13 +35,22 @@ class DestinationContext:
 
 class ConnectorRootTests(unittest.TestCase):
     def test_builtin_analyst_skills_use_canonical_object_names(self):
-        for warehouse_type in ("snowflake", "databricks", "bigquery"):
+        ai_context_conversion = {
+            "snowflake": "TO_VARCHAR(ai_context)",
+            "databricks": "CAST(ai_context AS STRING)",
+            "bigquery": "TO_JSON_STRING(ai_context)",
+        }
+        for warehouse_type, expected_conversion in ai_context_conversion.items():
             with self.subTest(warehouse_type=warehouse_type):
                 content = skills._load_builtin_analyst_skill(warehouse_type)
 
                 self.assertIn("AGENTS.ROOT", content)
                 self.assertNotRegex(content, r"\bagents\.(?!yml\b)[A-Za-z_*]+")
                 self.assertNotRegex(content, r"\bAGENTS\.[a-z_]")
+                self.assertIn("SELECT name, description, ai_context, expressions", content)
+                self.assertNotIn("SELECT name, description, ai_context, expression\n", content)
+                self.assertIn(expected_conversion, content)
+                self.assertIn("`{dialect, expression}`", content)
 
     def test_dbt_run_upserts_root_before_source_tables(self):
         dest = FakeDestination()

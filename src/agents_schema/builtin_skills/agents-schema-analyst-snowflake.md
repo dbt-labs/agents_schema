@@ -35,12 +35,12 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
    their overview/guidance rows. Only query tables for providers that actually appear here.
 
 2. **Find the metric.** Search the semantic definition tables for keywords from the question
-   and read `description`, `ai_context`, and the formula (`expression` for OSI, `sql` for LookML).
+   and read `description`, `ai_context`, and the formula (`expressions` for OSI, `sql` for LookML).
    Substitute a keyword from the question for `<keyword>`:
    ```sql
-   SELECT name, description, ai_context, expression
+   SELECT name, description, ai_context, expressions
    FROM AGENTS.OSI_METRIC
-   WHERE LOWER(COALESCE(name,'')||' '||COALESCE(description,'')||' '||COALESCE(ai_context,''))
+   WHERE LOWER(COALESCE(name,'')||' '||COALESCE(description,'')||' '||COALESCE(TO_VARCHAR(ai_context),''))
          LIKE '%<keyword>%';
    ```
    Use `AGENTS.LOOKML_MEASURE` (`sql`, `description`, `ai_context`) when the provider is LookML.
@@ -58,8 +58,9 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
      column descriptions.
    Use the source table named in the metadata — not a same-named table you assume exists elsewhere.
 
-4. **Translate the formula to SQL.** OSI `expression` is usually plain SQL (e.g. `SUM(amount)`)
-   — use it as-is against the resolved table. For LookML `sql`: `${TABLE}.col` → `col`;
+4. **Translate the formula to SQL.** OSI `expressions` is a list of `{dialect, expression}`
+   objects. Choose the expression for Snowflake, falling back to `ANSI_SQL` only when compatible,
+   and use its `expression` value against the resolved table. For LookML `sql`: `${TABLE}.col` → `col`;
    `${other_field}` → look that field up and substitute recursively; `{% if %}…{% else %} X {% endif %}`
    → use the `{% else %}` branch. For Omni `sql`: the value is a quoted column reference
    (e.g. `'"AMOUNT"'`) — strip the outer quotes and use the inner identifier directly.
