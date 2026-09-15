@@ -1,17 +1,120 @@
 from __future__ import annotations
 
-import unittest
 import sys
+import unittest
 from contextlib import contextmanager
-from types import ModuleType
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
-from agents_schema.agents_schema_writer import BigQueryAgentsSchemaWriter, DatabricksAgentsSchemaWriter
+from google.api_core.exceptions import Conflict, NotFound
+
+from agents_schema.agents_schema_writer import (
+    BigQueryAgentsSchemaWriter,
+    DatabricksAgentsSchemaWriter,
+)
+from agents_schema.config import ConfigError
 from agents_schema.dbt import DBT_MODEL
 
 
 class BigQueryAgentsSchemaWriterTests(unittest.TestCase):
+    def test_prepare_migrates_only_missing_tables_and_is_idempotent(self):
+        calls = []
+        datasets = {
+            "p.agents": _fake_dataset("p.agents", "EU"),
+            "p.AGENTS": _fake_dataset("p.AGENTS", "EU"),
+        }
+        tables = {
+            "p.agents": [_fake_table("root"), _fake_table("dbt_model")],
+            "p.AGENTS": [_fake_table("ROOT")],
+        }
+        client = _FakeBigQueryClient(calls, datasets=datasets, tables=tables)
+
+        with _fake_bigquery_module():
+            BigQueryAgentsSchemaWriter(client, "p").prepare()
+            BigQueryAgentsSchemaWriter(client, "p").prepare()
+
+        copy_calls = [call for call in calls if call[0] == "copy_table"]
+        self.assertEqual(len(copy_calls), 1)
+        self.assertEqual(copy_calls[0][1:3], ("p.agents.dbt_model", "p.AGENTS.DBT_MODEL"))
+        self.assertEqual(copy_calls[0][4], "EU")
+        self.assertEqual(copy_calls[0][3].kwargs["write_disposition"], "WRITE_EMPTY")
+
+    def test_prepare_creates_target_in_legacy_location(self):
+        calls = []
+        client = _FakeBigQueryClient(
+            calls,
+            datasets={"p.agents": _fake_dataset("p.agents", "EU")},
+            tables={"p.agents": [_fake_table("root")]},
+        )
+
+        with _fake_bigquery_module(), BigQueryAgentsSchemaWriter(client, "p"):
+            pass
+
+        create_call = next(call for call in calls if call[0] == "create_dataset")
+        self.assertEqual(create_call[1].ref, "p.AGENTS")
+        self.assertEqual(create_call[1].location, "EU")
+        copy_call = next(call for call in calls if call[0] == "copy_table")
+        self.assertEqual(copy_call[1:3], ("p.agents.root", "p.AGENTS.ROOT"))
+
+    def test_prepare_warns_for_unsupported_legacy_objects(self):
+        calls = []
+        client = _FakeBigQueryClient(
+            calls,
+            datasets={"p.agents": _fake_dataset("p.agents", "US")},
+            tables={"p.agents": [_fake_table("custom_view", "VIEW")]},
+        )
+
+        with _fake_bigquery_module(), self.assertWarnsRegex(RuntimeWarning, "custom_view"):
+            BigQueryAgentsSchemaWriter(client, "p").prepare()
+
+        self.assertFalse(any(call[0] == "copy_table" for call in calls))
+
+    def test_prepare_tolerates_copy_race_when_target_appears(self):
+        calls = []
+        client = _FakeBigQueryClient(
+            calls,
+            datasets={
+                "p.agents": _fake_dataset("p.agents", "US"),
+                "p.AGENTS": _fake_dataset("p.AGENTS", "US"),
+            },
+            tables={"p.agents": [_fake_table("root")]},
+        )
+
+        def racing_copy(source_ref, target_ref, job_config=None, location=None):
+            calls.append(("copy_table", source_ref, target_ref, job_config, location))
+            client.tables.setdefault("p.AGENTS", []).append(_fake_table("ROOT"))
+            raise Conflict(f"table already exists: {target_ref}")
+
+        client.copy_table = racing_copy
+        with _fake_bigquery_module():
+            BigQueryAgentsSchemaWriter(client, "p").prepare()
+
+        self.assertEqual(len([call for call in calls if call[0] == "copy_table"]), 1)
+
+    def test_prepare_rejects_colliding_canonical_table_names(self):
+        calls = []
+        client = _FakeBigQueryClient(
+            calls,
+            datasets={"p.agents": _fake_dataset("p.agents", "US")},
+            tables={"p.agents": [_fake_table("custom"), _fake_table("CUSTOM")]},
+        )
+
+        with _fake_bigquery_module(), self.assertRaisesRegex(ConfigError, "colliding canonical names"):
+            BigQueryAgentsSchemaWriter(client, "p").prepare()
+
+    def test_prepare_rejects_cross_location_migration(self):
+        calls = []
+        client = _FakeBigQueryClient(
+            calls,
+            datasets={
+                "p.agents": _fake_dataset("p.agents", "EU"),
+                "p.AGENTS": _fake_dataset("p.AGENTS", "US"),
+            },
+        )
+
+        with _fake_bigquery_module(), self.assertRaisesRegex(ConfigError, "cannot migrate"):
+            BigQueryAgentsSchemaWriter(client, "p").prepare()
+
     def test_upsert_rows_loads_staging_and_merges(self):
         calls = []
         with _fake_bigquery_module():
@@ -186,14 +289,50 @@ class _Job:
 
 
 class _FakeBigQueryClient:
-    def __init__(self, calls):
+    def __init__(self, calls, *, datasets=None, tables=None):
         self.calls = calls
+        self.datasets = dict(datasets or {})
+        self.tables = {dataset_ref: list(items) for dataset_ref, items in (tables or {}).items()}
+
+    def get_dataset(self, dataset_ref):
+        self.calls.append(("get_dataset", dataset_ref))
+        try:
+            return self.datasets[dataset_ref]
+        except KeyError as e:
+            raise NotFound(f"dataset not found: {dataset_ref}") from e
 
     def create_dataset(self, dataset, exists_ok=False):
         self.calls.append(("create_dataset", dataset, exists_ok))
+        self.datasets.setdefault(dataset.ref, dataset)
+        self.tables.setdefault(dataset.ref, [])
+        return self.datasets[dataset.ref]
+
+    def list_tables(self, dataset_ref):
+        self.calls.append(("list_tables", dataset_ref))
+        return list(self.tables.get(dataset_ref, []))
+
+    def copy_table(self, source_ref, target_ref, job_config=None, location=None):
+        self.calls.append(("copy_table", source_ref, target_ref, job_config, location))
+        target_dataset_ref, target_table_id = target_ref.rsplit(".", 1)
+        target_tables = self.tables.setdefault(target_dataset_ref, [])
+        if any(table.table_id == target_table_id for table in target_tables):
+            raise Conflict(f"table already exists: {target_ref}")
+        target_tables.append(_fake_table(target_table_id))
+        return _Job()
+
+    def get_table(self, table_ref):
+        dataset_ref, table_id = table_ref.rsplit(".", 1)
+        for table in self.tables.get(dataset_ref, []):
+            if table.table_id == table_id:
+                return table
+        raise NotFound(f"table not found: {table_ref}")
 
     def create_table(self, table, exists_ok=False):
         self.calls.append(("create_table", table, exists_ok))
+        dataset_ref, table_id = table.ref.rsplit(".", 1)
+        tables = self.tables.setdefault(dataset_ref, [])
+        if not any(item.table_id == table_id for item in tables):
+            tables.append(_fake_table(table_id))
 
     def delete_table(self, table_ref, not_found_ok=False):
         self.calls.append(("delete_table", table_ref, not_found_ok))
@@ -213,6 +352,7 @@ def _fake_bigquery_module():
     fake_bigquery = ModuleType("google.cloud.bigquery")
 
     class WriteDisposition:
+        WRITE_EMPTY = "WRITE_EMPTY"
         WRITE_APPEND = "WRITE_APPEND"
         WRITE_TRUNCATE = "WRITE_TRUNCATE"
 
@@ -236,6 +376,7 @@ def _fake_bigquery_module():
     class Dataset:
         def __init__(self, ref):
             self.ref = ref
+            self.project, self.dataset_id = ref.split(".", 1)
             self.location = None
 
     class Table:
@@ -245,6 +386,7 @@ def _fake_bigquery_module():
 
     fake_bigquery.WriteDisposition = WriteDisposition
     fake_bigquery.LoadJobConfig = LoadJobConfig
+    fake_bigquery.CopyJobConfig = LoadJobConfig
     fake_bigquery.QueryJobConfig = QueryJobConfig
     fake_bigquery.ScalarQueryParameter = ScalarQueryParameter
     fake_bigquery.SchemaField = SchemaField
@@ -260,6 +402,20 @@ def _fake_bigquery_module():
             "google.cloud.bigquery": fake_bigquery,
         },
     )
+
+
+def _fake_dataset(ref, location):
+    project, dataset_id = ref.split(".", 1)
+    return SimpleNamespace(
+        ref=ref,
+        project=project,
+        dataset_id=dataset_id,
+        location=location,
+    )
+
+
+def _fake_table(table_id, table_type="TABLE"):
+    return SimpleNamespace(table_id=table_id, table_type=table_type)
 
 
 if __name__ == "__main__":

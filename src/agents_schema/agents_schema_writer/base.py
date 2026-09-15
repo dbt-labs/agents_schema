@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any, Self
 
 from .schema import TableSchema
 
 
 class AgentsSchemaWriter(ABC):
+    def prepare(self) -> None:
+        """Run idempotent destination-specific setup before the first write."""
+
     @abstractmethod
     def ensure_table(self, table: TableSchema) -> None: ...
 
@@ -33,7 +37,8 @@ class AgentsSchemaWriter(ABC):
     @abstractmethod
     def close(self) -> None: ...
 
-    def __enter__(self) -> "AgentsSchemaWriter":
+    def __enter__(self) -> Self:
+        self.prepare()
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
