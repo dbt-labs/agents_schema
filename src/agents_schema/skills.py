@@ -17,7 +17,7 @@ from .root import ROOT, upsert_provider_root
 __all__ = ["SKILL_USE", "publish_builtin_skill", "publish_skill", "run"]
 
 SKILL_USE = TableSchema(
-    "agents.skill_use",
+    "AGENTS.SKILL_USE",
     (
         Column("provider", "varchar", nullable=False),
         Column("skill_key", "varchar", nullable=False),

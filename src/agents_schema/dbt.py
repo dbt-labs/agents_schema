@@ -1,4 +1,4 @@
-"""dbt manifest connector: writes agents.dbt_* from a compiled dbt manifest."""
+"""dbt manifest connector: writes AGENTS.DBT_* from a compiled dbt manifest."""
 from __future__ import annotations
 
 import json
@@ -12,7 +12,7 @@ from .skills import publish_builtin_skill
 __all__ = ["run"]
 
 DBT_MODEL = TableSchema(
-    "agents.dbt_model",
+    "AGENTS.DBT_MODEL",
     (
         Column("unique_id", "varchar", nullable=False),
         Column("name", "varchar", nullable=False),
@@ -27,7 +27,7 @@ DBT_MODEL = TableSchema(
     primary_key=("unique_id",),
 )
 DBT_COLUMN = TableSchema(
-    "agents.dbt_column",
+    "AGENTS.DBT_COLUMN",
     (
         Column("model_id", "varchar", nullable=False),
         Column("column_name", "varchar", nullable=False),
@@ -38,7 +38,7 @@ DBT_COLUMN = TableSchema(
     primary_key=("model_id", "column_name"),
 )
 DBT_DEPENDENCY = TableSchema(
-    "agents.dbt_dependency",
+    "AGENTS.DBT_DEPENDENCY",
     (
         Column("upstream_id", "varchar", nullable=False),
         Column("downstream_id", "varchar", nullable=False),

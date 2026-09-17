@@ -242,6 +242,36 @@ uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.11
 To upgrade, change only the tag in the `uses:` line. The current release tag is
 `v0.0.11`.
 
+#### BigQuery uppercase dataset migration
+
+Older releases created a lowercase `agents` dataset. After upgrading to a release
+that delivers the canonical uppercase names, the first BigQuery ingestion run
+creates `AGENTS` and non-destructively copies each missing table from `agents` to
+its canonical uppercase name. The migration is idempotent, does not overwrite
+objects already present in `AGENTS`, and never deletes the old dataset. When it
+creates `AGENTS`, it also preserves the legacy dataset's access entries, encryption
+configuration, expiration and time-travel settings, labels and resource tags,
+storage billing model, description, and friendly name when the installed BigQuery
+client supports those properties. Existing `AGENTS` dataset settings are never
+changed. Unsupported objects such as views, routines, and models produce a warning
+and must be migrated manually. The normal ingestion then refreshes the tables
+managed by that workflow.
+
+For custom IAM roles, the migration requires `bigquery.datasets.get` and
+`bigquery.tables.list` on both datasets; `bigquery.tables.get` and
+`bigquery.tables.getData` on both datasets; `bigquery.tables.create` and
+`bigquery.tables.update` on the destination; and `bigquery.jobs.create` on the
+project. Creating `AGENTS` also requires `bigquery.datasets.create` on the
+project. Grant `bigquery.routines.list` and `bigquery.models.list` on the legacy
+dataset for complete unsupported-object warnings. Reapplying resource tags may
+require the corresponding Resource Manager tag permissions.
+
+Run every configured ingestion workflow, update consumers to
+`<project_id>.AGENTS.*`, and inventory both datasets. Before deleting `agents`,
+confirm that every provider, table, skill, and other user-managed object is present
+and current in `AGENTS`. Drop the old dataset only after that verification is
+complete.
+
 ### Specification
 
 The full schema contract is in [SPEC.md](./SPEC.md). Keep schema definitions and

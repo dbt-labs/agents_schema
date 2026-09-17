@@ -1,4 +1,4 @@
-"""LookML connector: writes agents.lookml_* from LookML files."""
+"""LookML connector: writes AGENTS.LOOKML_* from LookML files."""
 from __future__ import annotations
 
 import re
@@ -14,7 +14,7 @@ from .skills import publish_builtin_skill
 __all__ = ["run"]
 
 LOOKML_VIEW = TableSchema(
-    "agents.lookml_view",
+    "AGENTS.LOOKML_VIEW",
     (
         Column("name", "varchar", nullable=False),
         Column("sql_table_name", "varchar"),
@@ -26,7 +26,7 @@ LOOKML_VIEW = TableSchema(
     primary_key=("name",),
 )
 LOOKML_DIMENSION = TableSchema(
-    "agents.lookml_dimension",
+    "AGENTS.LOOKML_DIMENSION",
     (
         Column("view_name", "varchar", nullable=False),
         Column("field_name", "varchar", nullable=False),
@@ -40,7 +40,7 @@ LOOKML_DIMENSION = TableSchema(
     primary_key=("view_name", "field_name"),
 )
 LOOKML_MEASURE = TableSchema(
-    "agents.lookml_measure",
+    "AGENTS.LOOKML_MEASURE",
     (
         Column("view_name", "varchar", nullable=False),
         Column("measure_name", "varchar", nullable=False),
@@ -53,7 +53,7 @@ LOOKML_MEASURE = TableSchema(
     primary_key=("view_name", "measure_name"),
 )
 LOOKML_EXPLORE = TableSchema(
-    "agents.lookml_explore",
+    "AGENTS.LOOKML_EXPLORE",
     (
         Column("name", "varchar", nullable=False),
         Column("from_view", "varchar"),

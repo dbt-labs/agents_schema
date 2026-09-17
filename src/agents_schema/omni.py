@@ -1,4 +1,4 @@
-"""Omni connector: writes agents.omni_* from Omni YAML files."""
+"""Omni connector: writes AGENTS.OMNI_* from Omni YAML files."""
 from __future__ import annotations
 
 import re
@@ -14,7 +14,7 @@ __all__ = ["run"]
 _REF_RE = re.compile(r"#\s*Reference this view as\s+(\S+)")
 
 OMNI_VIEW = TableSchema(
-    "agents.omni_view",
+    "AGENTS.OMNI_VIEW",
     (
         Column("view_name", "varchar", nullable=False),
         Column("schema", "varchar"),
@@ -26,7 +26,7 @@ OMNI_VIEW = TableSchema(
     primary_key=("view_name",),
 )
 OMNI_DIMENSION = TableSchema(
-    "agents.omni_dimension",
+    "AGENTS.OMNI_DIMENSION",
     (
         Column("view_name", "varchar", nullable=False),
         Column("field_name", "varchar", nullable=False),
@@ -39,7 +39,7 @@ OMNI_DIMENSION = TableSchema(
     primary_key=("view_name", "field_name"),
 )
 OMNI_MEASURE = TableSchema(
-    "agents.omni_measure",
+    "AGENTS.OMNI_MEASURE",
     (
         Column("view_name", "varchar", nullable=False),
         Column("measure_name", "varchar", nullable=False),
@@ -51,7 +51,7 @@ OMNI_MEASURE = TableSchema(
     primary_key=("view_name", "measure_name"),
 )
 OMNI_TOPIC = TableSchema(
-    "agents.omni_topic",
+    "AGENTS.OMNI_TOPIC",
     (
         Column("topic_name", "varchar", nullable=False),
         Column("base_view", "varchar"),
@@ -64,7 +64,7 @@ OMNI_TOPIC = TableSchema(
     primary_key=("topic_name",),
 )
 OMNI_TOPIC_JOIN = TableSchema(
-    "agents.omni_topic_join",
+    "AGENTS.OMNI_TOPIC_JOIN",
     (
         Column("topic_name", "varchar", nullable=False),
         Column("from_view", "varchar", nullable=False),
