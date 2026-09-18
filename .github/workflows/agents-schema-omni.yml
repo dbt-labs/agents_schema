@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Omni ingestion
-        uses: dbt-labs/agents_schema/.github/actions/agents-schema-omni@v0.0.11
+        uses: $/.github/actions/agents-schema-omni
         with:
           omni-dir: ${{ inputs.omni-dir }}
         env:
