@@ -100,7 +100,7 @@ on:
 
 jobs:
   agents-schema-omni:
-    uses: dbt-labs/agents_schema/.github/workflows/agents-schema-omni.yml@v0.0.11
+    uses: dbt-labs/agents_schema/.github/workflows/agents-schema-omni.yml@v0
     with:
       omni-dir: omni/My Connection
     secrets:
