@@ -22,8 +22,14 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Report Agents Schema runtime
+        uses: $/.github/actions/agents-schema-runtime
+        with:
+          workflow-ref: ${{ job.workflow_ref }}
+          workflow-sha: ${{ job.workflow_sha }}
+
       - name: Run Omni ingestion
-        uses: dbt-labs/agents_schema/.github/actions/agents-schema-omni@v0.0.11
+        uses: $/.github/actions/agents-schema-omni
         with:
           omni-dir: ${{ inputs.omni-dir }}
         env:

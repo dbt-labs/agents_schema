@@ -39,8 +39,14 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Report Agents Schema runtime
+        uses: $/.github/actions/agents-schema-runtime
+        with:
+          workflow-ref: ${{ job.workflow_ref }}
+          workflow-sha: ${{ job.workflow_sha }}
+
       - name: Run dbt ingestion
-        uses: dbt-labs/agents_schema/.github/actions/agents-schema-dbt@v0.0.11
+        uses: $/.github/actions/agents-schema-dbt
         with:
           dbt-project-dir: ${{ inputs.dbt-project-dir }}
           dbt-profile-name: ${{ inputs.dbt-profile-name }}

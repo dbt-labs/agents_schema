@@ -188,7 +188,8 @@ source-specific workflows.
 1. A workflow in your repository invokes one of this repo's workflows.
 2. The workflow checks out your repository and reads source metadata such as
    dbt artifacts, LookML files, Omni YAML files, or OSI YAML files.
-3. The workflow runs the `agents-schema` CLI at the pinned release tag.
+3. The workflow runs the `agents-schema` CLI bundled with the selected workflow
+   reference.
 4. The CLI writes normalized metadata and warehouse-delivered skills into the
    warehouse under the `AGENTS` schema.
 5. Agents and downstream tools query `AGENTS` for context close to the data
@@ -233,14 +234,26 @@ ORDER BY provider, key;
 Release tags version the whole repository: reusable workflows, actions, CLI
 source, examples, README, and spec.
 
-Pin exact tags in your workflows:
+Use the floating `v0` tag to receive the latest approved `v0.x.x` release:
 
 ```yaml
-uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0.0.11
+uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0
 ```
 
-To upgrade, change only the tag in the `uses:` line. The current release tag is
-`v0.0.11`.
+The `v0` tag moves only when a stable GitHub Release is published; it does not
+track every merge to `main`. To pin the workflow and CLI source, replace `v0`
+with an exact release tag such as `v0.0.11` or a full commit SHA. Branch
+references such as `main` are intended for development and integration testing.
+
+The selected reference supplies the reusable workflow, its composite action,
+and the Python CLI implementation together. GitHub Actions therefore do not
+depend on a separately hardcoded PyPI package version. PyPI releases remain the
+installation source for customers who run the CLI directly.
+
+Each reusable workflow run reports the requested workflow ref, the resolved
+workflow commit, and the CLI version in the Actions log and job summary. The
+resolved commit identifies the exact implementation used even after a floating
+tag such as `v0` moves to a newer release.
 
 #### BigQuery uppercase dataset migration
 
