@@ -250,6 +250,11 @@ and the Python CLI implementation together. GitHub Actions therefore do not
 depend on a separately hardcoded PyPI package version. PyPI releases remain the
 installation source for customers who run the CLI directly.
 
+Each reusable workflow run reports the requested workflow ref, the resolved
+workflow commit, and the CLI version in the Actions log and job summary. The
+resolved commit identifies the exact implementation used even after a floating
+tag such as `v0` moves to a newer release.
+
 #### BigQuery uppercase dataset migration
 
 Older releases created a lowercase `agents` dataset. After upgrading to a release

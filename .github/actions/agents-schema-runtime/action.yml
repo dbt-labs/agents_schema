@@ -1,0 +1,55 @@
+name: 'Agents Schema runtime information'
+description: >
+  Reports the requested workflow ref, resolved commit, and CLI version.
+
+inputs:
+  workflow-ref:
+    description: 'Full ref of the reusable workflow that invoked the action'
+    required: true
+  workflow-sha:
+    description: 'Resolved commit SHA of the reusable workflow that invoked the action'
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: '3.12'
+
+    - name: Report Agents Schema runtime
+      shell: bash
+      env:
+        AGENTS_SCHEMA_WORKFLOW_REF: ${{ inputs.workflow-ref }}
+        AGENTS_SCHEMA_WORKFLOW_SHA: ${{ inputs.workflow-sha }}
+      run: |
+        escape_workflow_command() {
+          local value="$1"
+          value="${value//%/%25}"
+          value="${value//$'\r'/%0D}"
+          value="${value//$'\n'/%0A}"
+          printf '%s' "$value"
+        }
+
+        cli_version="$(
+          uvx --from "$GITHUB_ACTION_PATH/../../.." agents-schema --version
+        )"
+
+        notice_ref="$(escape_workflow_command "$AGENTS_SCHEMA_WORKFLOW_REF")"
+        notice_sha="$(escape_workflow_command "$AGENTS_SCHEMA_WORKFLOW_SHA")"
+        notice_cli="$(escape_workflow_command "$cli_version")"
+
+        echo "Agents Schema workflow ref: $AGENTS_SCHEMA_WORKFLOW_REF"
+        echo "Agents Schema workflow commit: $AGENTS_SCHEMA_WORKFLOW_SHA"
+        echo "Agents Schema CLI version: $cli_version"
+        echo "::notice title=Agents Schema runtime::ref=$notice_ref commit=$notice_sha cli=$notice_cli"
+
+        {
+          echo "### Agents Schema runtime"
+          echo
+          echo "| Component | Resolved value |"
+          echo "| --- | --- |"
+          echo "| Workflow ref | \`$AGENTS_SCHEMA_WORKFLOW_REF\` |"
+          echo "| Workflow commit | \`$AGENTS_SCHEMA_WORKFLOW_SHA\` |"
+          echo "| CLI version | \`$cli_version\` |"
+        } >> "$GITHUB_STEP_SUMMARY"

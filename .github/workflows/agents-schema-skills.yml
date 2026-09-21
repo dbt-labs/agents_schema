@@ -24,6 +24,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Report Agents Schema runtime
+        uses: $/.github/actions/agents-schema-runtime
+        with:
+          workflow-ref: ${{ job.workflow_ref }}
+          workflow-sha: ${{ job.workflow_sha }}
+
       - name: Run skills ingestion
         uses: $/.github/actions/agents-schema-skills
         with:
