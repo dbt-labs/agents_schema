@@ -516,7 +516,7 @@ class ClickHouseAgentsSchemaWriterTests(unittest.TestCase):
     def test_existing_database_is_not_recreated(self):
         # CREATE DATABASE IF NOT EXISTS still requires the CREATE DATABASE
         # grant when the database exists; the documented least-privilege user
-        # must be able to sync into an admin-created agents database.
+        # must be able to sync into an admin-created AGENTS database.
         calls = []
         writer = ClickHouseAgentsSchemaWriter(_FakeClickHouseClient(calls, database_exists=True))
 

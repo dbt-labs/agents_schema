@@ -58,7 +58,7 @@ ROOT_ENTRIES = {
         ("data_model", "One row per Sigma data model YAML file. See AGENTS.SIGMA_DATA_MODEL."),
         ("element", "One row per table element in a Sigma data model. See AGENTS.SIGMA_ELEMENT."),
         ("column", "One row per column in a Sigma table element. See AGENTS.SIGMA_COLUMN."),
-        ("metric", "One row per metric in a Sigma data model. See AGENTS.SIGMA_METRIC."),
+        ("metric", "One row per metric in a Sigma table element. See AGENTS.SIGMA_METRIC."),
     ),
 }
 

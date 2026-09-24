@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+from agents_schema.agents_schema_writer import AGENTS_SCHEMA
 from agents_schema.config import ConfigError
 from agents_schema.destinations import (
     BigQueryDestination,
@@ -14,7 +15,6 @@ from agents_schema.destinations import (
     _merge_sql,
     open_destination,
 )
-from agents_schema.agents_schema_writer import AGENTS_SCHEMA
 from agents_schema.root import ROOT
 
 
