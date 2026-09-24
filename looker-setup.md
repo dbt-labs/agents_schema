@@ -83,6 +83,25 @@ credentials_json:
 `location` is optional. The service account needs permission to create datasets
 and create, load, query, update, and delete tables in the destination project.
 
+Alternatively, use Application Default Credentials (ADC) instead of a static
+key — for example with GitHub Actions Workload Identity Federation via
+[`google-github-actions/auth@v2`](https://github.com/google-github-actions/auth),
+which requires no long-lived secret:
+
+```yaml
+type: bigquery
+project_id: my-gcp-project
+location: US
+auth_method: adc
+```
+
+The step that runs before this one must leave Application Default Credentials
+resolvable in the environment. `google-github-actions/auth` with
+`workload_identity_provider` and `service_account` inputs sets
+`GOOGLE_APPLICATION_CREDENTIALS` to a short-lived credential file, which
+`google.auth.default()` picks up automatically. The impersonated service
+account needs the same dataset/table permissions listed above.
+
 </details>
 
 ## Run the Looker Sync Workflow

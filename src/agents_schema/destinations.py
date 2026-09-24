@@ -79,7 +79,22 @@ class BigQueryDestination(BigQueryAgentsSchemaWriter):
                 if config is None:
                     raise ConfigError("BigQueryDestination requires config or client")
                 credentials_info, project_id, location = _bigquery_credentials(config)
-            credentials = Credentials.from_service_account_info(credentials_info)
+
+            if credentials_info is None:
+                import google.auth
+                import google.auth.exceptions
+
+                try:
+                    credentials, _ = google.auth.default(
+                        scopes=["https://www.googleapis.com/auth/bigquery"]
+                    )
+                except google.auth.exceptions.DefaultCredentialsError as e:
+                    raise ConfigError(
+                        "WAREHOUSE_CREDENTIALS.auth_method is 'adc' but no Application "
+                        f"Default Credentials were found: {e}"
+                    ) from e
+            else:
+                credentials = Credentials.from_service_account_info(credentials_info)
             client = bigquery.Client(credentials=credentials, project=project_id)
         if project_id is None:
             raise ConfigError("BigQueryDestination requires project_id")
@@ -209,17 +224,38 @@ def _databricks_connect_kwargs_from_secret(destination: dict[str, Any]) -> dict[
     }
 
 
-def _bigquery_credentials(cfg: dict[str, Any]) -> tuple[dict[str, Any], str, str | None]:
+def _bigquery_credentials(cfg: dict[str, Any]) -> tuple[dict[str, Any] | None, str, str | None]:
     destination = warehouse_credentials_from_env()
     if destination.get("type") not in {"bigquery", "big_query"}:
         raise ConfigError("WAREHOUSE_CREDENTIALS.type must be bigquery")
     return _bigquery_credentials_from_secret(destination)
 
 
-def _bigquery_credentials_from_secret(destination: dict[str, Any]) -> tuple[dict[str, Any], str, str | None]:
+def _bigquery_credentials_from_secret(
+    destination: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str, str | None]:
     project_id = destination.get("project_id") or destination.get("projectId") or destination.get("project")
     if not project_id:
         raise ConfigError("WAREHOUSE_CREDENTIALS missing keys: project_id")
+
+    auth_method = destination.get("auth_method")
+    if auth_method is not None and auth_method not in ("adc", "service_account"):
+        raise ConfigError(
+            f"WAREHOUSE_CREDENTIALS.auth_method must be 'adc' or 'service_account', got {auth_method!r}"
+        )
+    if auth_method == "adc":
+        conflicting = [
+            name
+            for name in ("credentials_json", "credentialsJson", "private_key", "client_email")
+            if destination.get(name)
+        ]
+        if conflicting:
+            raise ConfigError(
+                "WAREHOUSE_CREDENTIALS.auth_method is 'adc'; remove "
+                + ", ".join(sorted(conflicting))
+                + " (service-account fields are ignored and would be misleading to keep)"
+            )
+        return None, str(project_id), _optional_string(destination.get("location"))
 
     credentials_info = destination.get("credentials_json") or destination.get("credentialsJson")
     if isinstance(credentials_info, str):

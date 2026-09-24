@@ -12,6 +12,7 @@ from agents_schema.destinations import (
     open_destination,
 )
 from agents_schema.agents_schema_writer import AGENTS_SCHEMA
+from agents_schema.config import ConfigError
 from agents_schema.root import ROOT
 
 
@@ -158,6 +159,61 @@ class DestinationSqlTests(unittest.TestCase):
         self.assertEqual(project_id, "analytics-project")
         self.assertEqual(credentials["project_id"], "analytics-project")
         self.assertEqual(credentials["private_key"], "key")
+
+    def test_bigquery_credentials_adc_short_circuits_service_account_lookup(self):
+        credentials, project_id, location = _bigquery_credentials_from_secret(
+            {
+                "type": "bigquery",
+                "project_id": "analytics-project",
+                "auth_method": "adc",
+            }
+        )
+
+        self.assertIsNone(credentials)
+        self.assertEqual(project_id, "analytics-project")
+        self.assertIsNone(location)
+
+    def test_bigquery_credentials_adc_rejects_unknown_auth_method(self):
+        with self.assertRaises(ConfigError):
+            _bigquery_credentials_from_secret(
+                {
+                    "type": "bigquery",
+                    "project_id": "analytics-project",
+                    "auth_method": "oops",
+                }
+            )
+
+    def test_bigquery_credentials_adc_rejects_leftover_service_account_fields(self):
+        with self.assertRaises(ConfigError):
+            _bigquery_credentials_from_secret(
+                {
+                    "type": "bigquery",
+                    "project_id": "analytics-project",
+                    "auth_method": "adc",
+                    "credentials_json": {
+                        "private_key": "key",
+                        "client_email": "bot@example.com",
+                    },
+                }
+            )
+
+    def test_bigquery_destination_uses_adc_when_credentials_are_none(self):
+        fake_credentials = object()
+        with (
+            patch(
+                "agents_schema.destinations._bigquery_credentials",
+                return_value=(None, "analytics-project", "US"),
+            ),
+            patch(
+                "google.auth.default",
+                return_value=(fake_credentials, "analytics-project"),
+            ) as auth_default,
+            patch("google.cloud.bigquery.Client") as client_cls,
+        ):
+            BigQueryDestination(config={"type": "bigquery"})
+
+        auth_default.assert_called_once()
+        client_cls.assert_called_once_with(credentials=fake_credentials, project="analytics-project")
 
     def test_bigquery_destination_accepts_explicit_client(self):
         client = object()
