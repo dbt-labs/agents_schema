@@ -22,6 +22,19 @@ on:
         type: string
         required: false
         default: ''
+      workload-identity-provider:
+        description: >
+          Workload Identity Federation provider resource name for keyless BigQuery auth
+          (WAREHOUSE_CREDENTIALS.auth_method: adc). Requires service-account too. Leave
+          unset to authenticate with WAREHOUSE_CREDENTIALS alone.
+        type: string
+        required: false
+        default: ''
+      service-account:
+        description: 'Google service account email to impersonate via Workload Identity Federation'
+        type: string
+        required: false
+        default: ''
     secrets:
       WAREHOUSE_CREDENTIALS:
         required: true
@@ -30,6 +43,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   ingest:
@@ -44,6 +58,13 @@ jobs:
         with:
           workflow-ref: ${{ job.workflow_ref }}
           workflow-sha: ${{ job.workflow_sha }}
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        if: inputs.workload-identity-provider != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ inputs.workload-identity-provider }}
+          service_account: ${{ inputs.service-account }}
 
       - name: Run dbt ingestion
         uses: $/.github/actions/agents-schema-dbt

@@ -83,6 +83,25 @@ credentials_json:
 `location` is optional. The service account needs permission to create datasets
 and create, load, query, update, and delete tables in the destination project.
 
+Alternatively, use Application Default Credentials (ADC) instead of a static
+key — for example with GitHub Actions Workload Identity Federation via
+[`google-github-actions/auth@v2`](https://github.com/google-github-actions/auth),
+which requires no long-lived secret:
+
+```yaml
+type: bigquery
+project_id: my-gcp-project
+location: US
+auth_method: adc
+```
+
+The step that runs before this one must leave Application Default Credentials
+resolvable in the environment. `google-github-actions/auth` with
+`workload_identity_provider` and `service_account` inputs sets
+`GOOGLE_APPLICATION_CREDENTIALS` to a short-lived credential file, which
+`google.auth.default()` picks up automatically. The impersonated service
+account needs the same dataset/table permissions listed above.
+
 </details>
 
 ## Run the OSI Sync Workflow
@@ -114,6 +133,32 @@ files. The example uses `osi`; change it to match your repository. With
 ```text
 osi/*.osi.yaml
 ```
+
+### Using Workload Identity Federation
+
+To authenticate with `WAREHOUSE_CREDENTIALS.auth_method: adc` instead of a BigQuery
+service account key, grant the job `id-token: write` and pass the Workload Identity
+Federation inputs:
+
+```yaml
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  agents-schema-osi:
+    uses: dbt-labs/agents_schema/.github/workflows/agents-schema-osi.yml@v0
+    with:
+      osi-dir: osi
+      workload-identity-provider: "projects/123/locations/global/workloadIdentityPools/my-pool/providers/my-provider"
+      service-account: "agents-schema@my-gcp-project.iam.gserviceaccount.com"
+    secrets:
+      WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
+```
+
+`WAREHOUSE_CREDENTIALS` still needs `type: bigquery`, `project_id`, and
+`auth_method: adc` (see the BigQuery setup details above); it just no longer needs
+a service account key.
 
 Each `*.osi.yaml` file is validated against the vendored OSI JSON schema before
 ingest; an invalid file fails the run with the offending path rather than writing
