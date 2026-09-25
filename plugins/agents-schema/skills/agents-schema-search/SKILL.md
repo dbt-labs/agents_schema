@@ -29,6 +29,11 @@ Required first query:
 SELECT * FROM AGENTS.ROOT ORDER BY provider, key;
 ```
 
+These are the canonical physical names created by the package. Use uppercase
+for the `AGENTS` schema and table identifiers on every destination, including
+case-sensitive destinations such as ClickHouse and BigQuery. For example, use
+`AGENTS.DBT_MODEL`.
+
 Then follow the provider guidance returned in the `content` column.
 
 If no rows are returned, or the AGENTS schema or the AGENTS.ROOT table is not
