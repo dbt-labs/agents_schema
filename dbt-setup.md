@@ -35,6 +35,40 @@ Password auth is also supported by replacing the private key fields with:
 password: your-password
 ```
 
+For keyless auth, use Snowflake workload identity federation with the GitHub
+Actions OIDC token. No password or private key is stored. First create a
+Snowflake service user that trusts your repository's token:
+
+```sql
+CREATE USER AGENTS_SCHEMA_BOT TYPE = SERVICE
+  WORKLOAD_IDENTITY = (
+    TYPE = OIDC
+    ISSUER = 'https://token.actions.githubusercontent.com'
+    SUBJECT = 'repo:your-org/your-repo:ref:refs/heads/main'
+    OIDC_AUDIENCE_LIST = ('https://abc123.snowflakecomputing.com')
+  );
+```
+
+Then set `WAREHOUSE_CREDENTIALS` to:
+
+```yaml
+type: snowflake
+auth_method: workload_identity
+account: abc123
+user: AGENTS_SCHEMA_BOT
+warehouse: COMPUTE_WH
+database: ANALYTICS
+role: TRANSFORMER
+oidc_audience: https://abc123.snowflakecomputing.com   # must match OIDC_AUDIENCE_LIST; defaults to snowflakecomputing.com
+```
+
+The job that runs `agents-schema` needs `permissions: id-token: write`. The
+reusable workflows in this repository do not request it, so run the CLI from a
+step in your own workflow (for example `uvx agents-schema dbt ...`) to use this
+option. `SUBJECT` must match the token's `sub` claim exactly, so it is specific
+to a branch, tag, or environment. If login fails with error 394729, the message
+shows the `sub` Snowflake received; use that value as `SUBJECT`.
+
 </details>
 
 <details>

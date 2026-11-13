@@ -35,7 +35,7 @@ requires-dist = [
     { name = "google-cloud-bigquery", specifier = ">=3.0.0" },
     { name = "jsonschema", specifier = ">=4.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "snowflake-connector-python", specifier = ">=3.0.0" },
+    { name = "snowflake-connector-python", specifier = ">=3.17.0" },
 ]
 
 [[package]]

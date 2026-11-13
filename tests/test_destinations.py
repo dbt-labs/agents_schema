@@ -1,4 +1,6 @@
+import io
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 from agents_schema.agents_schema_writer import AGENTS_SCHEMA
@@ -12,7 +14,9 @@ from agents_schema.destinations import (
     _clickhouse_connect_kwargs_from_secret,
     _create_table_if_not_exists_sql,
     _databricks_connect_kwargs_from_secret,
+    _github_oidc_token,
     _merge_sql,
+    _snowflake_connect_kwargs_from_secret,
     open_destination,
 )
 from agents_schema.root import ROOT
@@ -311,3 +315,167 @@ class DestinationSqlTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SnowflakeWorkloadIdentityTests(unittest.TestCase):
+    BASE = {
+        "type": "snowflake",
+        "account": "acct",
+        "user": "BOT",
+        "warehouse": "WH",
+        "database": "DB",
+        "auth_method": "workload_identity",
+    }
+
+    def test_workload_identity_builds_oidc_connect_kwargs_without_static_credentials(self):
+        with patch("agents_schema.destinations._github_oidc_token", return_value="jwt") as fetch:
+            kwargs = _snowflake_connect_kwargs_from_secret({**self.BASE, "oidc_audience": "aud"})
+
+        fetch.assert_called_once_with("aud")
+        self.assertEqual(kwargs["authenticator"], "WORKLOAD_IDENTITY")
+        self.assertEqual(kwargs["workload_identity_provider"], "OIDC")
+        self.assertEqual(kwargs["token"], "jwt")
+        self.assertNotIn("password", kwargs)
+        self.assertNotIn("private_key", kwargs)
+
+    def test_workload_identity_rejects_static_credentials(self):
+        with self.assertRaisesRegex(ConfigError, "remove password"):
+            _snowflake_connect_kwargs_from_secret({**self.BASE, "password": "pw"})
+
+    def test_unknown_auth_method_is_rejected(self):
+        with self.assertRaisesRegex(ConfigError, "auth_method must be .workload_identity."):
+            _snowflake_connect_kwargs_from_secret({**self.BASE, "auth_method": "magic"})
+
+    def test_github_oidc_token_requires_actions_environment(self):
+        with patch.dict("os.environ", {}, clear=True):
+            with self.assertRaisesRegex(ConfigError, "id-token: write"):
+                _github_oidc_token(None)
+
+    def test_password_auth_is_unchanged(self):
+        kwargs = _snowflake_connect_kwargs_from_secret(
+            {k: v for k, v in self.BASE.items() if k != "auth_method"} | {"password": "pw"}
+        )
+        self.assertEqual(kwargs["password"], "pw")
+        self.assertNotIn("authenticator", kwargs)
+
+    def _fetch_token(self, urlopen_result=None, side_effect=None, audience=None):
+        env = {
+            "ACTIONS_ID_TOKEN_REQUEST_URL": "https://actions.example/token?api-version=2",
+            "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "req",
+        }
+        with patch.dict("os.environ", env, clear=True), patch("time.sleep"), patch(
+            "urllib.request.urlopen", return_value=urlopen_result, side_effect=side_effect
+        ) as urlopen:
+            return _github_oidc_token(audience), urlopen
+
+    def test_github_oidc_token_requests_audience(self):
+        token, urlopen = self._fetch_token(
+            io.BytesIO(b'{"value": "jwt"}'), audience="https://acct.snowflakecomputing.com"
+        )
+
+        self.assertEqual(token, "jwt")
+        request = urlopen.call_args.args[0]
+        self.assertIn("audience=https%3A%2F%2Facct.snowflakecomputing.com", request.full_url)
+        self.assertEqual(request.get_header("Authorization"), "Bearer req")
+
+    def test_github_oidc_token_defaults_to_snowflake_audience(self):
+        token, urlopen = self._fetch_token(io.BytesIO(b'{"value": "jwt"}'))
+
+        self.assertEqual(token, "jwt")
+        self.assertIn("audience=snowflakecomputing.com", urlopen.call_args.args[0].full_url)
+
+    def test_github_oidc_token_request_failure_is_a_config_error(self):
+        with self.assertRaisesRegex(ConfigError, "Failed to fetch GitHub Actions OIDC token"):
+            self._fetch_token(side_effect=OSError("boom"))
+
+    def test_github_oidc_token_response_without_value_is_a_config_error(self):
+        with self.assertRaisesRegex(ConfigError, "did not include a token"):
+            self._fetch_token(io.BytesIO(b"{}"))
+
+    @staticmethod
+    def _http_error(code):
+        return urllib.error.HTTPError("https://actions.example/token", code, "err", {}, None)
+
+    def test_github_oidc_token_http_client_error_is_not_retried(self):
+        calls = []
+
+        def forbidden(*args, **kwargs):
+            calls.append(1)
+            raise self._http_error(403)
+
+        with self.assertRaisesRegex(ConfigError, "HTTP 403"):
+            self._fetch_token(side_effect=forbidden)
+        self.assertEqual(len(calls), 1)
+
+    def test_github_oidc_token_server_error_is_retried_then_fails(self):
+        urlopen_calls = []
+
+        def fail(*args, **kwargs):
+            urlopen_calls.append(1)
+            raise self._http_error(503)
+
+        with self.assertRaisesRegex(ConfigError, "HTTP 503"):
+            self._fetch_token(side_effect=fail)
+        self.assertEqual(len(urlopen_calls), 3)
+
+    def test_github_oidc_token_recovers_from_a_transient_failure(self):
+        responses = [self._http_error(502), io.BytesIO(b'{"value": "jwt"}')]
+
+        def respond(*args, **kwargs):
+            result = responses.pop(0)
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        token, _ = self._fetch_token(side_effect=respond)
+        self.assertEqual(token, "jwt")
+
+    def test_github_oidc_token_rejects_non_https_request_url(self):
+        env = {
+            "ACTIONS_ID_TOKEN_REQUEST_URL": "http://actions.example/token",
+            "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "req",
+        }
+        with patch.dict("os.environ", env, clear=True), self.assertRaisesRegex(ConfigError, "https"):
+            _github_oidc_token(None)
+
+    def test_github_oidc_token_response_that_is_not_an_object_is_rejected(self):
+        with self.assertRaisesRegex(ConfigError, "did not include a token"):
+            self._fetch_token(io.BytesIO(b'["jwt"]'))
+
+    def test_workload_identity_rejects_blank_audience(self):
+        with self.assertRaisesRegex(ConfigError, "oidc_audience"):
+            _snowflake_connect_kwargs_from_secret({**self.BASE, "oidc_audience": "  "})
+
+    def test_destination_explains_unrecognized_oidc_token_and_masks_it(self):
+        import snowflake.connector.errors as sf_errors
+
+        error = sf_errors.DatabaseError(msg="subject 'sub-x' not recognized token=SECRET.JWT", errno=394729)
+        kwargs = {"authenticator": "WORKLOAD_IDENTITY", "token": "SECRET.JWT"}
+        with patch("snowflake.connector.connect", side_effect=error):
+            with self.assertRaises(ConfigError) as ctx:
+                SnowflakeDestination(connect_kwargs=kwargs)
+
+        message = str(ctx.exception)
+        self.assertIn("sub-x", message)
+        self.assertIn("OIDC_AUDIENCE_LIST", message)
+        self.assertNotIn("SECRET.JWT", message)
+        self.assertIs(ctx.exception.__cause__, error)
+
+    def test_destination_leaves_other_snowflake_errors_untouched(self):
+        import snowflake.connector.errors as sf_errors
+
+        error = sf_errors.DatabaseError(msg="bad password", errno=390100)
+        with patch("snowflake.connector.connect", side_effect=error):
+            with self.assertRaises(sf_errors.DatabaseError):
+                SnowflakeDestination(connect_kwargs={"account": "a", "password": "p"})
+
+    def test_destination_explains_disallowed_audience(self):
+        import snowflake.connector.errors as sf_errors
+
+        error = sf_errors.DatabaseError(msg="JWT contains an invalid audience ('aud') claim", errno=394728)
+        with patch("snowflake.connector.connect", side_effect=error):
+            with self.assertRaises(ConfigError) as ctx:
+                SnowflakeDestination(connect_kwargs={"authenticator": "WORKLOAD_IDENTITY", "token": "t"})
+
+        self.assertIn("invalid audience", str(ctx.exception))
+        self.assertIn("oidc_audience", str(ctx.exception))
