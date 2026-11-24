@@ -1,4 +1,5 @@
 import io
+import traceback
 import unittest
 import urllib.error
 from unittest.mock import patch
@@ -403,8 +404,12 @@ class SnowflakeWorkloadIdentityTests(unittest.TestCase):
         message = str(ctx.exception)
         self.assertIn("sub-x", message)
         self.assertIn("OIDC_AUDIENCE_LIST", message)
+        self.assertIn("errno 394729", message)
         self.assertNotIn("SECRET.JWT", message)
-        self.assertIs(ctx.exception.__cause__, error)
+        self.assertIsNone(ctx.exception.__cause__)
+        self.assertIsNone(ctx.exception.__context__)
+        formatted = "".join(traceback.format_exception(ctx.exception))
+        self.assertNotIn("SECRET.JWT", formatted)
 
     def test_destination_leaves_other_snowflake_errors_untouched(self):
         import snowflake.connector.errors as sf_errors

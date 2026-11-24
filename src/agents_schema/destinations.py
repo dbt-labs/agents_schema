@@ -47,12 +47,15 @@ class SnowflakeDestination(SnowflakeAgentsSchemaWriter):
             if config is None:
                 raise ConfigError("SnowflakeDestination requires config or connect_kwargs")
             connect_kwargs = _snowflake_connect_kwargs(config)
+        login_error: ConfigError | None = None
         try:
             connection = snowflake.connector.connect(**connect_kwargs)
         except snowflake.connector.errors.Error as e:
             if connect_kwargs.get("authenticator") != "WORKLOAD_IDENTITY":
                 raise
-            raise _workload_identity_error(e, connect_kwargs.get("token")) from e
+            login_error = _workload_identity_error(e, connect_kwargs.get("token"))
+        if login_error is not None:
+            raise login_error
         super().__init__(connection)
 
 
@@ -286,8 +289,16 @@ def _workload_identity_error(error: Exception, token: str | None) -> ConfigError
     message = str(getattr(error, "msg", None) or error)
     if token:
         message = message.replace(token, "***")
-    hint = _WORKLOAD_IDENTITY_HINTS.get(getattr(error, "errno", None))
-    detail = f"Snowflake workload identity login failed: {message}"
+    errno = getattr(error, "errno", None)
+    sqlstate = getattr(error, "sqlstate", None)
+    codes = ", ".join(
+        f"{label} {value}" for label, value in (("errno", errno), ("sqlstate", sqlstate)) if value
+    )
+    hint = _WORKLOAD_IDENTITY_HINTS.get(errno)
+    detail = "Snowflake workload identity login failed"
+    if codes:
+        detail += f" ({codes})"
+    detail += f": {message}"
     return ConfigError(f"{detail}\n{hint}" if hint else detail)
 
 
