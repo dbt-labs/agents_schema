@@ -404,7 +404,6 @@ class SnowflakeWorkloadIdentityTests(unittest.TestCase):
         message = str(ctx.exception)
         self.assertIn("sub-x", message)
         self.assertIn("OIDC_AUDIENCE_LIST", message)
-        self.assertIn("errno 394729", message)
         self.assertNotIn("SECRET.JWT", message)
         self.assertIsNone(ctx.exception.__cause__)
         self.assertIsNone(ctx.exception.__context__)

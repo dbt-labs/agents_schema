@@ -289,16 +289,8 @@ def _workload_identity_error(error: Exception, token: str | None) -> ConfigError
     message = str(getattr(error, "msg", None) or error)
     if token:
         message = message.replace(token, "***")
-    errno = getattr(error, "errno", None)
-    sqlstate = getattr(error, "sqlstate", None)
-    codes = ", ".join(
-        f"{label} {value}" for label, value in (("errno", errno), ("sqlstate", sqlstate)) if value
-    )
-    hint = _WORKLOAD_IDENTITY_HINTS.get(errno)
-    detail = "Snowflake workload identity login failed"
-    if codes:
-        detail += f" ({codes})"
-    detail += f": {message}"
+    hint = _WORKLOAD_IDENTITY_HINTS.get(getattr(error, "errno", None))
+    detail = f"Snowflake workload identity login failed: {message}"
     return ConfigError(f"{detail}\n{hint}" if hint else detail)
 
 
