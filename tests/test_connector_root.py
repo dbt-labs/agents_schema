@@ -95,7 +95,7 @@ class ConnectorRootTests(unittest.TestCase):
 
         with (
             patch("agents_schema.omni.open_destination", return_value=DestinationContext(dest)),
-            patch("agents_schema.omni._ingest"),
+            patch("agents_schema.omni._collect", return_value=omni._Rows(found=1, usable=1)),
             patch("builtins.print"),
         ):
             omni.run(cfg)
