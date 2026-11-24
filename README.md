@@ -262,7 +262,8 @@ tag such as `v0` moves to a newer release.
 
 The reusable workflows request `contents: read` and, for the optional Workload Identity
 Federation, `id-token: write`. A called workflow cannot be granted more than its caller, so the
-calling workflow (or job) must include:
+calling workflow (or job) must include the block below. (`agents-schema-snowflake-semantic` needs only
+`contents: read`; granting `id-token: write` to it is harmless.)
 
 ```yaml
 permissions:
