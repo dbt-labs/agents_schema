@@ -139,6 +139,10 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   agents-schema-dbt:
     uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0
@@ -147,6 +151,11 @@ jobs:
     secrets:
       WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
 ```
+
+Grant `contents: read` and `id-token: write` in the calling workflow, as shown. The reusable
+workflows use `id-token: write` for the optional Workload Identity Federation described below,
+and GitHub does not start a called workflow that requests more permission than its caller
+grants, so include it even if you do not use that option.
 
 `dbt-project-dir` is required — set it to the path of your dbt project (the
 directory that contains `dbt_project.yml`). The example uses `dbt_project`;
