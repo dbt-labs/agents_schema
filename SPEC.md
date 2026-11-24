@@ -282,11 +282,13 @@ JOIN AGENTS.DBT_MODEL m ON m.unique_id = lineage.node_id;
 
 The LookML ingestion scans `*.lkml` files and writes normalized view, dimension, measure, and explore tables. It parses top-level `view` and `explore` blocks, plus `dimension`, `dimension_group`, and `measure` blocks inside views.
 
+Files are read with the [`lkml`](https://github.com/joshtemple/lkml) parser. Refinements (`view: +orders`, `explore: +orders`) are merged onto their base by name, bases first, so a refinement never depends on which file sorts first. Several refinements of the same view are applied in file-path order (Looker applies them in include order, which is not modeled). A refinement whose base is not among the ingested files still produces its view and fields, with a warning. A file that cannot be parsed (for example a LookML dashboard file) is skipped with a warning that names the file, and the run summary counts skipped files; in GitHub Actions each warning is also an annotation. If no file can be parsed, the run fails before any table is touched. A file that cannot be read at all fails the run. Explore joins, `extends`, and `include` are not captured.
+
 Agents can use this extension to understand the BI and semantic surface exposed through Looker: which explores exist, which views back them, what fields are available, and which fields include human-authored `description` or `ai_context`.
 
 ### `AGENTS.LOOKML_VIEW`
 
-One row per LookML `view` block.
+One row per LookML view name (refinements are merged into their base).
 
 ```sql
 CREATE OR REPLACE TABLE AGENTS.LOOKML_VIEW (
@@ -367,7 +369,7 @@ CREATE OR REPLACE TABLE AGENTS.LOOKML_MEASURE (
 
 ### `AGENTS.LOOKML_EXPLORE`
 
-One row per LookML `explore` block.
+One row per LookML explore name (refinements are merged into their base).
 
 ```sql
 CREATE OR REPLACE TABLE AGENTS.LOOKML_EXPLORE (

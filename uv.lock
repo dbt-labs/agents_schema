@@ -21,8 +21,10 @@ dependencies = [
     { name = "clickhouse-connect" },
     { name = "cryptography" },
     { name = "databricks-sql-connector" },
+    { name = "google-auth" },
     { name = "google-cloud-bigquery" },
     { name = "jsonschema" },
+    { name = "lkml" },
     { name = "pyyaml" },
     { name = "snowflake-connector-python" },
 ]
@@ -32,8 +34,10 @@ requires-dist = [
     { name = "clickhouse-connect", specifier = ">=0.8.0" },
     { name = "cryptography", specifier = ">=3.1.0" },
     { name = "databricks-sql-connector", specifier = ">=3.0.0,<5" },
+    { name = "google-auth", specifier = ">=2.0" },
     { name = "google-cloud-bigquery", specifier = ">=3.0.0" },
     { name = "jsonschema", specifier = ">=4.0" },
+    { name = "lkml", specifier = ">=1.3.5,<2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "snowflake-connector-python", specifier = ">=3.0.0" },
 ]
@@ -708,6 +712,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/19/74/a633ee74eb36c44aa6d1095e7cc5569bebf04342ee146178e2d36600708b/jsonschema_specifications-2025.9.1.tar.gz", hash = "sha256:b540987f239e745613c7a9176f3edb72b832a4ac465cf02712288397832b5e8d", size = 32855, upload-time = "2025-09-08T01:34:59.186Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl", hash = "sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe", size = 18437, upload-time = "2025-09-08T01:34:57.871Z" },
+]
+
+[[package]]
+name = "lkml"
+version = "1.3.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bf/18/18a3d0281c5e209156b877796096d4ac7259f03465409673056386c99221/lkml-1.3.7.tar.gz", hash = "sha256:51dc9f1b7e74cd7a00e0dbbf06fb573952015328f1f4a3a0730d444444a8ae7a", size = 28763, upload-time = "2025-01-31T02:30:35.472Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c7/15/e7124d4ec54fdcafa801b55d6b67d6196ed6c8a0de554e1a8b67b66fec65/lkml-1.3.7-py2.py3-none-any.whl", hash = "sha256:ce54c517f81fbd21d452038be9e2504fa02951a5bc30f7d7f1eb552c1f3f2b39", size = 23062, upload-time = "2025-01-31T02:30:34.377Z" },
 ]
 
 [[package]]
