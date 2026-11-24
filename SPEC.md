@@ -143,7 +143,7 @@ The current package delivers one table family per metadata source:
 | Skills | `AGENTS.SKILL_USE` |
 | Snowflake Semantic | `AGENTS.ROOT` only (pointer rows; no additional tables) |
 
-Each ingestion replaces its own table family with `CREATE OR REPLACE TABLE` and then inserts the rows parsed from the source metadata.
+Each ingestion replaces its own table family with `CREATE OR REPLACE TABLE` and then inserts the rows parsed from the source metadata. The skills ingestion is the exception: it shares `AGENTS.ROOT` and `AGENTS.SKILL_USE` with other publishers, so it reconciles only its own provider's rows (see [Source: Skills](#source-skills)).
 
 ---
 
@@ -152,6 +152,8 @@ Each ingestion replaces its own table family with `CREATE OR REPLACE TABLE` and 
 The skills ingestion reads markdown files and publishes each file as a skill row in `AGENTS.ROOT`. It also parses compliant `uses` frontmatter into `AGENTS.SKILL_USE` so consumers can quickly find which skills may use a schema or table.
 
 Skill rows are stored in `AGENTS.ROOT` under the publisher passed to the CLI. The skills CLI defaults to `--provider user`. For example, `skills/revenue/arr.md` without an explicit provider is published as `(user, skill/revenue/arr)`, while the same file with `--provider fivetran` is published as `(fivetran, skill/revenue/arr)`.
+
+Each run keeps that publisher's skills in sync with the directory: a markdown file removed from the repository has its `AGENTS.ROOT` row removed on the next run. Only rows whose `provider` is the publisher and whose `key` starts with `skill/` are ever removed. The publisher's other rows (for example `(user, costs)`), other publishers' rows, and other publishers' `AGENTS.SKILL_USE` rows are left alone. The provider name `skills` is reserved for the built-in skill and cannot be passed to `--provider`. Because a run removes the publisher's skills that are no longer in the directory, each `--provider` value should be published from exactly one skills directory: two directories published under the same provider (for example two teams both using the default `user`) will remove each other's skills, and concurrent runs for the same provider can drop rows non-deterministically.
 
 ### `AGENTS.SKILL_USE`
 
@@ -675,7 +677,7 @@ CREATE OR REPLACE TABLE AGENTS.SIGMA_METRIC (
 
 The Snowflake Semantic ingestion publishes pointer rows into `AGENTS.ROOT` for one or more named native Snowflake semantic views. It does not create additional `AGENTS.*` tables — the semantic definition (dimensions, metrics, relationships, and query behavior) lives in Snowflake itself and should be inspected there.
 
-Each semantic view produces one row in `AGENTS.ROOT` under provider `snowflake_semantic`. The key convention is `semantic_view/<fully_qualified_name>`.
+Each semantic view produces one row in `AGENTS.ROOT` under provider `snowflake_semantic`. The key convention is `semantic_view/<fully_qualified_name>`. A view removed from the configured list has its pointer row removed on the next run; the overview row is not affected. Every run is authoritative for the whole `semantic_view/` slice, so list all views in one invocation: a second invocation with a different `--semantic-view` removes the first one's pointers.
 
 The ingestion also publishes an overview row:
 

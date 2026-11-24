@@ -11,8 +11,8 @@ from google.api_core.exceptions import Conflict, Forbidden, NotFound
 from agents_schema.config import ConfigError
 
 from .base import AgentsSchemaWriter
-from .schema import AGENTS_SCHEMA, Column, TableSchema
-from .utils import rows_json_for_table
+from .schema import AGENTS_SCHEMA, Column, RowScope, TableSchema
+from .utils import check_rows_in_scope, rows_json_for_table, scope_terms
 
 LEGACY_AGENTS_SCHEMA = "agents"
 _COPYABLE_TABLE_TYPES = {"TABLE"}
@@ -126,22 +126,51 @@ class BigQueryAgentsSchemaWriter(AgentsSchemaWriter):
         finally:
             self._client.delete_table(staging_ref, not_found_ok=True)
 
-    def reconcile_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None:
+    def reconcile_rows(
+        self,
+        table: TableSchema,
+        rows: Iterable[tuple[Any, ...]],
+        scope: RowScope | None = None,
+    ) -> None:
+        rows = list(rows)
+        check_rows_in_scope(table, rows, scope)
         self.ensure_table(table)
         rows_json = rows_json_for_table(table, rows)
         if not rows_json:
-            self._client.query(f"DELETE FROM `{self._table_ref(table)}` WHERE TRUE").result()
+            if scope is None:
+                self._client.query(f"DELETE FROM `{self._table_ref(table)}` WHERE TRUE").result()
+            else:
+                scope_sql, query_config = self._scope_sql(scope, "")
+                self._client.query(
+                    f"DELETE FROM `{self._table_ref(table)}` WHERE {scope_sql}", job_config=query_config
+                ).result()
             return
         staging_ref = self._staging_ref(table)
         job_config = self._bigquery.LoadJobConfig(
             schema=[_bigquery_schema_field(self._bigquery, column) for column in table.columns],
             write_disposition=self._bigquery.WriteDisposition.WRITE_TRUNCATE,
         )
+        scope_sql, query_config = self._scope_sql(scope, "target.")
+        merge = self._merge_sql(table, staging_ref, delete_absent=True, scope_sql=scope_sql)
         try:
             self._client.load_table_from_json(rows_json, staging_ref, job_config=job_config).result()
-            self._client.query(self._merge_sql(table, staging_ref, delete_absent=True)).result()
+            if query_config is None:
+                self._client.query(merge).result()
+            else:
+                self._client.query(merge, job_config=query_config).result()
         finally:
             self._client.delete_table(staging_ref, not_found_ok=True)
+
+    def _scope_sql(self, scope: RowScope | None, prefix: str) -> tuple[str, Any]:
+        clauses, parameters = [], []
+        for index, (kind, column, value) in enumerate(scope_terms(scope)):
+            name = f"scope{index}"
+            target = f"{prefix}`{column}`"
+            clauses.append(f"{target} = @{name}" if kind == "eq" else f"STARTS_WITH({target}, @{name})")
+            parameters.append(self._bigquery.ScalarQueryParameter(name, "STRING", value))
+        if not parameters:
+            return "", None
+        return " AND ".join(clauses), self._bigquery.QueryJobConfig(query_parameters=parameters)
 
     def close(self) -> None:
         close = getattr(self._client, "close", None)
@@ -308,7 +337,9 @@ class BigQueryAgentsSchemaWriter(AgentsSchemaWriter):
     def _staging_ref(self, table: TableSchema) -> str:
         return f"{self._project_id}.{AGENTS_SCHEMA}._staging_{table.base_name}_{uuid4().hex}"
 
-    def _merge_sql(self, table: TableSchema, staging_ref: str, delete_absent: bool = False) -> str:
+    def _merge_sql(
+        self, table: TableSchema, staging_ref: str, delete_absent: bool = False, scope_sql: str = ""
+    ) -> str:
         if not table.primary_key:
             raise ConfigError("upsert requires a table primary key")
         columns = [column.name for column in table.columns]
@@ -318,7 +349,8 @@ class BigQueryAgentsSchemaWriter(AgentsSchemaWriter):
         insert_columns = ", ".join(f"`{column}`" for column in columns)
         insert_values = ", ".join(f"source.`{column}`" for column in columns)
         matched_sql = f"WHEN MATCHED THEN UPDATE SET {update_sql}\n" if update_sql else ""
-        delete_sql = "\nWHEN NOT MATCHED BY SOURCE THEN DELETE" if delete_absent else ""
+        scope_condition = f" AND {scope_sql}" if scope_sql else ""
+        delete_sql = f"\nWHEN NOT MATCHED BY SOURCE{scope_condition} THEN DELETE" if delete_absent else ""
         return f"""MERGE `{self._table_ref(table)}` AS target
 USING `{staging_ref}` AS source
 ON {on_sql}

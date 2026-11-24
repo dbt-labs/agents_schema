@@ -88,7 +88,10 @@ def _build_parser() -> argparse.ArgumentParser:
     skills_parser.add_argument(
         "--provider",
         default="user",
-        help="publisher name to use for AGENTS.ROOT skill rows",
+        help=(
+            "publisher name to use for AGENTS.ROOT skill rows; each provider value should be published "
+            "from exactly one skills directory, because a run removes that provider's skills it no longer lists"
+        ),
     )
 
     sigma_parser = sub.add_parser(

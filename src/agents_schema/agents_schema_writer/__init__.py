@@ -5,7 +5,7 @@ from .base import AgentsSchemaWriter
 from .bigquery import BigQueryAgentsSchemaWriter
 from .clickhouse import ClickHouseAgentsSchemaWriter
 from .databricks import DatabricksAgentsSchemaWriter
-from .schema import AGENTS_SCHEMA, Column, TableSchema
+from .schema import AGENTS_SCHEMA, Column, RowScope, TableSchema
 from .snowflake import SnowflakeAgentsSchemaWriter
 
 __all__ = [
@@ -15,6 +15,7 @@ __all__ = [
     "ClickHouseAgentsSchemaWriter",
     "Column",
     "DatabricksAgentsSchemaWriter",
+    "RowScope",
     "SnowflakeAgentsSchemaWriter",
     "TableSchema",
 ]

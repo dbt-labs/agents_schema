@@ -15,9 +15,12 @@ from agents_schema.agents_schema_writer import (
     BigQueryAgentsSchemaWriter,
     ClickHouseAgentsSchemaWriter,
     DatabricksAgentsSchemaWriter,
+    RowScope,
+    SnowflakeAgentsSchemaWriter,
 )
 from agents_schema.config import ConfigError
 from agents_schema.dbt import DBT_MODEL
+from agents_schema.root import ROOT
 
 
 class BigQueryAgentsSchemaWriterTests(unittest.TestCase):
@@ -554,6 +557,163 @@ class ClickHouseAgentsSchemaWriterTests(unittest.TestCase):
         )
         self.assertEqual(data[1][4], ["prefer the signed-in customer grain"])
         self.assertEqual(data[1][5], [])
+
+
+class RowScopeTests(unittest.TestCase):
+    def test_an_empty_scope_is_rejected_because_it_would_match_the_whole_table(self):
+        with self.assertRaisesRegex(ValueError, "at least one term"):
+            RowScope()
+
+    def test_an_empty_prefix_is_rejected_because_it_would_match_every_row(self):
+        with self.assertRaisesRegex(ValueError, "must not be empty"):
+            RowScope(equals=(("provider", "user"),), starts_with=(("key", ""),))
+
+
+class ScopedReconcileTests(unittest.TestCase):
+    """Reconciling one caller's slice of a shared table (one provider's skills in AGENTS.ROOT)."""
+
+    SCOPE = RowScope(equals=(("provider", "user"),), starts_with=(("key", "skill/"),))
+    ROWS = [("user", "skill/a", "A")]
+
+    def test_snowflake_deletes_only_in_scope_rows_that_are_absent(self):
+        calls = []
+        SnowflakeAgentsSchemaWriter(_fake_connection(calls)).reconcile_rows(ROOT, self.ROWS, scope=self.SCOPE)
+
+        sql, params = next(call for call in calls if call[0].startswith("DELETE FROM"))
+        self.assertIn("WHERE target.provider = %s AND STARTSWITH(target.key, %s) AND NOT EXISTS (", sql)
+        self.assertEqual(params, ("user", "skill/", "user", "skill/a"))
+
+    def test_snowflake_empty_scoped_reconcile_clears_only_the_slice(self):
+        calls = []
+        SnowflakeAgentsSchemaWriter(_fake_connection(calls)).reconcile_rows(ROOT, [], scope=self.SCOPE)
+
+        sql, params = next(call for call in calls if call[0].startswith("DELETE FROM"))
+        self.assertEqual(
+            sql, "DELETE FROM AGENTS.ROOT AS target\nWHERE target.provider = %s AND STARTSWITH(target.key, %s)"
+        )
+        self.assertEqual(params, ("user", "skill/"))
+
+    def test_snowflake_unscoped_reconcile_is_unchanged(self):
+        calls = []
+        writer = SnowflakeAgentsSchemaWriter(_fake_connection(calls))
+        writer.reconcile_rows(ROOT, self.ROWS)
+        writer.reconcile_rows(ROOT, [])
+
+        deletes = [call for call in calls if call[0].startswith("DELETE FROM")]
+        self.assertNotIn("STARTSWITH", deletes[0][0])
+        self.assertIn("WHERE NOT EXISTS (", deletes[0][0])
+        self.assertEqual(deletes[1], ("DELETE FROM AGENTS.ROOT", None))
+
+    def test_databricks_deletes_only_in_scope_rows_that_are_absent(self):
+        calls = []
+        DatabricksAgentsSchemaWriter(_fake_connection(calls)).reconcile_rows(ROOT, self.ROWS, scope=self.SCOPE)
+
+        sql, params = next(call for call in calls if call[0].startswith("DELETE FROM"))
+        self.assertIn("WHERE target.`provider` = ? AND startswith(target.`key`, ?) AND NOT EXISTS (", sql)
+        self.assertEqual(params, ["user", "skill/", "user", "skill/a"])
+
+    def test_databricks_empty_scoped_reconcile_clears_only_the_slice(self):
+        calls = []
+        DatabricksAgentsSchemaWriter(_fake_connection(calls)).reconcile_rows(ROOT, [], scope=self.SCOPE)
+
+        sql, params = next(call for call in calls if call[0].startswith("DELETE FROM"))
+        self.assertEqual(
+            sql, "DELETE FROM `AGENTS`.`ROOT` AS target\nWHERE target.`provider` = ? AND startswith(target.`key`, ?)"
+        )
+        self.assertEqual(params, ["user", "skill/"])
+
+    def test_bigquery_merge_deletes_only_in_scope_rows_with_bound_parameters(self):
+        calls = []
+        with _fake_bigquery_module():
+            BigQueryAgentsSchemaWriter(_FakeBigQueryClient(calls), "p").reconcile_rows(
+                ROOT, self.ROWS, scope=self.SCOPE
+            )
+
+        _, sql, config = next(call for call in calls if call[0] == "query")
+        self.assertIn(
+            "WHEN NOT MATCHED BY SOURCE AND target.`provider` = @scope0 "
+            "AND STARTS_WITH(target.`key`, @scope1) THEN DELETE",
+            sql,
+        )
+        self.assertEqual(
+            [parameter.args for parameter in config.kwargs["query_parameters"]],
+            [("scope0", "STRING", "user"), ("scope1", "STRING", "skill/")],
+        )
+
+    def test_bigquery_empty_scoped_reconcile_clears_only_the_slice(self):
+        calls = []
+        with _fake_bigquery_module():
+            BigQueryAgentsSchemaWriter(_FakeBigQueryClient(calls), "p").reconcile_rows(ROOT, [], scope=self.SCOPE)
+
+        _, sql, config = next(call for call in calls if call[0] == "query")
+        self.assertEqual(
+            sql, "DELETE FROM `p.AGENTS.ROOT` WHERE `provider` = @scope0 AND STARTS_WITH(`key`, @scope1)"
+        )
+        self.assertEqual(len(config.kwargs["query_parameters"]), 2)
+
+    def test_bigquery_unscoped_reconcile_sends_no_parameters(self):
+        calls = []
+        with _fake_bigquery_module():
+            BigQueryAgentsSchemaWriter(_FakeBigQueryClient(calls), "p").reconcile_rows(ROOT, self.ROWS)
+
+        _, sql, config = next(call for call in calls if call[0] == "query")
+        self.assertIn("WHEN NOT MATCHED BY SOURCE THEN DELETE", sql)
+        self.assertIsNone(config)
+
+    def test_clickhouse_deletes_only_in_scope_rows_that_are_absent(self):
+        calls = []
+        ClickHouseAgentsSchemaWriter(_FakeClickHouseClient(calls)).reconcile_rows(ROOT, self.ROWS, scope=self.SCOPE)
+
+        _, sql, _, params = next(call for call in calls if call[0] == "command" and "NOT (" in call[1])
+        self.assertIn(
+            "WHERE `provider` = {scope0:String} AND startsWith(`key`, {scope1:String}) "
+            "AND NOT ((`provider`, `key`) IN {keys:Array(Tuple(String, String))})",
+            sql,
+        )
+        self.assertEqual(params, {"scope0": "user", "scope1": "skill/", "keys": [("user", "skill/a")]})
+
+    def test_clickhouse_empty_scoped_reconcile_clears_only_the_slice_instead_of_truncating(self):
+        calls = []
+        ClickHouseAgentsSchemaWriter(_FakeClickHouseClient(calls)).reconcile_rows(ROOT, [], scope=self.SCOPE)
+
+        sqls = [call[1] for call in calls if call[0] == "command"]
+        self.assertFalse(any(sql.startswith("TRUNCATE") for sql in sqls))
+        delete = next(call for call in calls if call[0] == "command" and call[1].startswith("DELETE FROM"))
+        self.assertIn("WHERE `provider` = {scope0:String} AND startsWith(`key`, {scope1:String})", delete[1])
+        self.assertEqual(delete[3], {"scope0": "user", "scope1": "skill/"})
+
+    def test_scope_values_are_bound_never_interpolated_into_sql(self):
+        hostile = "x'; DROP TABLE AGENTS.ROOT; --"
+        scope = RowScope(equals=(("provider", hostile),), starts_with=(("key", "skill/"),))
+        rows = [(hostile, "skill/a", "A")]
+        sqls = []
+
+        calls = []
+        SnowflakeAgentsSchemaWriter(_fake_connection(calls)).reconcile_rows(ROOT, rows, scope=scope)
+        sqls += [call[0] for call in calls]
+        calls = []
+        DatabricksAgentsSchemaWriter(_fake_connection(calls)).reconcile_rows(ROOT, rows, scope=scope)
+        sqls += [call[0] for call in calls]
+        calls = []
+        with _fake_bigquery_module():
+            BigQueryAgentsSchemaWriter(_FakeBigQueryClient(calls), "p").reconcile_rows(ROOT, rows, scope=scope)
+        sqls += [call[1] for call in calls if call[0] == "query"]
+        calls = []
+        ClickHouseAgentsSchemaWriter(_FakeClickHouseClient(calls)).reconcile_rows(ROOT, rows, scope=scope)
+        sqls += [call[1] for call in calls if call[0] == "command"]
+
+        self.assertTrue(sqls)
+        for sql in sqls:
+            self.assertNotIn("DROP TABLE", sql)
+
+    def test_rows_outside_the_scope_are_rejected_before_anything_is_written(self):
+        for rows in ([("other", "skill/a", "A")], [("user", "costs", "not a skill")]):
+            with self.subTest(rows=rows):
+                calls = []
+                writer = ClickHouseAgentsSchemaWriter(_FakeClickHouseClient(calls))
+                with self.assertRaisesRegex(ConfigError, "outside the reconcile scope"):
+                    writer.reconcile_rows(ROOT, rows, scope=self.SCOPE)
+                self.assertEqual(calls, [])
 
 
 class _FakeClickHouseClient:

@@ -221,7 +221,10 @@ when publishing vendor-delivered skills.
 The `snowflake-semantic` command is an experimental pointer-only workflow. It
 publishes one `AGENTS.ROOT` row per `--semantic-view` value using keys such as
 `semantic_view/ANALYTICS.FINANCE.REVENUE`; the semantic view definition remains
-native to Snowflake.
+native to Snowflake. Each run is authoritative for the list it receives: a
+`semantic_view/...` pointer that is not in the current list is removed, so pass
+every view in one invocation (repeat `--semantic-view`) rather than running the
+command once per view.
 
 Skills are delivered as `AGENTS.ROOT` rows whose keys start with `skill/`:
 

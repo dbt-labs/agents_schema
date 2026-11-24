@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from typing import Any, Iterable
 
-from .schema import Column, TableSchema
+from agents_schema.config import ConfigError
+
+from .schema import Column, RowScope, TableSchema
 
 
 def bind_json_rows(table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
@@ -35,6 +37,29 @@ def primary_key_rows(table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> lis
         index for index, column in enumerate(table.columns) if column.name in table.primary_key
     ]
     return [tuple(row[index] for index in primary_key_indexes) for row in rows]
+
+
+def scope_terms(scope: RowScope | None) -> list[tuple[str, str, str]]:
+    """Flatten a scope into (kind, column, value) terms; kind is "eq" or "prefix"."""
+    if scope is None:
+        return []
+    return [("eq", column, value) for column, value in scope.equals] + [
+        ("prefix", column, value) for column, value in scope.starts_with
+    ]
+
+
+def check_rows_in_scope(table: TableSchema, rows: list[tuple[Any, ...]], scope: RowScope | None) -> None:
+    """Refuse rows outside the scope: they would be upserted but could never be reconciled away."""
+    terms = scope_terms(scope)
+    if not terms:
+        return
+    names = [column.name for column in table.columns]
+    for row in rows:
+        for kind, column, value in terms:
+            actual = row[names.index(column)]
+            inside = actual == value if kind == "eq" else isinstance(actual, str) and actual.startswith(value)
+            if not inside:
+                raise ConfigError(f"{table.base_name}: row {row[:2]} is outside the reconcile scope ({column} {kind} {value!r})")
 
 
 def rows_json_for_table(table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> list[dict[str, Any]]:
