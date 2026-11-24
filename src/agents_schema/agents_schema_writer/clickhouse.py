@@ -237,7 +237,7 @@ def _supports_json_type(client: Any) -> bool:
 
 
 def _clickhouse_type(column: Column, json_type: str) -> str:
-    if column.kind == "array":
+    if column.kind in {"array", "variant"}:
         return "Array(String)"
     if column.kind == "json":
         # Nullable(JSON) is not supported; missing values are written as {}.

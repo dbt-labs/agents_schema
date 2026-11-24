@@ -45,7 +45,7 @@ def rows_json_for_table(table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> 
 
 
 def databricks_placeholder(column: Column) -> str:
-    if column.kind == "array":
+    if column.kind in {"array", "variant"}:
         return "from_json(?, 'array<string>')"
     if column.kind == "json":
         return "parse_json(?)"

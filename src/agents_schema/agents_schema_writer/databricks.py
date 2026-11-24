@@ -159,7 +159,7 @@ class DatabricksAgentsSchemaWriter(AgentsSchemaWriter):
 
 
 def _databricks_type(column: Column) -> str:
-    if column.kind == "array":
+    if column.kind in {"array", "variant"}:
         return "ARRAY<STRING>"
     if column.kind == "json":
         return "VARIANT"

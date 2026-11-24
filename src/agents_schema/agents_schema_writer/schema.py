@@ -20,7 +20,9 @@ class TableSchema:
 
     @property
     def array_indexes(self) -> set[int]:
-        return {index for index, column in enumerate(self.columns) if column.kind == "array"}
+        # "variant" holds arbitrary JSON (a string, object, or array). Destinations without a
+        # better native type handle it exactly like "array", so both share this code path.
+        return {index for index, column in enumerate(self.columns) if column.kind in {"array", "variant"}}
 
     @property
     def json_indexes(self) -> set[int]:

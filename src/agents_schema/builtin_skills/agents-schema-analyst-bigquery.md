@@ -70,7 +70,10 @@ SQLEOF
 
 4. **Translate the formula to SQL.** OSI `expressions` is a list of `{dialect, expression}`
    objects. Choose the expression for BigQuery, falling back to `ANSI_SQL` only when compatible,
-   and use its `expression` value against the resolved table. **Always alias aggregate expressions**
+   and use its `expression` value against the resolved table. On BigQuery, `expressions` and
+   `ai_context` are native `JSON` columns: read an expression with
+   `JSON_VALUE(JSON_QUERY_ARRAY(expressions)[OFFSET(0)], '$.expression')` (and `'$.dialect'`).
+   **Always alias aggregate expressions**
    (e.g. `SUM(amount) AS value`) so `bq query --format=json` returns a named key instead of the
    auto-generated `f0_`. For LookML `sql`: `${TABLE}.col` → `col`;
    `${other_field}` → look that field up and substitute recursively; `{% if %}…{% else %} X {% endif %}`
