@@ -159,9 +159,9 @@ class DatabricksAgentsSchemaWriter(AgentsSchemaWriter):
 
 
 def _databricks_type(column: Column) -> str:
-    if column.kind in {"array", "variant"}:
+    if column.kind == "array":
         return "ARRAY<STRING>"
-    if column.kind == "json":
+    if column.kind in {"json", "variant"}:
         return "VARIANT"
     if column.kind == "boolean":
         return "BOOLEAN"

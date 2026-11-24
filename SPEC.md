@@ -20,7 +20,7 @@ The canonical spelling of every delivered object is uppercase: the `AGENTS` sche
 | `text` | `TEXT` | Longer free-form text. |
 | `boolean` | `BOOLEAN` | Boolean values. |
 | `array` | `VARIANT` | Inserted as JSON via `PARSE_JSON`. On BigQuery, a repeated `STRING` column, so use it only for lists of strings. |
-| `variant` | `VARIANT` | Arbitrary JSON: a string, an object, or an array. Inserted as JSON via `PARSE_JSON`. BigQuery stores it in a native `JSON` column. |
+| `variant` | `VARIANT` | Arbitrary JSON: a string, an object, or an array. Inserted as JSON via `PARSE_JSON`. BigQuery stores it in a native `JSON` column and Databricks in a `VARIANT` column. |
 
 ---
 

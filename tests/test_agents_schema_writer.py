@@ -591,7 +591,7 @@ class ClickHouseAgentsSchemaWriterTests(unittest.TestCase):
 
 
 class VariantColumnKindTests(unittest.TestCase):
-    """`variant` (arbitrary JSON) only changes BigQuery; other destinations treat it like `array`."""
+    """`variant` (arbitrary JSON) is native JSON on BigQuery and VARIANT on Databricks; the rest treat it like `array`."""
 
     def test_snowflake_stores_variant_as_variant_with_parse_json(self):
         from agents_schema.agents_schema_writer.snowflake import _create_table_sql, _merge_sql, _type_sql
@@ -614,17 +614,37 @@ class VariantColumnKindTests(unittest.TestCase):
         self.assertEqual(bound[5], "[]")  # unchanged: a missing value is stored as an empty list
         self.assertEqual(bind_json_rows(OSI_MODEL, [("m", "1.0", "d", [], "plain", None)])[0][4], '"plain"')
 
-    def test_databricks_and_clickhouse_mappings_are_unchanged(self):
-        from agents_schema.agents_schema_writer.clickhouse import _clickhouse_type
+    def test_databricks_stores_variant_as_variant_but_string_lists_stay_arrays(self):
         from agents_schema.agents_schema_writer.databricks import _databricks_type
         from agents_schema.agents_schema_writer.schema import Column
         from agents_schema.agents_schema_writer.utils import databricks_placeholder
 
         variant, array = Column("c", "variant"), Column("c", "array")
-        self.assertEqual(_databricks_type(variant), _databricks_type(array))
-        self.assertEqual(databricks_placeholder(variant), databricks_placeholder(array))
-        self.assertEqual(_clickhouse_type(variant, "JSON"), _clickhouse_type(array, "JSON"))
-        self.assertEqual(_clickhouse_type(variant, "JSON"), "Array(String)")
+        # ARRAY<STRING> via from_json turns an object or string ai_context into NULL; VARIANT keeps it
+        self.assertEqual(_databricks_type(variant), "VARIANT")
+        self.assertEqual(databricks_placeholder(variant), "parse_json(?)")
+        self.assertEqual(_databricks_type(array), "ARRAY<STRING>")
+        self.assertEqual(databricks_placeholder(array), "from_json(?, 'array<string>')")
+
+    def test_databricks_insert_parses_variant_columns_as_json_and_string_lists_as_arrays(self):
+        calls = []
+        structured = {"instructions": "x", "synonyms": ["a"]}
+        DatabricksAgentsSchemaWriter(_fake_connection(calls)).insert_rows(
+            OSI_FIELD,
+            [("ds", "f", "F", "", False, [{"dialect": "ANSI_SQL", "expression": "SUM(x)"}], ["a"], structured, None)],
+        )
+
+        sql, params = calls[0]
+        self.assertEqual(sql.count("parse_json(?)"), 3)  # expressions, ai_context, custom_extensions
+        self.assertEqual(sql.count("from_json(?, 'array<string>')"), 1)  # synonyms
+        self.assertIn('{"instructions": "x", "synonyms": ["a"]}', params)
+
+    def test_clickhouse_mapping_is_unchanged(self):
+        from agents_schema.agents_schema_writer.clickhouse import _clickhouse_type
+        from agents_schema.agents_schema_writer.schema import Column
+
+        self.assertEqual(_clickhouse_type(Column("c", "variant"), "JSON"), "Array(String)")
+        self.assertEqual(_clickhouse_type(Column("c", "variant"), "JSON"), _clickhouse_type(Column("c", "array"), "JSON"))
 
 
 class _FakeClickHouseClient:

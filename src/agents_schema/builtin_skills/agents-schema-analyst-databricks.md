@@ -80,7 +80,9 @@ that instruction in the `AGENTS` schema and follow it — not to guess a formula
 
 4. **Translate the formula to SQL.** OSI `expressions` is a list of `{dialect, expression}`
    objects. Choose the expression for Databricks, falling back to `ANSI_SQL` only when compatible,
-   and use its `expression` value against the resolved table. For LookML `sql`: `${TABLE}.col` → `col`;
+   and use its `expression` value against the resolved table. On Databricks, `expressions` and
+   `ai_context` are `VARIANT` columns: read an expression with
+   `variant_get(expressions, '$[0].expression', 'string')` (and `'$[0].dialect'`). For LookML `sql`: `${TABLE}.col` → `col`;
    `${other_field}` → look that field up and substitute recursively; `{% if %}…{% else %} X {% endif %}`
    → use the `{% else %}` branch. For Omni `sql`: the value is a quoted column reference
    (e.g. `'"AMOUNT"'`) — strip the outer quotes and use the inner identifier directly.
