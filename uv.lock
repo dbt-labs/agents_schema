@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -20,6 +20,7 @@ source = { editable = "." }
 dependencies = [
     { name = "clickhouse-connect" },
     { name = "cryptography" },
+    { name = "databricks-sdk" },
     { name = "databricks-sql-connector" },
     { name = "google-auth" },
     { name = "google-cloud-bigquery" },
@@ -38,6 +39,7 @@ dev = [
 requires-dist = [
     { name = "clickhouse-connect", specifier = ">=0.8.0" },
     { name = "cryptography", specifier = ">=3.1.0" },
+    { name = "databricks-sdk", specifier = ">=0.55.0" },
     { name = "databricks-sql-connector", specifier = ">=3.0.0,<5" },
     { name = "google-auth", specifier = ">=2.0" },
     { name = "google-cloud-bigquery", specifier = ">=3.0.0" },
@@ -168,11 +170,11 @@ wheels = [
 
 [[package]]
 name = "certifi"
-version = "2026.5.20"
+version = "2026.11.20"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f3/ce/ee2ecad540810a79593028e88299baeae54d346cc7a0d94b6199988b89b1/certifi-2026.5.20.tar.gz", hash = "sha256:69dea482ab64caa7b9f6aba1c6bf48bb6a5448d1c0f1b17ab42ad8c763a5344d", size = 135422, upload-time = "2026-05-20T11:46:50.073Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/51/33/4cd27639502f010084bcef7a2036391dd637439901341ce1a530f36f6e51/certifi-2026.11.20.tar.gz", hash = "sha256:af1cb240a8133f105aa52684a3a3258339d7f2fd0bd4e2812698ff5cf5588c4e", size = 128901, upload-time = "2026-11-20T23:37:49.522Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/59/8c/57e832b7af6d7c5abe66eb3fbe3a3a32f4d11ea23a1aa7131371035be991/certifi-2026.5.20-py3-none-any.whl", hash = "sha256:3c52e209ba0a4ad7aebe60436a4ab349c39e1e602e8c134221e546902ad25897", size = 134134, upload-time = "2026-05-20T11:46:48.578Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/39/5eec3296860b94ac20bb8ed807725b88f6adfab3f343df592afd975f5f86/certifi-2026.11.20-py3-none-any.whl", hash = "sha256:7422df25243767b9877031a2248cb14d09ddac9beee846f4cef3d5c9191d488f", size = 127913, upload-time = "2026-11-20T23:37:48.117Z" },
 ]
 
 [[package]]
@@ -460,6 +462,22 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/3b/f2/5a72274ca9f1b2a8b44a662ee0bf1b435909deb473d6f97bcd035bcdbc71/cryptography-48.0.0-pp311-pypy311_pp73-manylinux_2_34_aarch64.whl", hash = "sha256:ecde28a596bead48b0cfd2a1b4416c3d43074c2d785e3a398d7ec1fc4d0f7fbb", size = 4636797, upload-time = "2026-05-04T22:59:24.912Z" },
     { url = "https://files.pythonhosted.org/packages/b4/e1/48cedb2fe63626e91ded1edad159e2a4fb8b6906c4425eb7749673077ce7/cryptography-48.0.0-pp311-pypy311_pp73-manylinux_2_34_x86_64.whl", hash = "sha256:4defde8685ae324a9eb9d818717e93b4638ef67070ac9bc15b8ca85f63048355", size = 4666800, upload-time = "2026-05-04T22:59:27.474Z" },
     { url = "https://files.pythonhosted.org/packages/a2/ca/7e8365deec19afb2b2c7be7c1c0aa8f99633b54e90c570999acda93260fc/cryptography-48.0.0-pp311-pypy311_pp73-win_amd64.whl", hash = "sha256:db63bf618e5dea46c07de12e900fe1cdd2541e6dc9dbae772a70b7d4d4765f6a", size = 3739536, upload-time = "2026-05-04T22:59:29.61Z" },
+]
+
+[[package]]
+name = "databricks-sdk"
+version = "0.170.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "certifi" },
+    { name = "google-auth" },
+    { name = "protobuf" },
+    { name = "requests" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2d/36/89041fa688a579634c5d97ce9b1e5663ae4896110279c144d7f1476bdcee/databricks_sdk-0.170.0.tar.gz", hash = "sha256:256ff31fc6ad12dbdd11cfef474c81e9cfcbe018cce35ea460f2cbe9bc6fe0dd", size = 1357571, upload-time = "2026-11-23T04:26:39.147Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d6/b3/69d37f32cd517e3d7997d5ac2b26cca1b1d9edcb7d0f140a17c34fa7881d/databricks_sdk-0.170.0-py3-none-any.whl", hash = "sha256:e64dbeb663cd46b6e3bf396e59e910393a3447ebf14d8cfdaa19bf7de5bf06d5", size = 1300171, upload-time = "2026-11-23T04:26:37.254Z" },
 ]
 
 [[package]]

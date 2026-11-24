@@ -2,7 +2,7 @@ import io
 import traceback
 import unittest
 import urllib.error
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from agents_schema.agents_schema_writer import AGENTS_SCHEMA
 from agents_schema.config import ConfigError
@@ -480,6 +480,88 @@ class SnowflakeWorkloadIdentityTests(unittest.TestCase):
 
         self.assertIn("invalid audience", str(ctx.exception))
         self.assertIn("oidc_audience", str(ctx.exception))
+
+
+class DatabricksWorkloadIdentityTests(unittest.TestCase):
+    BASE = {
+        "type": "databricks",
+        "auth_method": "workload_identity",
+        "host": "dbc-test.cloud.databricks.com",
+        "http_path": "/sql/1.0/warehouses/abc",
+        "catalog": "main",
+        "client_id": "sp-uuid",
+    }
+    GITHUB_ENV = {
+        "ACTIONS_ID_TOKEN_REQUEST_URL": "https://actions.example/token",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "req",
+    }
+
+    @staticmethod
+    def _token(access_token, valid=True):
+        token = Mock(token_type="Bearer", access_token=access_token)
+        token.valid = valid
+        return token
+
+    def _connect_kwargs(self, destination, tokens=None, error=None):
+        with patch.dict("os.environ", self.GITHUB_ENV, clear=True), patch(
+            "databricks.sdk.core.Config"
+        ) as config_cls:
+            config = config_cls.return_value
+            if error is not None:
+                config.oauth_token.side_effect = error
+            else:
+                config.oauth_token.side_effect = tokens or [self._token("dbx")]
+            kwargs = _databricks_connect_kwargs_from_secret(destination)
+        return kwargs, config_cls
+
+    def test_workload_identity_uses_github_oidc_credentials_provider(self):
+        kwargs, config_cls = self._connect_kwargs(self.BASE)
+
+        config_cls.assert_called_once_with(
+            host="dbc-test.cloud.databricks.com", client_id="sp-uuid", auth_type="github-oidc"
+        )
+        self.assertNotIn("access_token", kwargs)
+        self.assertEqual(kwargs["server_hostname"], "dbc-test.cloud.databricks.com")
+        headers = kwargs["credentials_provider"]()
+        self.assertEqual(headers(), {"Authorization": "Bearer dbx"})
+
+    def test_workload_identity_reuses_token_until_it_expires(self):
+        tokens = [self._token("first"), self._token("second")]
+        kwargs, config_cls = self._connect_kwargs(self.BASE, tokens=tokens)
+        headers = kwargs["credentials_provider"]()
+
+        self.assertEqual(headers(), {"Authorization": "Bearer first"})
+        self.assertEqual(headers(), {"Authorization": "Bearer first"})
+        self.assertEqual(config_cls.return_value.oauth_token.call_count, 1)
+
+        tokens[0].valid = False
+        self.assertEqual(headers(), {"Authorization": "Bearer second"})
+
+    def test_workload_identity_requires_client_id(self):
+        destination = {k: v for k, v in self.BASE.items() if k != "client_id"}
+        with self.assertRaisesRegex(ConfigError, "missing keys: client_id"):
+            _databricks_connect_kwargs_from_secret(destination)
+
+    def test_workload_identity_rejects_static_token(self):
+        with self.assertRaisesRegex(ConfigError, "remove token"):
+            _databricks_connect_kwargs_from_secret({**self.BASE, "token": "dapi"})
+
+    def test_unknown_auth_method_is_rejected(self):
+        with self.assertRaisesRegex(ConfigError, "auth_method must be .workload_identity."):
+            _databricks_connect_kwargs_from_secret({**self.BASE, "auth_method": "pat"})
+
+    def test_workload_identity_requires_actions_environment(self):
+        with patch.dict("os.environ", {}, clear=True), self.assertRaisesRegex(ConfigError, "id-token: write"):
+            _databricks_connect_kwargs_from_secret(self.BASE)
+
+    def test_workload_identity_login_failure_is_a_config_error(self):
+        error = ValueError("invalid_grant: TOKEN_INVALID")
+        with self.assertRaises(ConfigError) as ctx:
+            self._connect_kwargs(self.BASE, error=error)
+
+        self.assertIn("invalid_grant: TOKEN_INVALID", str(ctx.exception))
+        self.assertIn("federation policy", str(ctx.exception))
+        self.assertTrue(ctx.exception.__suppress_context__)
 
 
 if __name__ == "__main__":
