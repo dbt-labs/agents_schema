@@ -57,8 +57,9 @@ class GitHubActionsTests(unittest.TestCase):
 
     def test_composite_actions_pin_python_for_every_uvx_step(self):
         # Without `setup-uv`'s python-version (see the test above), uv picks the newest
-        # Python it can find or download (3.14 at the time of writing), which is outside
-        # the versions this package supports. Pin the interpreter on each step that runs uvx.
+        # Python it can find or download (3.14 on a real runner at the time of writing),
+        # which is outside the 3.11-3.13 range this package declares. Pin the interpreter
+        # on each step that runs uvx so the version stays deliberate and reproducible.
         actions = sorted(ACTION_ROOT.glob("*/action.yml"))
 
         self.assertTrue(actions)
