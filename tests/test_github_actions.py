@@ -2,6 +2,8 @@ import re
 import unittest
 from pathlib import Path
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ACTION_ROOT = REPO_ROOT / ".github" / "actions"
 WORKFLOW_ROOT = REPO_ROOT / ".github" / "workflows"
@@ -35,6 +37,23 @@ class GitHubActionsTests(unittest.TestCase):
                     'uvx --from "$GITHUB_ACTION_PATH/../../.."', contents
                 )
                 self.assertNotIn('uvx --from "agents-schema==', contents)
+
+    def test_composite_actions_do_not_create_a_python_environment(self):
+        # Every reusable workflow runs the runtime-report action and then an ingestion
+        # action in the same job, so `setup-uv` runs more than once per job. With
+        # `python-version` set, setup-uv creates and activates `.venv`, and the second
+        # invocation fails ("Activating python venv" / exit code 2) before the CLI runs.
+        # `uvx --from <path>` builds its own isolated environment and needs no setup.
+        actions = sorted(ACTION_ROOT.glob("*/action.yml"))
+
+        self.assertTrue(actions)
+        for action in actions:
+            steps = yaml.safe_load(action.read_text())["runs"]["steps"]
+            setup_uv_steps = [s for s in steps if s.get("uses", "").startswith("astral-sh/setup-uv@")]
+            with self.subTest(action=action.parent.name):
+                self.assertTrue(setup_uv_steps)
+                for step in setup_uv_steps:
+                    self.assertNotIn("python-version", step.get("with", {}))
 
     def test_reusable_workflows_report_runtime_before_ingestion(self):
         workflows = sorted(WORKFLOW_ROOT.glob("agents-schema-*.yml"))
