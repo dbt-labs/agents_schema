@@ -18,6 +18,7 @@ runs:
     - name: Report Agents Schema runtime
       shell: bash
       env:
+        UV_PYTHON: '3.12'
         AGENTS_SCHEMA_WORKFLOW_REF: ${{ inputs.workflow-ref }}
         AGENTS_SCHEMA_WORKFLOW_SHA: ${{ inputs.workflow-sha }}
       run: |

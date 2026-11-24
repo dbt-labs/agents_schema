@@ -15,6 +15,7 @@ runs:
     - name: Run Omni ingestion
       shell: bash
       env:
+        UV_PYTHON: '3.12'
         AGENTS_SCHEMA_OMNI_DIR: ${{ inputs.omni-dir }}
       run: |
         uvx --from "$GITHUB_ACTION_PATH/../../.." \

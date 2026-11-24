@@ -18,6 +18,8 @@ runs:
 
     - name: Run skills ingestion
       shell: bash
+      env:
+        UV_PYTHON: '3.12'
       run: |
         uvx --from "$GITHUB_ACTION_PATH/../../.." \
           agents-schema skills \

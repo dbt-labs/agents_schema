@@ -55,6 +55,21 @@ class GitHubActionsTests(unittest.TestCase):
                 for step in setup_uv_steps:
                     self.assertNotIn("python-version", step.get("with", {}))
 
+    def test_composite_actions_pin_python_for_every_uvx_step(self):
+        # Without `setup-uv`'s python-version (see the test above), uv picks the newest
+        # Python it can find or download (3.14 at the time of writing), which is outside
+        # the versions this package supports. Pin the interpreter on each step that runs uvx.
+        actions = sorted(ACTION_ROOT.glob("*/action.yml"))
+
+        self.assertTrue(actions)
+        for action in actions:
+            steps = yaml.safe_load(action.read_text())["runs"]["steps"]
+            uvx_steps = [s for s in steps if "uvx" in s.get("run", "")]
+            with self.subTest(action=action.parent.name):
+                self.assertTrue(uvx_steps)
+                for step in uvx_steps:
+                    self.assertEqual(step.get("env", {}).get("UV_PYTHON"), "3.12", step["name"])
+
     def test_reusable_workflows_report_runtime_before_ingestion(self):
         workflows = sorted(WORKFLOW_ROOT.glob("agents-schema-*.yml"))
         runtime_reference = "uses: $/.github/actions/agents-schema-runtime"

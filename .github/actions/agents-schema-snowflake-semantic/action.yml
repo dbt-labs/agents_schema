@@ -17,6 +17,7 @@ runs:
     - name: Run snowflake-semantic ingestion
       shell: bash
       env:
+        UV_PYTHON: '3.12'
         AGENTS_SCHEMA_SEMANTIC_VIEWS: ${{ inputs.semantic-views }}
       run: |
         args=()
