@@ -63,6 +63,19 @@ class GitHubActionsTests(unittest.TestCase):
         self.assertIn('} >> "$GITHUB_STEP_SUMMARY"', contents)
         self.assertNotIn("$GITHUB_OUTPUT", contents)
 
+    def test_dbt_action_runs_dbt_core_not_the_pypi_dbt_package(self):
+        # `uvx --with <adapter> dbt ...` resolves the PyPI package named "dbt", which is a
+        # different project (2.x) from dbt-core. Both write into the same `dbt/` package
+        # directory, so the resulting environment is intermittently corrupt
+        # ("cannot import name 'ArtifactMixin'"). Name dbt-core explicitly.
+        contents = (ACTION_ROOT / "agents-schema-dbt" / "action.yml").read_text()
+        commands = re.findall(r"uvx\b[^\n]* dbt (?:deps|parse)\b", contents)
+
+        self.assertTrue(commands)
+        for command in commands:
+            with self.subTest(command=command):
+                self.assertIn("--from dbt-core", command)
+
     def test_customer_workflow_references_use_v0(self):
         reference_files = [
             REPO_ROOT / "README.md",
