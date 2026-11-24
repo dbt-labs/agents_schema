@@ -71,13 +71,14 @@ class GoogleAuthFailureTests(unittest.TestCase):
             env = {
                 "HOME": str(tmp_path / "home"),
                 "CLOUDSDK_CONFIG": str(tmp_path / "gcloud"),
+                # Documented google-auth switch: skip probing the GCE metadata server so the
+                # test never touches the network.
+                "NO_GCE_CHECK": "true",
                 "WAREHOUSE_CREDENTIALS": json.dumps(
                     {"type": "bigquery", "project_id": "my-proj", "auth_method": "adc"}
                 ),
             }
-            with patch.dict("os.environ", env, clear=True), patch(
-                "google.auth._default._get_gce_credentials", return_value=(None, None)
-            ):
+            with patch.dict("os.environ", env, clear=True):
                 code, stderr = _run_cli(["looker", "--lookml-dir", str(tmp_path / "lkml")])
 
         self.assertEqual(code, 1)
