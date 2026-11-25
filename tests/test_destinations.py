@@ -314,9 +314,6 @@ class DestinationSqlTests(unittest.TestCase):
         self.assertIs(result, destination.return_value)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class SnowflakeWorkloadIdentityTests(unittest.TestCase):
     BASE = {
@@ -483,3 +480,7 @@ class SnowflakeWorkloadIdentityTests(unittest.TestCase):
 
         self.assertIn("invalid audience", str(ctx.exception))
         self.assertIn("oidc_audience", str(ctx.exception))
+
+
+if __name__ == "__main__":
+    unittest.main()

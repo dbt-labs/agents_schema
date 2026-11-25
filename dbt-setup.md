@@ -63,11 +63,18 @@ oidc_audience: https://abc123.snowflakecomputing.com   # must match OIDC_AUDIENC
 ```
 
 The job that runs `agents-schema` needs `permissions: id-token: write`. The
-reusable workflows in this repository do not request it, so run the CLI from a
-step in your own workflow (for example `uvx agents-schema dbt ...`) to use this
-option. `SUBJECT` must match the token's `sub` claim exactly, so it is specific
-to a branch, tag, or environment. If login fails with error 394729, the message
+`agents-schema-dbt`, `agents-schema-osi`, and `agents-schema-skills` reusable
+workflows already request it, so grant `id-token: write` in the calling
+workflow (see [Using Workload Identity Federation](#using-workload-identity-federation))
+and only `WAREHOUSE_CREDENTIALS` changes; no extra workflow input is needed.
+`SUBJECT` must match the token's `sub` claim exactly, so it is specific to a
+branch, tag, or environment. If login fails with error 394729, the message
 shows the `sub` Snowflake received; use that value as `SUBJECT`.
+
+`auth_method` names the credential source per warehouse: Snowflake accepts
+`workload_identity` (GitHub OIDC token, above), while BigQuery accepts `adc`
+or `service_account` (the default, using `credentials_json`). Key pair and password auth need no
+`auth_method`.
 
 </details>
 
