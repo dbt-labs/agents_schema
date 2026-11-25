@@ -157,10 +157,11 @@ def main(argv: list[str] | None = None) -> int:
         # credentials are built.
         print(f"agents-schema: error: Google authentication failed: {e}", file=sys.stderr)
         print(
-            "agents-schema: hint: with Workload Identity Federation, check the "
+            "agents-schema: hint: if you use Workload Identity Federation, check the "
             "workload-identity-provider and service-account inputs, that the job grants "
             "'id-token: write', and that the provider's attribute condition allows this "
-            "repository",
+            "repository; otherwise check that the service account key or credentials in "
+            "WAREHOUSE_CREDENTIALS are valid and not revoked",
             file=sys.stderr,
         )
         return 1

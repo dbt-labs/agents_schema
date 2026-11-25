@@ -27,6 +27,9 @@ class GoogleAuthFailureTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("agents-schema: error: Google authentication failed: sts exchange rejected", stderr)
         self.assertIn("id-token: write", stderr)
+        # The hint must not assume Workload Identity Federation: a revoked service-account key raises the same error.
+        self.assertIn("if you use Workload Identity Federation", stderr)
+        self.assertIn("otherwise check that the service account key", stderr)
         self.assertNotIn("Traceback", stderr)
 
     def test_real_google_auth_refresh_failure_is_reported_cleanly(self):
