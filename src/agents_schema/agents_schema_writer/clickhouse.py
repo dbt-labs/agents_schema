@@ -34,7 +34,10 @@ class ClickHouseAgentsSchemaWriter(AgentsSchemaWriter):
     - Row values are never interpolated into SQL text: inserts go through the
       driver's native ``client.insert`` binding and delete predicates bind key
       values as query parameters.
-    - ``array`` columns map to ``Array(String)``. ``json`` columns map to the
+    - ``array`` and ``variant`` columns map to ``Array(String)`` (ClickHouse has no
+      arbitrary-JSON column type that holds strings, objects and lists alike, so a
+      ``variant`` string becomes a one-element array and an object or list element
+      becomes JSON text). ``json`` columns map to the
       native ``JSON`` type on servers that support it (25.3+, where the type is
       production-ready), and fall back to ``String`` holding JSON text on
       older or unidentifiable servers.
