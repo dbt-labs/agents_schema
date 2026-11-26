@@ -23,12 +23,11 @@ runs:
   steps:
     - name: Set up uv
       uses: astral-sh/setup-uv@v5
-      with:
-        python-version: '3.12'
 
     - name: Prepare dbt manifest
       shell: bash
       env:
+        UV_PYTHON: '3.12'
         AGENTS_SCHEMA_DBT_PROJECT_DIR: ${{ inputs.dbt-project-dir }}
         DBT_PROFILE_NAME: ${{ inputs.dbt-profile-name }}
         DBT_PARSE_COMMAND: ${{ inputs.dbt-parse-command }}
@@ -113,6 +112,7 @@ runs:
     - name: Run dbt ingestion
       shell: bash
       env:
+        UV_PYTHON: '3.12'
         AGENTS_SCHEMA_DBT_PROJECT_DIR: ${{ inputs.dbt-project-dir }}
       run: |
         uvx --from "$GITHUB_ACTION_PATH/../../.." \

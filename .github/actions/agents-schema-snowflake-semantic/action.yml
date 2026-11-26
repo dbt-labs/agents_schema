@@ -13,12 +13,11 @@ runs:
   steps:
     - name: Set up uv
       uses: astral-sh/setup-uv@v5
-      with:
-        python-version: '3.12'
 
     - name: Run snowflake-semantic ingestion
       shell: bash
       env:
+        UV_PYTHON: '3.12'
         AGENTS_SCHEMA_SEMANTIC_VIEWS: ${{ inputs.semantic-views }}
       run: |
         args=()
