@@ -190,6 +190,32 @@ The workflow writes:
 - `AGENTS.SIGMA_COLUMN`
 - `AGENTS.SIGMA_METRIC`
 
+### Using Workload Identity Federation
+
+To authenticate with `WAREHOUSE_CREDENTIALS.auth_method: adc` instead of a BigQuery
+service account key, grant the job `id-token: write` and pass the Workload Identity
+Federation inputs:
+
+```yaml
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  agents-schema-sigma:
+    uses: dbt-labs/agents_schema/.github/workflows/agents-schema-sigma.yml@v0
+    with:
+      sigma-dir: sigma
+      workload-identity-provider: "projects/123/locations/global/workloadIdentityPools/my-pool/providers/my-provider"
+      service-account: "agents-schema@my-gcp-project.iam.gserviceaccount.com"
+    secrets:
+      WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
+```
+
+`WAREHOUSE_CREDENTIALS` still needs `type: bigquery`, `project_id`, and
+`auth_method: adc` (see the BigQuery setup details above); it just no longer needs
+a service account key.
+
 These jobs do not need to depend on dbt or Looker jobs unless your repository
 has its own ordering requirement.
 

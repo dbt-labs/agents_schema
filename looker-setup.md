@@ -156,5 +156,31 @@ grants, so include it even if you do not use that option.
 `lookml-dir` is required — set it to the directory that contains your `*.lkml`
 files. The example uses `lookml`; change it to match your repository.
 
+### Using Workload Identity Federation
+
+To authenticate with `WAREHOUSE_CREDENTIALS.auth_method: adc` instead of a BigQuery
+service account key, grant the job `id-token: write` and pass the Workload Identity
+Federation inputs:
+
+```yaml
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  agents-schema-looker:
+    uses: dbt-labs/agents_schema/.github/workflows/agents-schema-looker.yml@v0
+    with:
+      lookml-dir: lookml
+      workload-identity-provider: "projects/123/locations/global/workloadIdentityPools/my-pool/providers/my-provider"
+      service-account: "agents-schema@my-gcp-project.iam.gserviceaccount.com"
+    secrets:
+      WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
+```
+
+`WAREHOUSE_CREDENTIALS` still needs `type: bigquery`, `project_id`, and
+`auth_method: adc` (see the BigQuery setup details above); it just no longer needs
+a service account key.
+
 These jobs do not need to depend on each other unless your repository has its
 own ordering requirement.

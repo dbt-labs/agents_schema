@@ -183,6 +183,32 @@ class GitHubActionsTests(unittest.TestCase):
             with self.subTest(path=path.relative_to(REPO_ROOT), version=version):
                 self.assertEqual(version, "v0")
 
+    def test_warehouse_writing_workflows_support_workload_identity_federation(self):
+        # Warehouse authentication is a destination concern, independent of the
+        # metadata source, so every source workflow must offer keyless BigQuery auth.
+        sources = ("dbt", "looker", "omni", "osi", "sigma", "skills")
+        auth_step = "uses: google-github-actions/auth@v2"
+
+        for source in sources:
+            contents = (WORKFLOW_ROOT / f"agents-schema-{source}.yml").read_text()
+            with self.subTest(workflow=source):
+                self.assertIn("      workload-identity-provider:\n", contents)
+                self.assertIn("      service-account:\n", contents)
+                self.assertIn("  id-token: write\n", contents)
+                self.assertIn("if: inputs.workload-identity-provider != ''", contents)
+                self.assertEqual(contents.count(auth_step), 1)
+                self.assertLess(
+                    contents.index(auth_step),
+                    contents.rindex("uses: $/.github/actions/"),
+                )
+
+    def test_setup_guides_document_workload_identity_federation(self):
+        for source in ("dbt", "looker", "omni", "osi", "sigma"):
+            contents = (REPO_ROOT / f"{source}-setup.md").read_text()
+            with self.subTest(guide=source):
+                self.assertIn("### Using Workload Identity Federation", contents)
+                self.assertIn("workload-identity-provider:", contents)
+
 
 if __name__ == "__main__":
     unittest.main()
