@@ -13,19 +13,34 @@ WORKFLOW_REFERENCE = re.compile(
 )
 
 
+def expected_permissions(workflow_text):
+    """The least privilege a reusable workflow needs, decided from what it does, not from what it declares.
+
+    Every workflow reads the repository. Only a workflow that authenticates to Google Cloud with
+    keyless Workload Identity Federation (`google-github-actions/auth`) needs an OIDC token, so only
+    that one gets `id-token: write`.
+    """
+    permissions = {"contents": "read"}
+    if "google-github-actions/auth" in workflow_text:
+        permissions["id-token"] = "write"
+    return permissions
+
+
 class GitHubActionsTests(unittest.TestCase):
     def test_reusable_workflows_declare_least_privilege_permissions(self):
-        # Every reusable workflow must state its permissions explicitly: read-only
-        # contents, plus `id-token: write` only where it is requested for keyless auth.
+        # Each reusable workflow must declare exactly the permissions it needs: read-only contents, plus
+        # `id-token: write` if and only if it authenticates with Workload Identity Federation. A missing
+        # `id-token` would break keyless auth; an unneeded one hands a job a token it never uses.
         workflows = sorted(WORKFLOW_ROOT.glob("agents-schema-*.yml"))
 
         self.assertTrue(workflows)
+        federated = [w for w in workflows if "google-github-actions/auth" in w.read_text()]
+        self.assertTrue(federated, "expected at least one workflow that uses keyless Google auth")
+        self.assertLess(len(federated), len(workflows), "expected at least one workflow without it")
         for workflow in workflows:
-            permissions = yaml.safe_load(workflow.read_text()).get("permissions")
+            text = workflow.read_text()
             with self.subTest(workflow=workflow.name):
-                self.assertIsInstance(permissions, dict)
-                self.assertEqual(permissions.get("contents"), "read")
-                self.assertLessEqual(set(permissions) - {"contents", "id-token"}, set())
+                self.assertEqual(yaml.safe_load(text).get("permissions"), expected_permissions(text))
 
     def test_documented_callers_grant_the_permissions_the_called_workflows_request(self):
         # A called workflow cannot be granted more than its caller, so a caller that omits
@@ -43,7 +58,7 @@ class GitHubActionsTests(unittest.TestCase):
             doc = yaml.safe_load(text)
             for job_name, job in doc["jobs"].items():
                 match = called.search(job["uses"])
-                requested = yaml.safe_load((WORKFLOW_ROOT / f"{match.group(1)}.yml").read_text())["permissions"]
+                requested = expected_permissions((WORKFLOW_ROOT / f"{match.group(1)}.yml").read_text())
                 granted = job.get("permissions", doc.get("permissions")) or {}
                 for scope, level in requested.items():
                     checked += 1
