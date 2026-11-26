@@ -79,9 +79,9 @@ runs:
           fi
 
           if [ -f "$project_dir/packages.yml" ] || [ -f "$project_dir/dependencies.yml" ]; then
-            uvx --with "$DBT_ADAPTER_PACKAGE" dbt deps "${dbt_args[@]}"
+            uvx --from dbt-core --with "$DBT_ADAPTER_PACKAGE" dbt deps "${dbt_args[@]}"
           fi
-          uvx --with "$DBT_ADAPTER_PACKAGE" dbt parse "${dbt_args[@]}" --no-partial-parse
+          uvx --from dbt-core --with "$DBT_ADAPTER_PACKAGE" dbt parse "${dbt_args[@]}" --no-partial-parse
         else
           echo "::error title=Missing dbt manifest::No dbt manifest was found at $manifest_path." >&2
           echo "Agents Schema can ingest dbt from an existing manifest, run managed dbt parse, or run a custom parse command." >&2
@@ -100,7 +100,7 @@ runs:
 
           echo "Example managed parse inputs: dbt-profile-name: analytics, dbt-target: prod" >&2
           echo "Example custom dbt-parse-command:" >&2
-          echo "uvx --with <dbt-adapter-package> dbt parse --project-dir $project_dir --profiles-dir \"$profiles_dir\" --no-partial-parse" >&2
+          echo "uvx --from dbt-core --with <dbt-adapter-package> dbt parse --project-dir $project_dir --profiles-dir \"$profiles_dir\" --no-partial-parse" >&2
           exit 1
         fi
 
