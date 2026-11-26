@@ -31,7 +31,7 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
    ```sql
    SELECT provider, key, content FROM AGENTS.ROOT ORDER BY provider, key;
    ```
-   This lists the providers that published metadata (`osi`, `lookml`, `dbt`, or user-published) plus
+   This lists the providers that published metadata (`osi`, `lookml`, `omni`, `sigma`, `dbt`, or user-published) plus
    their overview/guidance rows. Only query tables for providers that actually appear here.
 
 2. **Find the metric.** Search the semantic definition tables for keywords from the question
@@ -45,6 +45,8 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
    ```
    Use `AGENTS.LOOKML_MEASURE` (`sql`, `description`, `ai_context`) when the provider is LookML.
    Use `AGENTS.OMNI_MEASURE` (`sql`, `description`) when the provider is Omni.
+   Use `AGENTS.SIGMA_METRIC` (`formula`, `description`) when the provider is Sigma. Sigma publishes only metrics
+   that are one standard aggregation of one column, so no match there does not prove the metric is undefined in Sigma.
    **If no rows match, stop and tell the user** — do not proceed to Step 3 without a metric
    definition. Try a shorter or alternate keyword if the first search returns nothing.
 
@@ -54,6 +56,9 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
    - LookML: `AGENTS.LOOKML_VIEW` (`sql_table_name`), `AGENTS.LOOKML_DIMENSION`
    - Omni: `AGENTS.OMNI_VIEW` (`schema`, `table_name`, `description`), `AGENTS.OMNI_DIMENSION`;
      use `AGENTS.OMNI_TOPIC_JOIN` to understand which views are reachable within a topic.
+   - Sigma: `AGENTS.SIGMA_ELEMENT` (`source_path` is the warehouse table, `element_name`, `description`),
+     `AGENTS.SIGMA_COLUMN` (`name`, `kind`, `formula`, `description`); join metrics and columns to their
+     element on `source_path`.
    - dbt, *only if present in root*: `AGENTS.DBT_MODEL` / `AGENTS.DBT_COLUMN` add model and
      column descriptions.
    Use the source table named in the metadata — not a same-named table you assume exists elsewhere.
@@ -64,6 +69,12 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
    `${other_field}` → look that field up and substitute recursively; `{% if %}…{% else %} X {% endif %}`
    → use the `{% else %}` branch. For Omni `sql`: the value is a quoted column reference
    (e.g. `'"AMOUNT"'`) — strip the outer quotes and use the inner identifier directly.
+   For Sigma `formula`: a metric such as `Sum([ORDERS/Amount])` is one aggregation (`Sum`, `Avg`, `Count`,
+   `CountDistinct`, `Min`, `Max`) of one column, to run against the table in `source_path`. The bracketed name is Sigma's
+   display name for the column, which can differ from the warehouse column's name (for example `Order Id` for
+   `ORDER_ID`); confirm the real column with a focused `SELECT * FROM <source_path> LIMIT 1`, and if you cannot tell
+   which column it is, say so instead of guessing. The formula of a `computed` Sigma column (`kind = 'computed'`) is
+   Sigma syntax, not SQL — never copy it into a query.
 
 5. **Pick the time grain from metadata.** Use the time dimension the metadata marks
    (`osi_field.is_time_dimension`, or a LookML `dimension_group`). For "current"/snapshot
@@ -104,6 +115,9 @@ be UPPERCASE when you query them.
 | `AGENTS.OMNI_DIMENSION` | `view_name`, `field_name`, `sql`, `description` |
 | `AGENTS.OMNI_TOPIC` | `topic_name`, `base_view`, `label`, `group_label`, `description`, `ai_context` |
 | `AGENTS.OMNI_TOPIC_JOIN` | `topic_name`, `from_view`, `to_view` |
+| `AGENTS.SIGMA_METRIC` | `source_path`, `name`, `formula`, `description` |
+| `AGENTS.SIGMA_ELEMENT` | `source_path`, `source_file`, `page_name`, `element_name`, `description` |
+| `AGENTS.SIGMA_COLUMN` | `source_path`, `name`, `kind`, `formula`, `description` |
 | `AGENTS.DBT_MODEL` | `unique_id`, `name`, `schema_name`, `description`, `meta` |
 | `AGENTS.DBT_COLUMN` | `model_id`, `column_name`, `data_type`, `description`, `meta` |
 
