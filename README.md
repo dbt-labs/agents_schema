@@ -258,6 +258,23 @@ workflow commit, and the CLI version in the Actions log and job summary. The
 resolved commit identifies the exact implementation used even after a floating
 tag such as `v0` moves to a newer release.
 
+#### Required workflow permissions
+
+The reusable workflows request `contents: read` and, for the optional Workload Identity
+Federation, `id-token: write`. A called workflow cannot be granted more than its caller, so the
+calling workflow (or job) must include the block below. (`agents-schema-snowflake-semantic` needs only
+`contents: read`; granting `id-token: write` to it is harmless.)
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+```
+
+A caller without it fails at startup (the run shows a startup failure rather than running any
+steps). When moving to a release that adds this requirement, add the block to existing caller
+workflows.
+
 #### BigQuery uppercase dataset migration
 
 Older releases created a lowercase `agents` dataset. After upgrading to a release

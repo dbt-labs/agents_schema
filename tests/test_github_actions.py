@@ -13,7 +13,62 @@ WORKFLOW_REFERENCE = re.compile(
 )
 
 
+def expected_permissions(workflow_text):
+    """The least privilege a reusable workflow needs, decided from what it does, not from what it declares.
+
+    Every workflow reads the repository. Only a workflow that authenticates to Google Cloud with
+    keyless Workload Identity Federation (`google-github-actions/auth`) needs an OIDC token, so only
+    that one gets `id-token: write`.
+    """
+    permissions = {"contents": "read"}
+    if "google-github-actions/auth" in workflow_text:
+        permissions["id-token"] = "write"
+    return permissions
+
+
 class GitHubActionsTests(unittest.TestCase):
+    def test_reusable_workflows_declare_least_privilege_permissions(self):
+        # Each reusable workflow must declare exactly the permissions it needs: read-only contents, plus
+        # `id-token: write` if and only if it authenticates with Workload Identity Federation. A missing
+        # `id-token` would break keyless auth; an unneeded one hands a job a token it never uses.
+        workflows = sorted(WORKFLOW_ROOT.glob("agents-schema-*.yml"))
+
+        self.assertTrue(workflows)
+        federated = [w for w in workflows if "google-github-actions/auth" in w.read_text()]
+        self.assertTrue(federated, "expected at least one workflow that uses keyless Google auth")
+        self.assertLess(len(federated), len(workflows), "expected at least one workflow without it")
+        for workflow in workflows:
+            text = workflow.read_text()
+            with self.subTest(workflow=workflow.name):
+                self.assertEqual(yaml.safe_load(text).get("permissions"), expected_permissions(text))
+
+    def test_documented_callers_grant_the_permissions_the_called_workflows_request(self):
+        # A called workflow cannot be granted more than its caller, so a caller that omits
+        # a permission the reusable workflow requests fails at startup. Check every caller
+        # shown in the setup guides and examples against the workflow it calls.
+        levels = {"none": 0, "read": 1, "write": 2}
+        called = re.compile(r"workflows/(agents-schema-[\w-]+)\.yml@")
+        sources = [(p, p.read_text()) for p in sorted((REPO_ROOT / "examples" / "workflows").glob("*.yml"))]
+        for guide in sorted(REPO_ROOT.glob("*-setup.md")):
+            blocks = re.findall(r"```yaml\n(.*?)```", guide.read_text(), re.S)
+            sources += [(guide, b) for b in blocks if "uses: dbt-labs/agents_schema" in b]
+
+        checked = 0
+        for path, text in sources:
+            doc = yaml.safe_load(text)
+            for job_name, job in doc["jobs"].items():
+                match = called.search(job["uses"])
+                requested = expected_permissions((WORKFLOW_ROOT / f"{match.group(1)}.yml").read_text())
+                granted = job.get("permissions", doc.get("permissions")) or {}
+                for scope, level in requested.items():
+                    checked += 1
+                    with self.subTest(source=path.name, job=job_name, scope=scope):
+                        self.assertGreaterEqual(
+                            levels[granted.get(scope, "none")], levels[level],
+                            f"{path.name}: {job_name} must grant {scope}: {level}",
+                        )
+        self.assertGreater(checked, 20)
+
     def test_reusable_workflows_use_colocated_composite_actions(self):
         workflows = sorted(WORKFLOW_ROOT.glob("agents-schema-*.yml"))
 
