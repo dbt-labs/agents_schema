@@ -79,8 +79,8 @@ SQLEOF
    (e.g. `SUM(amount) AS value`) so `bq query --format=json` returns a named key instead of the
    auto-generated `f0_`. For LookML `sql`: `${TABLE}.col` → `col`;
    `${other_field}` → look that field up and substitute recursively; `{% if %}…{% else %} X {% endif %}`
-   → use the `{% else %}` branch. For Omni `sql`: the value is a quoted column reference
-   (e.g. `'"AMOUNT"'`) — strip the outer quotes and use the inner identifier directly.
+   → use the `{% else %}` branch. For Omni `sql`, resolve any Omni field references in the expression.
+   Preserve identifier spelling and use the warehouse's quoting rules.
 
 5. **Pick the time grain from metadata.** Use the time dimension the metadata marks
    (`osi_field.is_time_dimension`, or a LookML `dimension_group`). For "current"/snapshot
