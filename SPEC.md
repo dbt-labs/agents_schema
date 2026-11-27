@@ -282,7 +282,7 @@ JOIN AGENTS.DBT_MODEL m ON m.unique_id = lineage.node_id;
 
 The LookML ingestion scans `*.lkml` files and writes normalized view, dimension, measure, and explore tables. It parses top-level `view` and `explore` blocks, plus `dimension`, `dimension_group`, and `measure` blocks inside views.
 
-Files are read with the [`lkml`](https://github.com/joshtemple/lkml) parser. Refinements (`view: +orders`, `explore: +orders`) are merged onto their base by name, bases first, so a refinement never depends on which file sorts first. Several refinements of the same view are applied in file-path order (Looker applies them in include order, which is not modeled). A refinement whose base is not among the ingested files still produces its view and fields, with a warning. A file that cannot be parsed (for example a LookML dashboard file) is skipped with a warning that names the file, and the run summary counts skipped files; in GitHub Actions each warning is also an annotation. If no file can be parsed, the run fails before any table is touched. A file that cannot be read at all fails the run. Explore joins, `extends`, and `include` are not captured.
+Files are read with the [`lkml`](https://github.com/joshtemple/lkml) parser. Refinements (`view: +orders`, `explore: +orders`) are merged onto their base by name (an explore by model and name, see `AGENTS.LOOKML_EXPLORE`), bases first, so a refinement never depends on which file sorts first. A measure refinement that sets `filters: []` clears the filters it inherited; one that does not mention `filters` keeps them. Several refinements of the same view are applied in file-path order (Looker applies them in include order, which is not modeled). A refinement whose base is not among the ingested files still produces its view and fields, with a warning. A file that cannot be parsed (for example a LookML dashboard file) is skipped with a warning that names the file, and the run summary counts skipped files; in GitHub Actions each warning is also an annotation. The `lkml` parser can loop forever on some malformed input (for example a stray `;` after a quoted value), so a file that does not finish parsing within 10 seconds is skipped in the same way. If no file can be parsed, the run fails before any table is touched. A file that cannot be read at all fails the run. Explore joins, `extends`, and `include` are not captured.
 
 Agents can use this extension to understand the BI and semantic surface exposed through Looker: which explores exist, which views back them, what fields are available, and which fields include human-authored `description` or `ai_context`.
 
@@ -369,22 +369,24 @@ CREATE OR REPLACE TABLE AGENTS.LOOKML_MEASURE (
 
 ### `AGENTS.LOOKML_EXPLORE`
 
-One row per LookML explore name (refinements are merged into their base).
+One row per LookML explore per model. Two models in the same project may define an explore with the same name (for example `retail.model.lkml` and `wholesale.model.lkml` can each define `orders`, backed by different views); each gets its own row. Refinements are merged into their base within the same model.
 
 ```sql
 CREATE OR REPLACE TABLE AGENTS.LOOKML_EXPLORE (
+  model_name  VARCHAR NOT NULL,
   name        VARCHAR NOT NULL,
   from_view   VARCHAR,
   label       VARCHAR,
   description TEXT,
   ai_context  TEXT,
   file_path   VARCHAR,
-  PRIMARY KEY (name)
+  PRIMARY KEY (model_name, name)
 );
 ```
 
 | Column | Source field |
 |---|---|
+| `model_name` | The model the explore is defined in: the name of its `*.model.lkml` file without that suffix (`retail.model.lkml` gives `retail`). An explore in any other file, such as an `*.explore.lkml` file that models include, has no model of its own and gets an empty string. A model that refines such an explore gets its own row with the refinement applied, and the shared definition stays as it is. |
 | `name` | Explore block name. |
 | `from_view` | Explore `from`; defaults to the explore name when `from` is missing. |
 | `label` | Explore `label`. |

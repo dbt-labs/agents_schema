@@ -1,6 +1,8 @@
 import contextlib
 import io
+import signal
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -372,7 +374,7 @@ class MalformedInputTests(unittest.TestCase):
 class ExploreTests(unittest.TestCase):
     def test_a_joins_properties_do_not_overwrite_the_explore(self):
         rows = _ingest(
-            model="""
+            **{"shop.model": """
 explore: orders {
   from: orders_base
   label: "Orders Explore"
@@ -387,16 +389,16 @@ explore: orders {
     relationship: many_to_one
   }
 }
-"""
+"""}
         )
         self.assertEqual(
             rows["LOOKML_EXPLORE"],
-            [("orders", "orders_base", "Orders Explore", "Orders joined to customers", None, "model.lkml")],
+            [("shop", "orders", "orders_base", "Orders Explore", "Orders joined to customers", None, "shop.model.lkml")],
         )
 
     def test_from_defaults_to_the_explore_name(self):
         rows = _ingest(model="explore: orders {\n  join: customers { from: customer_table }\n}\n")
-        self.assertEqual(rows["LOOKML_EXPLORE"][0][:2], ("orders", "orders"))
+        self.assertEqual(rows["LOOKML_EXPLORE"][0][:3], ("", "orders", "orders"))
 
 
 class RefinementTests(unittest.TestCase):
@@ -447,7 +449,119 @@ view: +orders {
             a='explore: orders {\n  label: "Orders"\n  description: "Base"\n}\n',
             b='explore: +orders {\n  description: "Refined"\n}\n',
         )
-        self.assertEqual(rows["LOOKML_EXPLORE"], [("orders", "orders", "Orders", "Refined", None, "a.lkml")])
+        self.assertEqual(rows["LOOKML_EXPLORE"], [("", "orders", "orders", "Orders", "Refined", None, "a.lkml")])
+
+
+class ExploresPerModelTests(unittest.TestCase):
+    """Two models in one project may define an explore with the same name; both must survive."""
+
+    RETAIL = 'explore: orders {\n  from: retail_orders\n  label: "Retail orders"\n}\n'
+    WHOLESALE = 'explore: orders {\n  from: wholesale_orders\n  label: "Wholesale orders"\n}\n'
+
+    def test_the_same_explore_name_in_two_models_gives_two_rows(self):
+        rows = _ingest(**{"retail.model": self.RETAIL, "wholesale.model": self.WHOLESALE})
+        explores = {(row[0], row[1]): row for row in rows["LOOKML_EXPLORE"]}
+        self.assertEqual(sorted(explores), [("retail", "orders"), ("wholesale", "orders")])
+        self.assertEqual(explores[("retail", "orders")][2:4], ("retail_orders", "Retail orders"))
+        self.assertEqual(explores[("wholesale", "orders")][2:4], ("wholesale_orders", "Wholesale orders"))
+
+    def test_a_refinement_only_changes_the_explore_in_its_own_model(self):
+        rows = _ingest(
+            **{
+                "retail.model": self.RETAIL + 'explore: +orders {\n  label: "Retail (refined)"\n}\n',
+                "wholesale.model": self.WHOLESALE,
+            }
+        )
+        labels = {row[0]: row[3] for row in rows["LOOKML_EXPLORE"]}
+        self.assertEqual(labels, {"retail": "Retail (refined)", "wholesale": "Wholesale orders"})
+
+    def test_a_model_can_refine_an_explore_defined_in_a_file_that_is_not_a_model(self):
+        rows = _ingest(
+            orders=self.RETAIL,  # orders.lkml: not a model file, so it has no model of its own
+            **{"retail.model": 'explore: +orders {\n  label: "Retail (refined)"\n}\n'},
+        )
+        explores = {(row[0], row[1]): row for row in rows["LOOKML_EXPLORE"]}
+        self.assertEqual(sorted(explores), [("", "orders"), ("retail", "orders")])
+        self.assertEqual(explores[("", "orders")][3], "Retail orders")  # the shared definition is untouched
+        self.assertEqual(explores[("retail", "orders")][2:4], ("retail_orders", "Retail (refined)"))
+
+    def test_the_model_name_is_the_file_name_without_the_model_suffix(self):
+        self.assertEqual(lookml._model_name("retail.model.lkml"), "retail")
+        self.assertEqual(lookml._model_name("models/eu/retail.model.lkml"), "retail")
+        self.assertEqual(lookml._model_name("orders.explore.lkml"), "")
+        self.assertEqual(lookml._model_name("orders.view.lkml"), "")
+
+
+class MeasureFilterRefinementTests(unittest.TestCase):
+    BASE = 'view: orders {\n  measure: revenue { type: sum sql: ${amount} ;; filters: [status: "complete"] }\n}\n'
+
+    def _filters(self, refinement):
+        rows = _ingest(a_base=self.BASE, b_refinement=refinement)
+        return {row[1]: row[6] for row in rows["LOOKML_MEASURE"]}["revenue"]
+
+    def test_an_explicit_empty_filters_clears_the_inherited_filters(self):
+        self.assertIsNone(self._filters("view: +orders {\n  measure: revenue { filters: [] }\n}\n"))
+
+    def test_a_refinement_that_does_not_mention_filters_keeps_them(self):
+        self.assertEqual(self._filters('view: +orders {\n  measure: revenue { label: "Revenue" }\n}\n'), 'status: "complete"')
+
+    def test_a_refinement_can_replace_the_filters(self):
+        self.assertEqual(self._filters('view: +orders {\n  measure: revenue { filters: [region: "EU"] }\n}\n'), 'region: "EU"')
+
+
+class ParserFailureTests(unittest.TestCase):
+    """lkml 1.3.7 can hang or raise unexpected errors on malformed input; one file must never stop the run."""
+
+    GOOD = "view: good { dimension: y { type: string } }\n"
+
+    def _collect(self, bad_text, timeout=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / "bad.view.lkml").write_text(bad_text)
+            (base / "good.view.lkml").write_text(self.GOOD)
+            stderr = io.StringIO()
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(contextlib.redirect_stderr(stderr))
+                if timeout is not None:
+                    stack.enter_context(patch.object(lookml, "_PARSE_TIMEOUT_SECONDS", timeout))
+                rows = lookml._collect(sorted(base.glob("*.lkml")), base)
+        return rows, stderr.getvalue()
+
+    def test_an_unexpected_parser_error_skips_the_file_instead_of_crashing_the_run(self):
+        # lkml raises IndexError (not SyntaxError) on this input.
+        rows, stderr = self._collect("view: bad { dimension: x { sql: ${TABLE}.x ; } }\n")
+        self.assertEqual(list(rows.views), ["good"])
+        self.assertRegex(stderr, r"skipping bad\.view\.lkml: could not parse LookML: IndexError")
+
+    def test_a_file_that_makes_the_parser_loop_forever_is_skipped(self):
+        # A stray `;` after a quoted value makes lkml 1.3.7 loop forever.
+        started = time.monotonic()
+        rows, stderr = self._collect('view: bad { label: "Bad"; }\n', timeout=1)
+        self.assertLess(time.monotonic() - started, 10)
+        self.assertEqual(list(rows.views), ["good"])
+        self.assertRegex(stderr, r"skipping bad\.view\.lkml: the LookML parser did not finish within 1s")
+        self.assertEqual(rows.skipped, 1)
+
+    def test_the_timeout_also_works_where_signals_cannot_be_used(self):
+        # Windows, or a non-main thread: the parse runs in a child process that is killed on timeout.
+        with patch.object(lookml, "_can_interrupt_with_signal", return_value=False):
+            started = time.monotonic()
+            rows, stderr = self._collect('view: bad { label: "Bad"; }\n', timeout=1)
+            self.assertLess(time.monotonic() - started, 10)
+        self.assertEqual(list(rows.views), ["good"])
+        self.assertIn("did not finish within 1s", stderr)
+
+    def test_the_subprocess_fallback_parses_normally_and_reports_syntax_errors(self):
+        with patch.object(lookml, "_can_interrupt_with_signal", return_value=False):
+            rows, stderr = self._collect("view: bad {\n  dimension: y {\n")
+        self.assertEqual(list(rows.views), ["good"])
+        self.assertRegex(stderr, r"skipping bad\.view\.lkml: could not parse LookML")
+
+    def test_the_timer_is_cleared_and_the_previous_handler_restored(self):
+        previous = signal.getsignal(signal.SIGALRM)
+        lookml._parse(self.GOOD)
+        self.assertEqual(signal.getitimer(signal.ITIMER_REAL), (0.0, 0.0))
+        self.assertEqual(signal.getsignal(signal.SIGALRM), previous)
 
 
 class RunTests(unittest.TestCase):

@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import os
 import re
+import signal
+import subprocess
 import sys
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -61,6 +65,7 @@ LOOKML_MEASURE = TableSchema(
 LOOKML_EXPLORE = TableSchema(
     "AGENTS.LOOKML_EXPLORE",
     (
+        Column("model_name", "varchar", nullable=False),
         Column("name", "varchar", nullable=False),
         Column("from_view", "varchar"),
         Column("label", "varchar"),
@@ -68,7 +73,7 @@ LOOKML_EXPLORE = TableSchema(
         Column("ai_context", "text"),
         Column("file_path", "varchar"),
     ),
-    primary_key=("name",),
+    primary_key=("model_name", "name"),
 )
 
 
@@ -91,6 +96,68 @@ def _quiet_lkml():
         yield
     finally:
         logger.setLevel(previous)
+
+
+# lkml 1.3.7 loops forever on some malformed input (for example a stray `;` after a quoted value), so one bad
+# file would hang the whole run. A parse that takes longer than this is abandoned and the file skipped; real
+# files parse in milliseconds.
+_PARSE_TIMEOUT_SECONDS = 10
+
+
+class _ParseTimeout(BaseException):
+    """The parser did not finish in time. A BaseException so no `except Exception` inside lkml can swallow it."""
+
+
+def _can_interrupt_with_signal() -> bool:
+    return hasattr(signal, "setitimer") and threading.current_thread() is threading.main_thread()
+
+
+def _parse(text: str) -> dict:
+    """`lkml.load(text)`, abandoned after _PARSE_TIMEOUT_SECONDS.
+
+    The hang is a Python-level loop, so on POSIX a timer signal interrupts it. Where that is not possible
+    (Windows, or a non-main thread) the parse runs in a child process that can be killed instead.
+    """
+    if not _can_interrupt_with_signal():
+        return _parse_in_subprocess(text)
+
+    def on_alarm(signum, frame):
+        raise _ParseTimeout()
+
+    previous = signal.signal(signal.SIGALRM, on_alarm)
+    signal.setitimer(signal.ITIMER_REAL, _PARSE_TIMEOUT_SECONDS)
+    try:
+        return lkml.load(text)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous if previous is not None else signal.SIG_DFL)
+
+
+_CHILD_PARSER = (
+    "import json, logging, sys, lkml\n"
+    "logging.getLogger('lkml').setLevel(logging.ERROR)\n"
+    "print(json.dumps(lkml.load(sys.stdin.read())))\n"
+)
+
+
+def _parse_in_subprocess(text: str) -> dict:
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    try:
+        done = subprocess.run(
+            [sys.executable, "-c", _CHILD_PARSER],
+            input=text,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            timeout=_PARSE_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        raise _ParseTimeout() from None
+    if done.returncode != 0:
+        lines = done.stderr.strip().splitlines()
+        raise ValueError(lines[-1] if lines else f"parser exited with status {done.returncode}")
+    return json.loads(done.stdout)
 
 
 def _warn(message: str) -> None:
@@ -140,7 +207,7 @@ class _Rows:
     views: dict[str, dict[str, str]] = field(default_factory=dict)
     dimensions: dict[tuple[str, str], dict[str, str]] = field(default_factory=dict)
     measures: dict[tuple[str, str], dict[str, str]] = field(default_factory=dict)
-    explores: dict[str, dict[str, str]] = field(default_factory=dict)
+    explores: dict[tuple[str, str], dict[str, str]] = field(default_factory=dict)  # keyed by (model_name, name)
 
 
 def _ingest(dest: Destination, files: list[Path], base_dir: Path) -> None:
@@ -163,10 +230,16 @@ def _collect(files: list[Path], base_dir: Path) -> _Rows:
             continue
         try:
             with _quiet_lkml():
-                documents.append((rel_path, lkml.load(text)))
-        except (SyntaxError, KeyError, ValueError, RecursionError) as e:  # lkml's own parse failures
+                documents.append((rel_path, _parse(text)))
+        except _ParseTimeout:
             rows.skipped += 1
-            _warn(f"skipping {rel_path}: could not parse LookML: {e}")
+            _warn(
+                f"skipping {rel_path}: the LookML parser did not finish within {_PARSE_TIMEOUT_SECONDS}s "
+                "(lkml can loop forever on some malformed input, for example a stray `;` after a value)"
+            )
+        except Exception as e:  # lkml fails in many ways on malformed input: SyntaxError, IndexError, ...
+            rows.skipped += 1
+            _warn(f"skipping {rel_path}: could not parse LookML: {type(e).__name__}: {e}")
     if files and not documents:
         raise ValueError(f"none of the {len(files)} LookML files in {base_dir} could be parsed")
 
@@ -229,8 +302,10 @@ def _merge_view(rows: _Rows, view: dict, rel_path: str) -> None:
             continue
         props = _field_props(measure)
         _check_sql(props, rel_path, name, measure_name)
-        if (filters := _filters(measure)) is not None:
-            props["filters"] = filters
+        if "filters__all" in measure or isinstance(measure.get("filters"), list):
+            # An explicit `filters: []` yields None here, which clears the filters inherited from the base
+            # measure when this is a refinement; an absent property leaves them alone.
+            props["filters"] = _filters(measure)
         rows.measures[(name, measure_name)] = {**rows.measures.get((name, measure_name), {}), **props}
 
 
@@ -242,20 +317,36 @@ def _check_sql(props: dict[str, str], rel_path: str, view_name: str, field_name:
         )
 
 
+def _model_name(rel_path: str) -> str:
+    """The Looker model an explore belongs to: the file name of a `*.model.lkml` file without that suffix.
+
+    An explore in any other file (for example an `*.explore.lkml` that models include) has no model of its own,
+    so its model name is empty.
+    """
+    file_name = Path(rel_path).name
+    return file_name[: -len(".model.lkml")] if file_name.endswith(".model.lkml") else ""
+
+
 def _merge_explore(rows: _Rows, explore: dict, rel_path: str) -> None:
     if (name := _block_name(explore, "explore", rel_path)) is None:
         return
+    model = _model_name(rel_path)
+    row_key = (model, name)
     refinement = _is_refinement(explore)
     props = {key: text for key in _EXPLORE_PROPS if (text := _text(explore.get(key))) is not None}
-    if refinement and name in rows.explores:
-        rows.explores[name].update(props)
+    if refinement and row_key in rows.explores:
+        rows.explores[row_key].update(props)
+    elif refinement and model and ("", name) in rows.explores:
+        # The base lives in a file that is not a model (included into models); the refinement applies to this
+        # model's copy of it, and the shared definition stays as it is.
+        rows.explores[row_key] = {**rows.explores[("", name)], **props}
     else:
         if refinement:
             _warn(
                 f"{rel_path}: explore +{name} refines an explore that is not defined in any ingested file "
                 "(or whose file could not be parsed); it is kept with only the refined properties"
             )
-        rows.explores[name] = {**props, "file_path": rel_path}
+        rows.explores[row_key] = {**props, "file_path": rel_path}
 
 
 def _field_props(block: dict) -> dict[str, str]:
@@ -329,6 +420,7 @@ def _write(dest: Destination, rows: _Rows) -> None:
     ]
     explores = [
         (
+            model_name,
             name,
             _string(p.get("from")) or name,
             _string(p.get("label")),
@@ -336,7 +428,7 @@ def _write(dest: Destination, rows: _Rows) -> None:
             _string(p.get("ai_context")),
             p["file_path"],
         )
-        for name, p in rows.explores.items()
+        for (model_name, name), p in rows.explores.items()
     ]
 
     if views:
