@@ -19,7 +19,8 @@ The canonical spelling of every delivered object is uppercase: the `AGENTS` sche
 | `varchar` | `VARCHAR` | String values. |
 | `text` | `TEXT` | Longer free-form text. |
 | `boolean` | `BOOLEAN` | Boolean values. |
-| `array` | `VARIANT` | Inserted as JSON via `PARSE_JSON`. |
+| `array` | `VARIANT` | Inserted as JSON via `PARSE_JSON`. On BigQuery, a repeated `STRING` column, so use it only for lists of strings. |
+| `variant` | `VARIANT` | Arbitrary JSON: a string, an object, or an array. Inserted as JSON via `PARSE_JSON`. BigQuery stores it in a native `JSON` column and Databricks in a `VARIANT` column. ClickHouse has no equivalent and stores `Array(String)` (a string becomes a one-element array; each object or list element becomes JSON text). A missing value is stored as the empty JSON array `[]` on Snowflake, Databricks and ClickHouse, and as `NULL` on BigQuery. |
 
 ---
 

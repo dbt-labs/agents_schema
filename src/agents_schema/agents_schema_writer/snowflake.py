@@ -196,7 +196,7 @@ def _identifier(identifier: str) -> str:
 def _type_sql(kind: str) -> str:
     if kind == "array":
         return "VARIANT"
-    if kind == "json":
+    if kind in {"json", "variant"}:
         return "VARIANT"
     if kind == "boolean":
         return "BOOLEAN"

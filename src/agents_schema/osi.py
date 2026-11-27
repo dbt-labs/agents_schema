@@ -30,7 +30,9 @@ from .skills import publish_builtin_skill
 
 __all__ = ["run"]
 
-# VARIANT columns reuse the destinations' "array" kind (JSON-encoded on insert).
+# "variant" columns hold arbitrary JSON (ai_context is a string or an object, expressions and
+# custom_extensions are lists of objects, unique_keys is a list of lists). BigQuery stores them as
+# native JSON; other destinations store them as they did before. "array" columns are string lists.
 OSI_MODEL = TableSchema(
     "AGENTS.OSI_MODEL",
     (
@@ -38,8 +40,8 @@ OSI_MODEL = TableSchema(
         Column("version", "varchar"),
         Column("description", "text"),
         Column("synonyms", "array"),
-        Column("ai_context", "array"),
-        Column("custom_extensions", "array"),
+        Column("ai_context", "variant"),
+        Column("custom_extensions", "variant"),
     ),
     primary_key=("name",),
 )
@@ -50,11 +52,11 @@ OSI_DATASET = TableSchema(
         Column("name", "varchar", nullable=False),
         Column("source", "varchar", nullable=False),
         Column("primary_key", "array"),
-        Column("unique_keys", "array"),
+        Column("unique_keys", "variant"),
         Column("description", "text"),
         Column("synonyms", "array"),
-        Column("ai_context", "array"),
-        Column("custom_extensions", "array"),
+        Column("ai_context", "variant"),
+        Column("custom_extensions", "variant"),
     ),
     primary_key=("model_name", "name"),
 )
@@ -66,10 +68,10 @@ OSI_FIELD = TableSchema(
         Column("label", "varchar"),
         Column("description", "text"),
         Column("is_time_dimension", "boolean"),
-        Column("expressions", "array"),
+        Column("expressions", "variant"),
         Column("synonyms", "array"),
-        Column("ai_context", "array"),
-        Column("custom_extensions", "array"),
+        Column("ai_context", "variant"),
+        Column("custom_extensions", "variant"),
     ),
     primary_key=("dataset_name", "name"),
 )
@@ -79,10 +81,10 @@ OSI_METRIC = TableSchema(
         Column("model_name", "varchar", nullable=False),
         Column("name", "varchar", nullable=False),
         Column("description", "text"),
-        Column("expressions", "array"),
+        Column("expressions", "variant"),
         Column("synonyms", "array"),
-        Column("ai_context", "array"),
-        Column("custom_extensions", "array"),
+        Column("ai_context", "variant"),
+        Column("custom_extensions", "variant"),
     ),
     primary_key=("model_name", "name"),
 )
@@ -96,8 +98,8 @@ OSI_RELATIONSHIP = TableSchema(
         Column("from_columns", "array", nullable=False),
         Column("to_columns", "array", nullable=False),
         Column("synonyms", "array"),
-        Column("ai_context", "array"),
-        Column("custom_extensions", "array"),
+        Column("ai_context", "variant"),
+        Column("custom_extensions", "variant"),
     ),
     primary_key=("model_name", "name"),
 )
