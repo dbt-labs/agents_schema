@@ -33,6 +33,10 @@ runs:
         DBT_PARSE_COMMAND: ${{ inputs.dbt-parse-command }}
         DBT_TARGET: ${{ inputs.dbt-target }}
       run: |
+        # dbt reads DBT_TARGET itself. Unset, it is "no target"; an empty value is not: dbt 2 looks up a
+        # target named '' and fails. Pass it on to the parse command only when a target was given.
+        [ -n "${DBT_TARGET:-}" ] || unset DBT_TARGET
+
         project_dir="$AGENTS_SCHEMA_DBT_PROJECT_DIR"
         manifest_path="$project_dir/target/manifest.json"
         profiles_dir="$RUNNER_TEMP/agents-schema-dbt-profiles"

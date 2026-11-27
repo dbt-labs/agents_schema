@@ -1,4 +1,7 @@
+import os
 import re
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -141,6 +144,34 @@ class GitHubActionsTests(unittest.TestCase):
                     contents.index(runtime_reference),
                     contents.rindex("uses: $/.github/actions/"),
                 )
+
+    def test_dbt_action_does_not_export_an_empty_dbt_target_to_the_parse_command(self):
+        # The action always sets DBT_TARGET (to "" when the `dbt-target` input is empty). dbt itself reads
+        # DBT_TARGET: dbt 2 treats an empty value as a target named '' and fails, so the script must pass it
+        # on only when a target was given. Run the real script with a stand-in `uvx` that records its environment.
+        steps = yaml.safe_load((ACTION_ROOT / "agents-schema-dbt" / "action.yml").read_text())["runs"]["steps"]
+        script = next(step["run"] for step in steps if step.get("name") == "Prepare dbt manifest")
+
+        def target_seen_by_parse_command(dbt_target):
+            with tempfile.TemporaryDirectory() as tmp:
+                bin_dir = Path(tmp) / "bin"
+                bin_dir.mkdir()
+                seen = Path(tmp) / "seen"
+                probe = bin_dir / "uvx"
+                probe.write_text(f'#!/bin/bash\nprintf "%s" "${{DBT_TARGET+set:$DBT_TARGET}}" > "{seen}"\n')
+                probe.chmod(0o755)
+                env = {
+                    "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+                    "RUNNER_TEMP": tmp,
+                    "AGENTS_SCHEMA_DBT_PROJECT_DIR": str(Path(tmp) / "project"),
+                    "DBT_PARSE_COMMAND": "uvx dbt parse",
+                    "DBT_TARGET": dbt_target,
+                }
+                subprocess.run(["bash", "-e", "-c", script], env=env, capture_output=True, text=True)
+                return seen.read_text()
+
+        self.assertEqual(target_seen_by_parse_command(""), "")
+        self.assertEqual(target_seen_by_parse_command("prod"), "set:prod")
 
     def test_runtime_action_reports_ref_commit_and_cli_version(self):
         contents = RUNTIME_ACTION.read_text()
