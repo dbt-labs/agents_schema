@@ -80,8 +80,8 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
 5. **Translate the formula to SQL.** OSI `expression` is usually plain SQL (e.g. `SUM(amount)`)
    — use it as-is against the resolved table. For LookML `sql`: `${TABLE}.col` → `col`;
    `${other_field}` → look that field up and substitute recursively; `{% if %}…{% else %} X {% endif %}`
-   → use the `{% else %}` branch. For Omni `sql`: the value is a quoted column reference
-   (e.g. `'"AMOUNT"'`) — strip the outer quotes and use the inner identifier directly.
+   → use the `{% else %}` branch. For Omni `sql`, resolve any Omni field references in the expression.
+   Preserve identifier spelling and use the warehouse's quoting rules.
    Dialect notes: use `dateDiff('unit', a, b)`, `toStartOfMonth(...)` for date math; string
    concat is `||` or `concat()`. On ClickHouse 25.3+ the `meta` columns are native JSON with
    direct path access (`meta.owner`); on older servers they are `String` holding JSON text, so

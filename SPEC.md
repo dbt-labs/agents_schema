@@ -736,7 +736,7 @@ CREATE OR REPLACE TABLE AGENTS.OMNI_DIMENSION (
 | `view_name` | The view the dimension belongs to. |
 | `field_name` | The key of the entry in `dimensions`. |
 | `label` | The dimension's `label`. |
-| `sql` | The dimension's `sql`. In Omni this is usually a quoted column reference such as `'"AMOUNT"'`; strip the outer quotes to get the identifier. |
+| `sql` | The dimension's SQL expression as parsed from YAML. For example, YAML `sql: '"OrderId"'` is stored as `"OrderId"`. |
 | `format` | The dimension's `format`. |
 | `description` | The dimension's `description`. |
 | `primary_key` | `true` when the dimension sets `primary_key`, otherwise `false`. |
@@ -763,7 +763,7 @@ CREATE OR REPLACE TABLE AGENTS.OMNI_MEASURE (
 | `measure_name` | The key of the entry in `measures`. |
 | `label` | The measure's `label`. |
 | `aggregate_type` | The measure's `aggregate_type` (for example `sum` or `count`). |
-| `sql` | The measure's `sql`, with the same quoting convention as dimensions. |
+| `sql` | The measure's SQL expression as parsed from YAML. |
 | `description` | The measure's `description`. |
 
 ### `AGENTS.OMNI_TOPIC`

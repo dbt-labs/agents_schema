@@ -62,8 +62,8 @@ that instruction in `AGENTS.*` and follow it — not to guess a formula, table, 
    objects. Choose the expression for Snowflake, falling back to `ANSI_SQL` only when compatible,
    and use its `expression` value against the resolved table. For LookML `sql`: `${TABLE}.col` → `col`;
    `${other_field}` → look that field up and substitute recursively; `{% if %}…{% else %} X {% endif %}`
-   → use the `{% else %}` branch. For Omni `sql`: the value is a quoted column reference
-   (e.g. `'"AMOUNT"'`) — strip the outer quotes and use the inner identifier directly.
+   → use the `{% else %}` branch. For Omni `sql`, resolve any Omni field references in the expression.
+   Preserve identifier spelling and use the warehouse's quoting rules.
 
 5. **Pick the time grain from metadata.** Use the time dimension the metadata marks
    (`osi_field.is_time_dimension`, or a LookML `dimension_group`). For "current"/snapshot
