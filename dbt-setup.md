@@ -132,8 +132,9 @@ In your dbt project repository, set up a new GitHub Workflow from the Actions ta
 The workflow needs a dbt manifest at `<dbt project>/target/manifest.json`. It finds or creates one in
 this order:
 
-1. **An existing manifest.** If the file is already there when the job runs (committed to the
-   repository, or produced by an earlier step), it is used as is.
+1. **An existing manifest.** If the file is already in the repository checkout when the workflow runs
+   (that is, committed), it is used as is. The workflow runs in its own job, so a manifest produced by
+   another job of your workflow is not available to it.
 2. **A custom parse command.** If `dbt-parse-command` is set, the workflow runs it to create the manifest.
 3. **Managed parse.** If the `DBT_PROFILES_YML` secret and `dbt-profile-name` are set, the workflow runs
    `dbt deps` (when the project has a `packages.yml` or `dependencies.yml`) and `dbt parse` for you.
@@ -207,15 +208,39 @@ jobs:
   other type is rejected.
 - Managed parse runs `dbt-core` 1.x with that adapter (these adapters require `dbt-core<2`). A manifest
   that already exists always wins, so remove the committed one if you want the workflow to regenerate it.
-- To use a different command, set `dbt-parse-command` to anything that writes `target/manifest.json`.
-  It takes precedence over managed parse. When `DBT_PROFILES_YML` is set, it is written to
-  `$RUNNER_TEMP/agents-schema-dbt-profiles/profiles.yml` before the command runs.
+- To use a different command, set `dbt-parse-command`. It takes precedence over managed parse and runs
+  with `bash` from the repository root, so it must write `<dbt-project-dir>/target/manifest.json`: pass
+  `--project-dir` (for `dbt-project-dir: dbt_project`, use `--project-dir dbt_project`). When
+  `DBT_PROFILES_YML` is set, it is written to `$RUNNER_TEMP/agents-schema-dbt-profiles/profiles.yml`
+  before the command runs, so `--profiles-dir "$RUNNER_TEMP/agents-schema-dbt-profiles"` finds it. If you
+  also set `dbt-profile-name`, the profile is validated first (its `type` must be one of the four above)
+  and the matching adapter package is exported as `DBT_ADAPTER_PACKAGE`. Leave `dbt-profile-name` unset
+  to skip that validation, for example to use an adapter that is not in the list.
 
 #### Manifests from dbt 2
 
-You can generate the manifest with dbt 2 (the `dbt` package on PyPI, a Rust-based engine) yourself, in an
-earlier step or with `dbt-parse-command`, and the workflow ingests it. Agents Schema reads the same
-manifest fields from both. On a sample project, dbt 2.0.13 and dbt-core 1.12.7 produced identical
+You can generate the manifest with dbt 2 (the `dbt` package on PyPI, a Rust-based engine) by using
+`dbt-parse-command`, and the workflow ingests it:
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  agents-schema-dbt:
+    uses: dbt-labs/agents_schema/.github/workflows/agents-schema-dbt.yml@v0
+    with:
+      dbt-project-dir: dbt_project
+      dbt-parse-command: >-
+        uvx --from "dbt==2.0.13" dbt parse --project-dir dbt_project
+        --profiles-dir "$RUNNER_TEMP/agents-schema-dbt-profiles" --no-partial-parse
+    secrets:
+      WAREHOUSE_CREDENTIALS: ${{ secrets.WAREHOUSE_CREDENTIALS }}
+      DBT_PROFILES_YML: ${{ secrets.DBT_PROFILES_YML }}
+```
+
+Agents Schema reads the same manifest fields from both. On a sample project, dbt 2.0.13 and dbt-core 1.12.7 produced identical
 `AGENTS.DBT_*` rows with BigQuery, Snowflake, Databricks, ClickHouse, and DuckDB profiles. One
 difference to know about: dbt 2 requires `meta` under `config:`. A top-level `meta:` key on a model
 or column is an error (`dbt parse` exits with status 1), and the value is left out of the manifest,
