@@ -47,7 +47,11 @@ CREATE USER AGENTS_SCHEMA_BOT TYPE = SERVICE
     SUBJECT = 'repo:your-org/your-repo:ref:refs/heads/main'
     OIDC_AUDIENCE_LIST = ('https://abc123.snowflakecomputing.com')
   );
+GRANT ROLE TRANSFORMER TO USER AGENTS_SCHEMA_BOT;
 ```
+
+A new user can only use `PUBLIC` until a role is granted, and Snowflake rejects
+a login that requests a role the user does not hold (error 390186).
 
 Then set `WAREHOUSE_CREDENTIALS` to:
 
