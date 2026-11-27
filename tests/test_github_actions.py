@@ -173,6 +173,35 @@ class GitHubActionsTests(unittest.TestCase):
         self.assertEqual(target_seen_by_parse_command(""), "")
         self.assertEqual(target_seen_by_parse_command("prod"), "set:prod")
 
+    def test_composite_actions_do_not_expand_expressions_inside_shell_scripts(self):
+        # `${{ inputs.x }}` inside a `run:` block is pasted into the script before the shell parses it,
+        # so a value containing quotes or `$(...)` would run as code. Pass inputs through `env:` instead.
+        actions = sorted(ACTION_ROOT.glob("*/action.yml"))
+
+        self.assertTrue(actions)
+        for action in actions:
+            steps = yaml.safe_load(action.read_text())["runs"]["steps"]
+            for step in steps:
+                with self.subTest(action=action.parent.name, step=step.get("name")):
+                    self.assertNotIn("${{", step.get("run", ""))
+
+    def test_workflows_do_not_expand_expressions_inside_shell_scripts_either(self):
+        for workflow in sorted(WORKFLOW_ROOT.glob("*.yml")):
+            jobs = yaml.safe_load(workflow.read_text()).get("jobs", {})
+            for job_name, job in jobs.items():
+                for step in job.get("steps", []):
+                    with self.subTest(workflow=workflow.name, job=job_name, step=step.get("name")):
+                        self.assertNotIn("${{", step.get("run", ""))
+
+    def test_skills_action_hands_its_inputs_to_the_script_through_env(self):
+        steps = yaml.safe_load((ACTION_ROOT / "agents-schema-skills" / "action.yml").read_text())["runs"]["steps"]
+        step = next(s for s in steps if "agents-schema skills" in s.get("run", ""))
+
+        self.assertEqual(step["env"]["AGENTS_SCHEMA_SKILLS_DIR"], "${{ inputs.skills-dir }}")
+        self.assertEqual(step["env"]["AGENTS_SCHEMA_SKILLS_PROVIDER"], "${{ inputs.provider }}")
+        self.assertIn('"$AGENTS_SCHEMA_SKILLS_DIR"', step["run"])
+        self.assertIn('"$AGENTS_SCHEMA_SKILLS_PROVIDER"', step["run"])
+
     def test_runtime_action_reports_ref_commit_and_cli_version(self):
         contents = RUNTIME_ACTION.read_text()
 

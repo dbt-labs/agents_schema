@@ -30,7 +30,9 @@ from .skills import publish_builtin_skill
 
 __all__ = ["run"]
 
-# VARIANT columns reuse the destinations' "array" kind (JSON-encoded on insert).
+# "variant" columns hold arbitrary JSON (ai_context is a string or an object, expressions and
+# custom_extensions are lists of objects, unique_keys is a list of lists). BigQuery stores them as
+# native JSON; other destinations store them as they did before. "array" columns are string lists.
 OSI_MODEL = TableSchema(
     "AGENTS.OSI_MODEL",
     (
@@ -38,8 +40,8 @@ OSI_MODEL = TableSchema(
         Column("version", "varchar"),
         Column("description", "text"),
         Column("synonyms", "array"),
-        Column("ai_context", "array"),
-        Column("custom_extensions", "array"),
+        Column("ai_context", "variant"),
+        Column("custom_extensions", "variant"),
     ),
     primary_key=("name",),
 )
@@ -50,11 +52,11 @@ OSI_DATASET = TableSchema(
         Column("name", "varchar", nullable=False),
         Column("source", "varchar", nullable=False),
         Column("primary_key", "array"),
-        Column("unique_keys", "array"),
+        Column("unique_keys", "variant"),
         Column("description", "text"),
         Column("synonyms", "array"),
-        Column("ai_context", "array"),
-        Column("custom_extensions", "array"),
+        Column("ai_context", "variant"),
+        Column("custom_extensions", "variant"),
     ),
     primary_key=("model_name", "name"),
 )
@@ -66,10 +68,10 @@ OSI_FIELD = TableSchema(
         Column("label", "varchar"),
         Column("description", "text"),
         Column("is_time_dimension", "boolean"),
-        Column("expressions", "array"),
+        Column("expressions", "variant"),
         Column("synonyms", "array"),
-        Column("ai_context", "array"),
-        Column("custom_extensions", "array"),
+        Column("ai_context", "variant"),
+        Column("custom_extensions", "variant"),
     ),
     primary_key=("dataset_name", "name"),
 )
@@ -79,10 +81,10 @@ OSI_METRIC = TableSchema(
         Column("model_name", "varchar", nullable=False),
         Column("name", "varchar", nullable=False),
         Column("description", "text"),
-        Column("expressions", "array"),
+        Column("expressions", "variant"),
         Column("synonyms", "array"),
-        Column("ai_context", "array"),
-        Column("custom_extensions", "array"),
+        Column("ai_context", "variant"),
+        Column("custom_extensions", "variant"),
     ),
     primary_key=("model_name", "name"),
 )
@@ -96,8 +98,8 @@ OSI_RELATIONSHIP = TableSchema(
         Column("from_columns", "array", nullable=False),
         Column("to_columns", "array", nullable=False),
         Column("synonyms", "array"),
-        Column("ai_context", "array"),
-        Column("custom_extensions", "array"),
+        Column("ai_context", "variant"),
+        Column("custom_extensions", "variant"),
     ),
     primary_key=("model_name", "name"),
 )
@@ -109,10 +111,11 @@ _SCHEMA = json.loads((resources.files("agents_schema") / "osi-schema.json").read
 def run(cfg: dict) -> None:
     osi_dir = Path(cfg["metadata_connection"]["path"])
     docs = _load_osi_files(osi_dir)
+    rows = _collect(docs)  # parse first: nothing is written to the warehouse unless every file is usable
     with open_destination(cfg) as dest:
         upsert_provider_root(dest, "osi")
         _create_tables(dest)
-        _ingest(dest, docs)
+        _write(dest, rows)
         publish_builtin_skill(dest, warehouse_type(cfg))
 
 
@@ -122,13 +125,22 @@ def _load_osi_files(osi_dir: Path) -> list[dict]:
         raise FileNotFoundError(f"no *.osi.yaml files found in {osi_dir}")
     docs = []
     for f in files:
-        doc = yaml.safe_load(f.read_text())
+        try:
+            doc = yaml.safe_load(f.read_text())
+        except (yaml.YAMLError, ValueError) as e:
+            raise ValueError(f"{f}: invalid YAML: {e}") from e
         _validate(doc, f)
         docs.append(doc)
     return docs
 
 
 def _validate(doc: Any, path: Path) -> None:
+    supported = _SCHEMA["properties"]["version"].get("const")
+    version = doc.get("version") if isinstance(doc, dict) else None
+    if supported and version is not None and version != supported:
+        raise ValueError(
+            f"{path}: unsupported OSI version {version!r}; this release of agents-schema reads OSI {supported}"
+        )
     try:
         jsonschema.validate(doc, _SCHEMA)
     except jsonschema.ValidationError as e:
@@ -155,6 +167,10 @@ def _dialects(expr: Any) -> list[dict]:
 
 
 def _ingest(dest: Destination, docs: list[dict]) -> None:
+    _write(dest, _collect(docs))
+
+
+def _collect(docs: list[dict]) -> tuple[list, list, list, list, list]:
     models, datasets, fields, metrics, relationships = [], [], [], [], []
 
     for doc in docs:
@@ -225,10 +241,15 @@ def _ingest(dest: Destination, docs: list[dict]) -> None:
                     r.get("custom_extensions"),
                 ))
 
-    for table, rows in zip(_TABLES, (models, datasets, fields, metrics, relationships)):
-        if rows:
-            dest.insert_rows(table, rows)
+    return models, datasets, fields, metrics, relationships
 
+
+def _write(dest: Destination, rows: tuple[list, list, list, list, list]) -> None:
+    for table, table_rows in zip(_TABLES, rows):
+        if table_rows:
+            dest.insert_rows(table, table_rows)
+
+    models, datasets, fields, metrics, relationships = rows
     print(
         f"  osi:      {len(models)} models, {len(datasets)} datasets, {len(fields)} fields, "
         f"{len(metrics)} metrics, {len(relationships)} relationships"

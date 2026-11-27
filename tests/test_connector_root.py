@@ -2,6 +2,8 @@ import unittest
 from unittest.mock import patch
 
 from agents_schema import dbt, lookml, omni, osi, sigma, skills, snowflake_semantic
+from agents_schema.config import ConfigError
+from agents_schema.destinations import RowScope
 from agents_schema.skills import SkillFile
 
 
@@ -20,6 +22,9 @@ class FakeDestination:
 
     def delete_rows(self, table, key_columns, rows):
         self.calls.append(("delete", table.name, key_columns, list(rows)))
+
+    def reconcile_rows(self, table, rows, scope=None):
+        self.calls.append(("reconcile", table.name, list(rows), scope))
 
 
 class DestinationContext:
@@ -90,7 +95,7 @@ class ConnectorRootTests(unittest.TestCase):
 
         with (
             patch("agents_schema.omni.open_destination", return_value=DestinationContext(dest)),
-            patch("agents_schema.omni._ingest"),
+            patch("agents_schema.omni._collect", return_value=omni._Rows(found=1, usable=1)),
             patch("builtins.print"),
         ):
             omni.run(cfg)
@@ -137,12 +142,29 @@ class ConnectorRootTests(unittest.TestCase):
 
         self.assertEqual(dest.calls[0][0], "upsert")
         self.assertEqual({row[0] for row in dest.calls[0][2]}, {"skills"})
-        self.assertEqual(dest.calls[1][0], "upsert")
-        self.assertEqual(dest.calls[1][1], "AGENTS.ROOT")
-        self.assertEqual(dest.calls[1][2], [("fivetran", "skill/revenue", "# Revenue\n")])
-        self.assertEqual(dest.calls[2], ("replace", "AGENTS.SKILL_USE"))
-        self.assertEqual(dest.calls[3][0], "insert")
-        self.assertEqual(dest.calls[3][1], "AGENTS.SKILL_USE")
+        # skills are reconciled within this provider's skill/ rows, so removed skills disappear and
+        # no other row (this provider's other rows, other providers, other providers' SKILL_USE) is touched
+        self.assertEqual(
+            dest.calls[1],
+            (
+                "reconcile",
+                "AGENTS.ROOT",
+                [("fivetran", "skill/revenue", "# Revenue\n")],
+                RowScope(equals=(("provider", "fivetran"),), starts_with=(("key", "skill/"),)),
+            ),
+        )
+        self.assertEqual(dest.calls[2][:2], ("reconcile", "AGENTS.SKILL_USE"))
+        self.assertEqual(dest.calls[2][3], RowScope(equals=(("provider", "fivetran"),)))
+        self.assertNotIn("replace", [call[0] for call in dest.calls])
+
+    def test_skills_run_rejects_the_reserved_skills_provider(self):
+        dest = FakeDestination()
+        cfg = {"warehouse": {"type": "snowflake"}, "metadata_connection": {"path": ".", "provider": "skills"}}
+
+        with patch("agents_schema.skills.open_destination", return_value=DestinationContext(dest)):
+            with self.assertRaisesRegex(ConfigError, "reserved"):
+                skills.run(cfg)
+        self.assertEqual(dest.calls, [])
 
     def test_sigma_run_upserts_root_before_source_tables(self):
         dest = FakeDestination()
@@ -182,9 +204,13 @@ class ConnectorRootTests(unittest.TestCase):
         self.assertEqual(dest.calls[0][1], "AGENTS.ROOT")
         self.assertEqual({row[0] for row in dest.calls[0][2]}, {"snowflake_semantic"})
         self.assertEqual({row[1] for row in dest.calls[0][2]}, {"overview"})
-        # second call: per-view pointer row
-        self.assertEqual(dest.calls[1][0], "upsert")
+        # second call: per-view pointer rows, reconciled so a dropped view loses its pointer
+        self.assertEqual(dest.calls[1][0], "reconcile")
         self.assertEqual(dest.calls[1][1], "AGENTS.ROOT")
+        self.assertEqual(
+            dest.calls[1][3],
+            RowScope(equals=(("provider", "snowflake_semantic"),), starts_with=(("key", "semantic_view/"),)),
+        )
         self.assertEqual(dest.calls[1][2][0][0], "snowflake_semantic")
         self.assertEqual(dest.calls[1][2][0][1], "semantic_view/ANALYTICS.FINANCE.REVENUE")
         self.assertIn("Snowflake object: `ANALYTICS.FINANCE.REVENUE`", dest.calls[1][2][0][2])

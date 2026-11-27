@@ -14,6 +14,7 @@ from .agents_schema_writer import (
     ClickHouseAgentsSchemaWriter,
     Column,
     DatabricksAgentsSchemaWriter,
+    RowScope,
     SnowflakeAgentsSchemaWriter,
     TableSchema,
 )
@@ -376,6 +377,7 @@ __all__ = [
     "Column",
     "DatabricksDestination",
     "Destination",
+    "RowScope",
     "SnowflakeDestination",
     "TableSchema",
     "_bigquery_credentials_from_secret",

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,10 +12,10 @@ import yaml
 import importlib.resources
 
 from .config import ConfigError, warehouse_type
-from .destinations import Column, Destination, TableSchema, open_destination
+from .destinations import Column, Destination, RowScope, TableSchema, open_destination
 from .root import ROOT, upsert_provider_root
 
-__all__ = ["SKILL_USE", "publish_builtin_skill", "publish_skill", "run"]
+__all__ = ["SKILL_USE", "publish_builtin_skill", "publish_skill", "run", "skill_root_scope"]
 
 SKILL_USE = TableSchema(
     "AGENTS.SKILL_USE",
@@ -40,6 +41,10 @@ def run(cfg: dict) -> None:
     metadata = cfg["metadata_connection"]
     skills_dir = Path(metadata["path"])
     provider = metadata["provider"]
+    if provider == "skills":
+        raise ConfigError(
+            'provider "skills" is reserved for the built-in skill and skill metadata; choose a different --provider value'
+        )
     skills = _load_skill_files(skills_dir)
     root_rows = [(provider, skill.key, skill.content) for skill in skills]
     use_rows = [
@@ -54,13 +59,19 @@ def run(cfg: dict) -> None:
 
     with open_destination(cfg) as dest:
         upsert_provider_root(dest, "skills")
-        dest.upsert_rows(ROOT, root_rows)
-        dest.replace_table(SKILL_USE)
-        if use_rows:
-            dest.insert_rows(SKILL_USE, use_rows)
+        # Keep this provider's slice in sync with the directory: a skill removed from the repo is
+        # removed from AGENTS.ROOT too, while the provider's other rows and every other provider's
+        # rows (and SKILL_USE rows) are left alone.
+        dest.reconcile_rows(ROOT, root_rows, scope=skill_root_scope(provider))
+        dest.reconcile_rows(SKILL_USE, use_rows, scope=RowScope(equals=(("provider", provider),)))
         publish_builtin_skill(dest, warehouse_type(cfg))
 
     print(f"  skills:   {len(root_rows)} skills, {len(use_rows)} uses")
+
+
+def skill_root_scope(provider: str) -> RowScope:
+    """One provider's skill rows in AGENTS.ROOT (key `skill/...`), excluding its other rows."""
+    return RowScope(equals=(("provider", provider),), starts_with=(("key", "skill/"),))
 
 
 BUILTIN_ANALYST_KEY = "skill/agents-schema-analyst"
@@ -158,7 +169,15 @@ def _parse_uses_frontmatter(content: str) -> tuple[tuple[tuple[str, str], ...], 
     extra = sorted(set(uses) - {"schemas", "tables"})
     if extra:
         return (), ("uses only supports schemas and tables",)
-    return tuple(rows), ()
+
+    # A repeated entry would otherwise be written twice (BigQuery has no unique constraint), and because a
+    # later sync only removes rows that no longer match any listed entry, the extra row would survive
+    # fixing the file. Store each entry once and say so.
+    unique = tuple(dict.fromkeys(rows))
+    if len(unique) != len(rows):
+        repeated = sorted(f"{kind} {ref}" for (kind, ref), n in Counter(rows).items() if n > 1)
+        return unique, (f"uses lists the same entry more than once ({', '.join(repeated)}); it is stored once",)
+    return unique, ()
 
 
 def _frontmatter(content: str) -> tuple[str | None, str | None]:

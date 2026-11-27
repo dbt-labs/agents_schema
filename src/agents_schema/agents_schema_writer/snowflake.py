@@ -7,8 +7,8 @@ from typing import Any, Iterable
 from agents_schema.config import ConfigError
 
 from .base import AgentsSchemaWriter
-from .schema import AGENTS_SCHEMA, TableSchema
-from .utils import batched, bind_json_rows, flatten, primary_key_rows
+from .schema import AGENTS_SCHEMA, RowScope, TableSchema
+from .utils import batched, bind_json_rows, check_rows_in_scope, flatten, primary_key_rows, scope_terms
 
 INSERT_BATCH_SIZE = 1000
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
@@ -64,19 +64,37 @@ class SnowflakeAgentsSchemaWriter(AgentsSchemaWriter):
                     flatten(batch),
                 )
 
-    def reconcile_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None:
+    def reconcile_rows(
+        self,
+        table: TableSchema,
+        rows: Iterable[tuple[Any, ...]],
+        scope: RowScope | None = None,
+    ) -> None:
         rows = list(rows)
+        check_rows_in_scope(table, rows, scope)
         self.ensure_table(table)
         self.upsert_rows(table, rows)
-        self._delete_absent_rows(table, primary_key_rows(table, rows))
+        self._delete_absent_rows(table, primary_key_rows(table, rows), scope)
 
     def close(self) -> None:
         self._con.close()
 
-    def _delete_absent_rows(self, table: TableSchema, key_rows: list[tuple[Any, ...]]) -> None:
+    def _delete_absent_rows(
+        self,
+        table: TableSchema,
+        key_rows: list[tuple[Any, ...]],
+        scope: RowScope | None = None,
+    ) -> None:
+        scope_sql, scope_params = _scope_sql(scope)
         with self._con.cursor() as cur:
             if not key_rows:
-                cur.execute(f"DELETE FROM {_table_name(table, AGENTS_SCHEMA)}")
+                if scope_sql:
+                    cur.execute(
+                        f"DELETE FROM {_table_name(table, AGENTS_SCHEMA)} AS target\nWHERE {scope_sql}",
+                        tuple(scope_params),
+                    )
+                else:
+                    cur.execute(f"DELETE FROM {_table_name(table, AGENTS_SCHEMA)}")
                 return
             source_columns = tuple(_column_for_delete_key(column) for column in table.primary_key)
             source_table = TableSchema(table.name, source_columns)
@@ -87,12 +105,21 @@ class SnowflakeAgentsSchemaWriter(AgentsSchemaWriter):
             )
             cur.execute(
                 f"DELETE FROM {_table_name(table, AGENTS_SCHEMA)} AS target\n"
-                f"WHERE NOT EXISTS (\n"
+                f"WHERE {scope_sql + ' AND ' if scope_sql else ''}NOT EXISTS (\n"
                 f"    SELECT 1 FROM ({source_select}) AS source\n"
                 f"    WHERE {exists_sql}\n"
                 f")",
-                flatten(key_rows),
+                tuple(scope_params) + flatten(key_rows),
             )
+
+
+def _scope_sql(scope: RowScope | None) -> tuple[str, list[Any]]:
+    clauses, params = [], []
+    for kind, column, value in scope_terms(scope):
+        target = f"target.{_identifier(column)}"
+        clauses.append(f"{target} = %s" if kind == "eq" else f"STARTSWITH({target}, %s)")
+        params.append(value)
+    return " AND ".join(clauses), params
 
 
 def _column_for_delete_key(name: str):
@@ -196,7 +223,7 @@ def _identifier(identifier: str) -> str:
 def _type_sql(kind: str) -> str:
     if kind == "array":
         return "VARIANT"
-    if kind == "json":
+    if kind in {"json", "variant"}:
         return "VARIANT"
     if kind == "boolean":
         return "BOOLEAN"
