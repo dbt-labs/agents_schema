@@ -8,8 +8,8 @@ from typing import Any
 from agents_schema.config import ConfigError
 
 from .base import AgentsSchemaWriter
-from .schema import AGENTS_SCHEMA, Column, TableSchema
-from .utils import batched, primary_key_rows
+from .schema import AGENTS_SCHEMA, Column, RowScope, TableSchema
+from .utils import batched, check_rows_in_scope, primary_key_rows, scope_terms
 
 INSERT_BATCH_SIZE = 1000
 CLICKHOUSE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
@@ -110,11 +110,17 @@ class ClickHouseAgentsSchemaWriter(AgentsSchemaWriter):
         self.ensure_table(table)
         self._delete_matching_keys(table, key_columns, key_rows)
 
-    def reconcile_rows(self, table: TableSchema, rows: Iterable[tuple[Any, ...]]) -> None:
+    def reconcile_rows(
+        self,
+        table: TableSchema,
+        rows: Iterable[tuple[Any, ...]],
+        scope: RowScope | None = None,
+    ) -> None:
         rows = list(rows)
+        check_rows_in_scope(table, rows, scope)
         self.ensure_table(table)
         self.upsert_rows(table, rows)
-        self._delete_absent_rows(table, primary_key_rows(table, rows))
+        self._delete_absent_rows(table, primary_key_rows(table, rows), scope)
 
     def close(self) -> None:
         self._client.close()
@@ -141,15 +147,40 @@ class ClickHouseAgentsSchemaWriter(AgentsSchemaWriter):
                 parameters=parameters,
             )
 
-    def _delete_absent_rows(self, table: TableSchema, key_rows: list[tuple[Any, ...]]) -> None:
+    def _scope_predicate(self, scope: RowScope | None) -> tuple[str, dict[str, Any]]:
+        clauses, parameters = [], {}
+        for index, (kind, column, value) in enumerate(scope_terms(scope)):
+            name = f"scope{index}"
+            identifier = self._identifier(column)
+            clauses.append(
+                f"{identifier} = {{{name}:String}}" if kind == "eq" else f"startsWith({identifier}, {{{name}:String}})"
+            )
+            parameters[name] = value
+        return " AND ".join(clauses), parameters
+
+    def _delete_absent_rows(
+        self,
+        table: TableSchema,
+        key_rows: list[tuple[Any, ...]],
+        scope: RowScope | None = None,
+    ) -> None:
+        scope_sql, scope_parameters = self._scope_predicate(scope)
         if not key_rows:
-            self._command(f"TRUNCATE TABLE {self._table_ref(table)}")
+            if scope_sql:
+                self._command(
+                    f"DELETE FROM {self._table_ref(table)} WHERE {scope_sql}",
+                    settings=_DELETE_SETTINGS,
+                    parameters=scope_parameters,
+                )
+            else:
+                self._command(f"TRUNCATE TABLE {self._table_ref(table)}")
             return
         predicate, parameters = self._key_predicate(table.primary_key, key_rows)
+        where = f"{scope_sql} AND NOT ({predicate})" if scope_sql else f"NOT ({predicate})"
         self._command(
-            f"DELETE FROM {self._table_ref(table)} WHERE NOT ({predicate})",
+            f"DELETE FROM {self._table_ref(table)} WHERE {where}",
             settings=_DELETE_SETTINGS,
-            parameters=parameters,
+            parameters={**scope_parameters, **parameters},
         )
 
     def _key_predicate(

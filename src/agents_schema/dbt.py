@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .config import warehouse_type
+from .inputs import parse_input
 from .destinations import Column, Destination, TableSchema, open_destination
 from .root import upsert_provider_root
 from .skills import publish_builtin_skill
@@ -52,10 +53,11 @@ DBT_DEPENDENCY = TableSchema(
 def run(cfg: dict) -> None:
     manifest_path = Path(cfg["metadata_connection"]["path"]) / "target" / "manifest.json"
     manifest = _load_manifest(manifest_path)
+    rows = parse_input("dbt manifest", _collect, manifest)  # parse first: a bad manifest must not leave emptied tables behind
     with open_destination(cfg) as dest:
         upsert_provider_root(dest, "dbt")
         _create_tables(dest)
-        _ingest(dest, manifest)
+        _write(dest, rows)
         publish_builtin_skill(dest, warehouse_type(cfg))
 
 
@@ -75,11 +77,17 @@ def _create_tables(dest: Destination) -> None:
 
 
 def _ingest(dest: Destination, manifest: dict) -> None:
+    _write(dest, _collect(manifest))
+
+
+def _collect(manifest: dict) -> tuple[list, list, list]:
     models, columns, dependencies = [], [], []
 
     for uid, node in manifest.get("nodes", {}).items():
         if node.get("resource_type") != "model":
             continue
+        if not node.get("name"):
+            raise ValueError(f"dbt manifest node {uid} has no name")
 
         models.append((
             uid,
@@ -106,6 +114,11 @@ def _ingest(dest: Destination, manifest: dict) -> None:
             dep_type = dep_uid.split(".")[0] if "." in dep_uid else "unknown"
             dependencies.append((dep_uid, uid, dep_type, "model"))
 
+    return models, columns, dependencies
+
+
+def _write(dest: Destination, rows: tuple[list, list, list]) -> None:
+    models, columns, dependencies = rows
     if models:
         dest.insert_rows(DBT_MODEL, models)
     if columns:

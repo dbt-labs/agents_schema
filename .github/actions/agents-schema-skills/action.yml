@@ -20,8 +20,10 @@ runs:
       shell: bash
       env:
         UV_PYTHON: '3.12'
+        AGENTS_SCHEMA_SKILLS_DIR: ${{ inputs.skills-dir }}
+        AGENTS_SCHEMA_SKILLS_PROVIDER: ${{ inputs.provider }}
       run: |
         uvx --from "$GITHUB_ACTION_PATH/../../.." \
           agents-schema skills \
-            --skills-dir "${{ inputs.skills-dir }}" \
-            --provider "${{ inputs.provider }}"
+            --skills-dir "$AGENTS_SCHEMA_SKILLS_DIR" \
+            --provider "$AGENTS_SCHEMA_SKILLS_PROVIDER"

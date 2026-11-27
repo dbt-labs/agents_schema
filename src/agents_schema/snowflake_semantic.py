@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from .config import ConfigError, warehouse_type
-from .destinations import Destination, open_destination
+from .destinations import Destination, RowScope, open_destination
 from .root import ROOT, upsert_provider_root
 from .skills import publish_builtin_skill
 
@@ -24,7 +24,8 @@ def run(cfg: dict) -> None:
 def publish_semantic_view_pointers(dest: Destination, semantic_views: Iterable[str]) -> None:
     upsert_provider_root(dest, PROVIDER)
     rows = [_root_row(name) for name in _normalize_semantic_views(semantic_views)]
-    dest.upsert_rows(ROOT, rows)
+    # A view dropped from the configured list loses its pointer row; the overview row is untouched.
+    dest.reconcile_rows(ROOT, rows, scope=RowScope(equals=(("provider", PROVIDER),), starts_with=(("key", KEY_PREFIX),)))
     print(f"  snowflake-semantic: {len(rows)} semantic views")
 
 

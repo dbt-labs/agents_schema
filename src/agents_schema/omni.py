@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 import re
+import sys
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
 
+from .inputs import parse_input
 from .destinations import Column, Destination, TableSchema, open_destination
 from .root import upsert_provider_root
 
@@ -78,10 +81,15 @@ def run(cfg: dict) -> None:
     omni_dir = Path(cfg["metadata_connection"]["path"])
     if not omni_dir.is_dir():
         raise FileNotFoundError(f"omni directory not found: {omni_dir}")
+    rows = parse_input("omni", _collect, omni_dir)  # parse first: nothing is replaced in the warehouse if reading fails
+    if not rows.found:
+        raise FileNotFoundError(f"no *.view.yaml or *.topic.yaml files found in {omni_dir}")
+    if not rows.usable:
+        raise ValueError(f"none of the {rows.found} Omni files in {omni_dir} could be read; see the warnings above")
     with open_destination(cfg) as dest:
         upsert_provider_root(dest, "omni")
         _create_tables(dest)
-        _ingest(dest, omni_dir)
+        _write(dest, rows)
 
 
 def _create_tables(dest: Destination) -> None:
@@ -126,20 +134,51 @@ def _collect_joins(joins: dict, parent: str, seen: set, result: list) -> None:
             _collect_joins(children, to_view, seen, result)
 
 
+@dataclass
+class _Rows:
+    found: int = 0  # *.view.yaml / *.topic.yaml files seen
+    usable: int = 0  # ... of which could be read
+    views: list = field(default_factory=list)
+    dimensions: list = field(default_factory=list)
+    measures: list = field(default_factory=list)
+    topics: list = field(default_factory=list)
+    topic_joins: list = field(default_factory=list)
+
+
 def _ingest(dest: Destination, omni_dir: Path) -> None:
-    views, dimensions, measures = [], [], []
-    topics, topic_joins = [], []
+    _write(dest, _collect(omni_dir))
 
-    for path in sorted(omni_dir.glob("**/*.view.yaml")):
+
+def _read_yaml(path: Path, omni_dir: Path) -> dict | None:
+    """Parse one Omni YAML file. Unusable files are skipped with a warning, never silently."""
+    rel = path.relative_to(omni_dir)
+    try:
+        doc = yaml.safe_load(path.read_text(encoding="utf-8", errors="replace"))
+    except (yaml.YAMLError, ValueError) as e:  # ValueError: a YAML date such as 2001-13-45
+        reason = str(e).strip().splitlines()[0]
+        print(f"  omni: warning: skipped {rel}: invalid YAML ({reason})", file=sys.stderr)
+        return None
+    if doc is None:  # an empty or comment-only file is kept as an empty view, as before
+        doc = {}
+    if not isinstance(doc, dict):
+        print(f"  omni: warning: skipped {rel}: expected a YAML mapping, got {type(doc).__name__}", file=sys.stderr)
+        return None
+    return doc
+
+
+def _collect(omni_dir: Path) -> _Rows:
+    rows = _Rows()
+
+    for path in sorted(p for p in omni_dir.glob("**/*.view.yaml") if p.is_file()):
         rel = str(path.relative_to(omni_dir))
-        raw = path.read_text(encoding="utf-8", errors="replace")
+        rows.found += 1
         view_name = _view_name_from_file(path, omni_dir)
-        try:
-            doc = yaml.safe_load(raw) or {}
-        except yaml.YAMLError:
+        doc = _read_yaml(path, omni_dir)
+        if doc is None:
             continue
+        rows.usable += 1
 
-        views.append((
+        rows.views.append((
             view_name,
             doc.get("schema"),
             doc.get("table_name"),
@@ -148,23 +187,23 @@ def _ingest(dest: Destination, omni_dir: Path) -> None:
             rel,
         ))
 
-        for field_name, field in (doc.get("dimensions") or {}).items():
-            if not isinstance(field, dict):
-                field = {}
-            dimensions.append((
+        for field_name, field_def in (doc.get("dimensions") or {}).items():
+            if not isinstance(field_def, dict):
+                field_def = {}
+            rows.dimensions.append((
                 view_name,
                 field_name,
-                field.get("label"),
-                field.get("sql"),
-                field.get("format"),
-                field.get("description"),
-                bool(field.get("primary_key")),
+                field_def.get("label"),
+                field_def.get("sql"),
+                field_def.get("format"),
+                field_def.get("description"),
+                bool(field_def.get("primary_key")),
             ))
 
         for measure_name, measure in (doc.get("measures") or {}).items():
             if not isinstance(measure, dict):
                 measure = {}
-            measures.append((
+            rows.measures.append((
                 view_name,
                 measure_name,
                 measure.get("label"),
@@ -173,16 +212,17 @@ def _ingest(dest: Destination, omni_dir: Path) -> None:
                 measure.get("description"),
             ))
 
-    for path in sorted(omni_dir.glob("**/*.topic.yaml")):
+    for path in sorted(p for p in omni_dir.glob("**/*.topic.yaml") if p.is_file()):
         rel = str(path.relative_to(omni_dir))
+        rows.found += 1
         topic_name = _topic_name_from_file(path)
-        try:
-            doc = yaml.safe_load(path.read_text(encoding="utf-8", errors="replace")) or {}
-        except yaml.YAMLError:
+        doc = _read_yaml(path, omni_dir)
+        if doc is None:
             continue
+        rows.usable += 1
 
         base_view = doc.get("base_view") or ""
-        topics.append((
+        rows.topics.append((
             topic_name,
             base_view,
             doc.get("label"),
@@ -198,20 +238,24 @@ def _ingest(dest: Destination, omni_dir: Path) -> None:
             edges: list[tuple[str, str]] = []
             _collect_joins(joins_dict, base_view, seen, edges)
             for from_view, to_view in edges:
-                topic_joins.append((topic_name, from_view, to_view))
+                rows.topic_joins.append((topic_name, from_view, to_view))
 
-    if views:
-        dest.insert_rows(OMNI_VIEW, views)
-    if dimensions:
-        dest.insert_rows(OMNI_DIMENSION, dimensions)
-    if measures:
-        dest.insert_rows(OMNI_MEASURE, measures)
-    if topics:
-        dest.insert_rows(OMNI_TOPIC, topics)
-    if topic_joins:
-        dest.insert_rows(OMNI_TOPIC_JOIN, topic_joins)
+    return rows
+
+
+def _write(dest: Destination, rows: _Rows) -> None:
+    if rows.views:
+        dest.insert_rows(OMNI_VIEW, rows.views)
+    if rows.dimensions:
+        dest.insert_rows(OMNI_DIMENSION, rows.dimensions)
+    if rows.measures:
+        dest.insert_rows(OMNI_MEASURE, rows.measures)
+    if rows.topics:
+        dest.insert_rows(OMNI_TOPIC, rows.topics)
+    if rows.topic_joins:
+        dest.insert_rows(OMNI_TOPIC_JOIN, rows.topic_joins)
 
     print(
-        f"  omni:     {len(views)} views, {len(dimensions)} dimensions, "
-        f"{len(measures)} measures, {len(topics)} topics, {len(topic_joins)} joins"
+        f"  omni:     {len(rows.views)} views, {len(rows.dimensions)} dimensions, "
+        f"{len(rows.measures)} measures, {len(rows.topics)} topics, {len(rows.topic_joins)} joins"
     )

@@ -221,7 +221,15 @@ when publishing vendor-delivered skills.
 The `snowflake-semantic` command is an experimental pointer-only workflow. It
 publishes one `AGENTS.ROOT` row per `--semantic-view` value using keys such as
 `semantic_view/ANALYTICS.FINANCE.REVENUE`; the semantic view definition remains
-native to Snowflake.
+native to Snowflake. Each run is authoritative for the list it receives: a
+`semantic_view/...` pointer that is not in the current list is removed, so pass
+every view in one invocation (repeat `--semantic-view`) rather than running the
+command once per view. At least one view is required, so the last pointer cannot
+be removed by a sync; delete it yourself:
+
+```sql
+DELETE FROM AGENTS.ROOT WHERE provider = 'snowflake_semantic' AND key LIKE 'semantic_view/%';
+```
 
 Skills are delivered as `AGENTS.ROOT` rows whose keys start with `skill/`:
 
@@ -230,6 +238,17 @@ SELECT provider, key, content
 FROM AGENTS.ROOT
 WHERE key LIKE 'skill/%'
 ORDER BY provider, key;
+```
+
+Each run keeps a publisher's skills in sync with the directory: a skill whose
+markdown file was removed disappears on the next run. The exception is a
+publisher's last skill. An empty skills directory is an error and the warehouse
+is left untouched, because an empty directory is also what a wrong path or a
+failed checkout looks like. To remove the last skill, delete the rows yourself:
+
+```sql
+DELETE FROM AGENTS.SKILL_USE WHERE provider = '<provider>';
+DELETE FROM AGENTS.ROOT WHERE provider = '<provider>' AND key LIKE 'skill/%';
 ```
 
 ### Versioning

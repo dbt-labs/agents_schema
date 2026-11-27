@@ -7,6 +7,7 @@ from typing import Any
 
 import yaml
 
+from .inputs import parse_input
 from .destinations import Column, Destination, TableSchema, open_destination
 from .root import upsert_provider_root
 
@@ -64,10 +65,11 @@ _FORMULA_COL_NAME_RE = re.compile(r"^\[[^\[\]/]+/([^\[\]]+)\]$")
 def run(cfg: dict) -> None:
     sigma_dir = Path(cfg["metadata_connection"]["path"])
     files = _load_sigma_files(sigma_dir)
+    rows = parse_input("sigma", _collect, files, sigma_dir)  # parse first: a bad file must not leave emptied tables behind
     with open_destination(cfg) as dest:
         upsert_provider_root(dest, "sigma")
         _create_tables(dest)
-        _ingest(dest, files, sigma_dir)
+        _write(dest, rows)
 
 
 def _load_sigma_files(sigma_dir: Path) -> list[Path]:
@@ -85,12 +87,19 @@ def _create_tables(dest: Destination) -> None:
 
 
 def _ingest(dest: Destination, files: list[Path], sigma_dir: Path) -> None:
+    _write(dest, _collect(files, sigma_dir))
+
+
+def _collect(files: list[Path], sigma_dir: Path) -> tuple[list, list, list, list]:
     data_models, elements, columns, metrics = [], [], [], []
     seen_element_paths: set[str] = set()
 
     for file_path in files:
         rel_path = str(file_path.relative_to(sigma_dir))
-        model = yaml.safe_load(file_path.read_text())
+        try:
+            model = yaml.safe_load(file_path.read_text())
+        except (yaml.YAMLError, ValueError) as e:
+            raise ValueError(f"{rel_path}: invalid YAML: {e}") from e
         if not isinstance(model, dict):
             raise ValueError(f"{rel_path}: expected a YAML mapping, got {type(model).__name__}")
 
@@ -149,6 +158,11 @@ def _ingest(dest: Destination, files: list[Path], sigma_dir: Path) -> None:
                         metric.get("description"),
                     ))
 
+    return data_models, elements, columns, metrics
+
+
+def _write(dest: Destination, rows: tuple[list, list, list, list]) -> None:
+    data_models, elements, columns, metrics = rows
     if data_models:
         dest.insert_rows(SIGMA_DATA_MODEL, data_models)
     if elements:
