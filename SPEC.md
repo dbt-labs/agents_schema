@@ -112,6 +112,12 @@ dbt        dependency                Direct dbt DAG edges. See AGENTS.DBT_DEPEND
 lookml     overview                  # LookML\nSemantic metadata parsed from LookML files.
 lookml     view                      One row per LookML view. See AGENTS.LOOKML_VIEW.
 lookml     explore                   One row per LookML explore. See AGENTS.LOOKML_EXPLORE.
+omni       overview                  # Omni\nSemantic metadata parsed from Omni YAML files.
+omni       view                      One row per Omni view. See AGENTS.OMNI_VIEW.
+omni       dimension                 One row per Omni dimension. See AGENTS.OMNI_DIMENSION.
+omni       measure                   One row per Omni measure. See AGENTS.OMNI_MEASURE.
+omni       topic                     One row per Omni topic. See AGENTS.OMNI_TOPIC.
+omni       topic_join                One row per join edge within a topic. See AGENTS.OMNI_TOPIC_JOIN.
 osi        overview                  # OSI\nOpen Semantic Interchange metadata. The canonical semantic-layer source.
 osi        model                     One row per OSI semantic model. See AGENTS.OSI_MODEL.
 osi        dataset                   One row per OSI dataset. See AGENTS.OSI_DATASET.
@@ -139,6 +145,7 @@ The current package delivers one table family per metadata source:
 |---|---|
 | dbt | `AGENTS.DBT_MODEL`, `AGENTS.DBT_COLUMN`, `AGENTS.DBT_DEPENDENCY` |
 | LookML | `AGENTS.LOOKML_VIEW`, `AGENTS.LOOKML_DIMENSION`, `AGENTS.LOOKML_MEASURE`, `AGENTS.LOOKML_EXPLORE` |
+| Omni | `AGENTS.OMNI_VIEW`, `AGENTS.OMNI_DIMENSION`, `AGENTS.OMNI_MEASURE`, `AGENTS.OMNI_TOPIC`, `AGENTS.OMNI_TOPIC_JOIN` |
 | OSI | `AGENTS.OSI_DATASET`, `AGENTS.OSI_FIELD`, `AGENTS.OSI_METRIC`, `AGENTS.OSI_RELATIONSHIP` |
 | Sigma | `AGENTS.SIGMA_DATA_MODEL`, `AGENTS.SIGMA_ELEMENT`, `AGENTS.SIGMA_COLUMN`, `AGENTS.SIGMA_METRIC` |
 | Skills | `AGENTS.SKILL_USE` |
@@ -687,6 +694,144 @@ CREATE OR REPLACE TABLE AGENTS.SIGMA_METRIC (
 
 ---
 
+## Source: Omni
+
+The Omni ingestion scans an Omni connection directory (the directory passed as `omni-dir`) recursively for `*.view.yaml` and `*.topic.yaml` files and writes normalized view, dimension, measure, topic, and topic-join tables. A file that is not valid YAML is skipped.
+
+Agents can use this extension to understand the BI and semantic surface exposed through Omni: which topics exist, which views back them and how those views join, and what dimensions and measures are available.
+
+### How views and topics are named
+
+- **View name.** If one of the first five lines of a `*.view.yaml` file contains a comment of the form `# Reference this view as <name>`, `<name>` is the view name. Otherwise the name is `<parent directory>__<file name without .view.yaml>` for a file in a subdirectory, or just the file name without `.view.yaml` for a file at the top of the directory.
+- **Topic name.** The file name without `.topic.yaml`.
+
+### `AGENTS.OMNI_VIEW`
+
+One row per `*.view.yaml` file.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OMNI_VIEW (
+  view_name   VARCHAR NOT NULL,
+  schema      VARCHAR,
+  table_name  VARCHAR,
+  label       VARCHAR,
+  description TEXT,
+  file_path   VARCHAR,
+  PRIMARY KEY (view_name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `view_name` | Derived as described above. Primary key and join target for `AGENTS.OMNI_DIMENSION.view_name`, `AGENTS.OMNI_MEASURE.view_name`, `AGENTS.OMNI_TOPIC.base_view`, and `AGENTS.OMNI_TOPIC_JOIN.from_view` / `to_view`. |
+| `schema` | The view's `schema`. |
+| `table_name` | The view's `table_name`. |
+| `label` | The view's `label`. |
+| `description` | The view's `description`. |
+| `file_path` | Path of the `.view.yaml` file relative to the Omni directory. |
+
+### `AGENTS.OMNI_DIMENSION`
+
+One row per entry under a view's `dimensions` mapping.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OMNI_DIMENSION (
+  view_name   VARCHAR NOT NULL,
+  field_name  VARCHAR NOT NULL,
+  label       VARCHAR,
+  sql         TEXT,
+  format      VARCHAR,
+  description TEXT,
+  primary_key BOOLEAN,
+  PRIMARY KEY (view_name, field_name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `view_name` | The view the dimension belongs to. |
+| `field_name` | The key of the entry in `dimensions`. |
+| `label` | The dimension's `label`. |
+| `sql` | The dimension's `sql`. In Omni this is usually a quoted column reference such as `'"AMOUNT"'`; strip the outer quotes to get the identifier. |
+| `format` | The dimension's `format`. |
+| `description` | The dimension's `description`. |
+| `primary_key` | `true` when the dimension sets `primary_key`, otherwise `false`. |
+
+### `AGENTS.OMNI_MEASURE`
+
+One row per entry under a view's `measures` mapping.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OMNI_MEASURE (
+  view_name      VARCHAR NOT NULL,
+  measure_name   VARCHAR NOT NULL,
+  label          VARCHAR,
+  aggregate_type VARCHAR,
+  sql            TEXT,
+  description    TEXT,
+  PRIMARY KEY (view_name, measure_name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `view_name` | The view the measure belongs to. |
+| `measure_name` | The key of the entry in `measures`. |
+| `label` | The measure's `label`. |
+| `aggregate_type` | The measure's `aggregate_type` (for example `sum` or `count`). |
+| `sql` | The measure's `sql`, with the same quoting convention as dimensions. |
+| `description` | The measure's `description`. |
+
+### `AGENTS.OMNI_TOPIC`
+
+One row per `*.topic.yaml` file.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OMNI_TOPIC (
+  topic_name  VARCHAR NOT NULL,
+  base_view   VARCHAR,
+  label       VARCHAR,
+  group_label VARCHAR,
+  description TEXT,
+  ai_context  TEXT,
+  file_path   VARCHAR,
+  PRIMARY KEY (topic_name)
+);
+```
+
+| Column | Source field |
+|---|---|
+| `topic_name` | Derived as described above. Primary key and join target for `AGENTS.OMNI_TOPIC_JOIN.topic_name`. |
+| `base_view` | The topic's `base_view`, or an empty string when it has none. Joins to `AGENTS.OMNI_VIEW.view_name`. |
+| `label` | The topic's `label`. |
+| `group_label` | The topic's `group_label`. |
+| `description` | The topic's `description`. |
+| `ai_context` | The topic's `ai_context`: human-authored guidance for agents. |
+| `file_path` | Path of the `.topic.yaml` file relative to the Omni directory. |
+
+### `AGENTS.OMNI_TOPIC_JOIN`
+
+One row per join edge in a topic's `joins` mapping.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OMNI_TOPIC_JOIN (
+  topic_name VARCHAR NOT NULL,
+  from_view  VARCHAR NOT NULL,
+  to_view    VARCHAR NOT NULL,
+  PRIMARY KEY (topic_name, from_view, to_view)
+);
+```
+
+`joins` is a nested mapping rooted at the topic's `base_view`: each key is a view joined to its parent, and its own nested mapping holds the views joined to it in turn. Each parent-to-child edge produces one row, recorded once per topic even if it appears more than once. A topic with no `joins` produces no rows.
+
+| Column | Source field |
+|---|---|
+| `topic_name` | The topic the edge belongs to. |
+| `from_view` | The parent view in the edge (the `base_view` for top-level joins). |
+| `to_view` | The joined view. |
+
+---
+
 ## Source: Snowflake Semantic
 
 The Snowflake Semantic ingestion publishes pointer rows into `AGENTS.ROOT` for one or more named native Snowflake semantic views. It does not create additional `AGENTS.*` tables — the semantic definition (dimensions, metrics, relationships, and query behavior) lives in Snowflake itself and should be inspected there.
@@ -764,6 +909,7 @@ The following provider names are reserved:
 |---|---|
 | `dbt` | dbt metadata in `AGENTS.DBT_*` |
 | `lookml` | LookML metadata in `AGENTS.LOOKML_*` |
+| `omni` | Omni metadata in `AGENTS.OMNI_*` |
 | `osi` | OSI metadata in `AGENTS.OSI_*` |
 | `sigma` | Sigma data model metadata in `AGENTS.SIGMA_*` |
 | `skills` | Skills extension metadata in `AGENTS.SKILL_USE` |
@@ -785,6 +931,11 @@ The following provider names are reserved:
 | `AGENTS.LOOKML_DIMENSION` | LookML | LookML dimensions and dimension groups |
 | `AGENTS.LOOKML_MEASURE` | LookML | LookML measures |
 | `AGENTS.LOOKML_EXPLORE` | LookML | LookML explores |
+| `AGENTS.OMNI_VIEW` | Omni | Omni views with schema, table, label, and description |
+| `AGENTS.OMNI_DIMENSION` | Omni | Omni dimensions with SQL, format, and primary-key flag |
+| `AGENTS.OMNI_MEASURE` | Omni | Omni measures with aggregate type and SQL |
+| `AGENTS.OMNI_TOPIC` | Omni | Omni topics with base view, labels, and AI context |
+| `AGENTS.OMNI_TOPIC_JOIN` | Omni | Join edges between views within an Omni topic |
 | `AGENTS.OSI_DATASET` | OSI | OSI datasets and dataset-level context |
 | `AGENTS.OSI_FIELD` | OSI | OSI dataset fields |
 | `AGENTS.OSI_METRIC` | OSI | OSI metrics |
