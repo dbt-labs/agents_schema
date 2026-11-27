@@ -29,7 +29,7 @@ dependencies = [
     "jsonschema>=4.0",
     "lkml>=1.3.5,<2",
     "pyyaml>=6.0",
-    "snowflake-connector-python>=3.0.0",
+    "snowflake-connector-python>=3.17.0",
 ]
 
 [project.urls]
