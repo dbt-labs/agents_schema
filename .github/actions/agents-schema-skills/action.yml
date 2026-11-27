@@ -15,12 +15,11 @@ runs:
   steps:
     - name: Set up uv
       uses: astral-sh/setup-uv@v5
-      with:
-        python-version: '3.12'
 
     - name: Run skills ingestion
       shell: bash
       env:
+        UV_PYTHON: '3.12'
         AGENTS_SCHEMA_SKILLS_DIR: ${{ inputs.skills-dir }}
         AGENTS_SCHEMA_SKILLS_PROVIDER: ${{ inputs.provider }}
       run: |

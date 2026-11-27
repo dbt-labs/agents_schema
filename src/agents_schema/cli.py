@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from google.auth.exceptions import GoogleAuthError
+
 from . import __version__, dbt, lookml, omni, osi, sigma, skills, snowflake_semantic
 from .config import ConfigError
 from .dbt_profiles import dbt_adapter_package_from_profiles_file
@@ -150,6 +152,21 @@ def main(argv: list[str] | None = None) -> int:
             raise ConfigError(f"unsupported source type: {args.source_type}")
     except (ConfigError, FileNotFoundError, ValueError) as e:
         print(f"agents-schema: error: {e}", file=sys.stderr)
+        return 1
+    except GoogleAuthError as e:
+        # Raised by google-auth when credentials cannot be refreshed, for example a failed
+        # Workload Identity Federation token exchange. It can surface at connection time or
+        # lazily on the first BigQuery API call, so it is handled here rather than where
+        # credentials are built.
+        print(f"agents-schema: error: Google authentication failed: {e}", file=sys.stderr)
+        print(
+            "agents-schema: hint: if you use Workload Identity Federation, check the "
+            "workload-identity-provider and service-account inputs, that the job grants "
+            "'id-token: write', and that the provider's attribute condition allows this "
+            "repository; otherwise check that the service account key or credentials in "
+            "WAREHOUSE_CREDENTIALS are valid and not revoked",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

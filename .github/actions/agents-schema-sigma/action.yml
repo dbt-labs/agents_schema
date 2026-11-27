@@ -11,12 +11,11 @@ runs:
   steps:
     - name: Set up uv
       uses: astral-sh/setup-uv@v5
-      with:
-        python-version: '3.12'
 
     - name: Run Sigma ingestion
       shell: bash
       env:
+        UV_PYTHON: '3.12'
         AGENTS_SCHEMA_SIGMA_DIR: ${{ inputs.sigma-dir }}
       run: |
         uvx --from "$GITHUB_ACTION_PATH/../../.." \
