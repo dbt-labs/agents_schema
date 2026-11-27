@@ -156,6 +156,15 @@ Skill rows are stored in `AGENTS.ROOT` under the publisher passed to the CLI. Th
 
 Each run keeps that publisher's skills in sync with the directory: a markdown file removed from the repository has its `AGENTS.ROOT` row removed on the next run. Only rows whose `provider` is the publisher and whose `key` starts with `skill/` are ever removed. The publisher's other rows (for example `(user, costs)`), other publishers' rows, and other publishers' `AGENTS.SKILL_USE` rows are left alone. The provider name `skills` is reserved for the built-in skill and cannot be passed to `--provider`. Because a run removes the publisher's skills that are no longer in the directory, each `--provider` value should be published from exactly one skills directory: two directories published under the same provider (for example two teams both using the default `user`) will remove each other's skills, and concurrent runs for the same provider can drop rows non-deterministically.
 
+Removing a publisher's *last* skill is the one exception. An empty skills directory is an error (`no *.md skill files found`) and the warehouse is left untouched: an empty directory is also what a wrong path or a failed checkout looks like, and treating it as "remove everything" would silently delete the publisher's skills. To remove the last skill, delete the publisher's rows yourself. These statements match exactly what a sync would have reconciled (adapt the syntax to your warehouse):
+
+```sql
+DELETE FROM AGENTS.SKILL_USE WHERE provider = '<provider>';
+DELETE FROM AGENTS.ROOT WHERE provider = '<provider>' AND key LIKE 'skill/%';
+```
+
+A skill's `uses` entries are stored once even if a file lists the same schema or table more than once; the repeat produces a warning.
+
 ### `AGENTS.SKILL_USE`
 
 One row per parsed skill use declaration. Missing frontmatter produces no rows. Malformed `uses` frontmatter should not block publication of the skill markdown to `AGENTS.ROOT`, but should be skipped for `AGENTS.SKILL_USE`.
@@ -678,7 +687,11 @@ CREATE OR REPLACE TABLE AGENTS.SIGMA_METRIC (
 
 The Snowflake Semantic ingestion publishes pointer rows into `AGENTS.ROOT` for one or more named native Snowflake semantic views. It does not create additional `AGENTS.*` tables — the semantic definition (dimensions, metrics, relationships, and query behavior) lives in Snowflake itself and should be inspected there.
 
-Each semantic view produces one row in `AGENTS.ROOT` under provider `snowflake_semantic`. The key convention is `semantic_view/<fully_qualified_name>`. A view removed from the configured list has its pointer row removed on the next run; the overview row is not affected. Every run is authoritative for the whole `semantic_view/` slice, so list all views in one invocation: a second invocation with a different `--semantic-view` removes the first one's pointers.
+Each semantic view produces one row in `AGENTS.ROOT` under provider `snowflake_semantic`. The key convention is `semantic_view/<fully_qualified_name>`. A view removed from the configured list has its pointer row removed on the next run; the overview row is not affected. Every run is authoritative for the whole `semantic_view/` slice, so list all views in one invocation: a second invocation with a different `--semantic-view` removes the first one's pointers. At least one `--semantic-view` is required, so the last pointer cannot be removed by a sync; delete it yourself:
+
+```sql
+DELETE FROM AGENTS.ROOT WHERE provider = 'snowflake_semantic' AND key LIKE 'semantic_view/%';
+```
 
 The ingestion also publishes an overview row:
 

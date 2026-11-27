@@ -1,9 +1,11 @@
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agents_schema import cli
+from agents_schema import cli, skills
 from agents_schema.skills import _load_skill_files, _parse_uses_frontmatter
 
 
@@ -54,6 +56,63 @@ class SkillsTests(unittest.TestCase):
 
         self.assertEqual(uses, ())
         self.assertEqual(warnings, ("uses.tables must be a list of strings",))
+
+    def test_parse_uses_frontmatter_stores_a_repeated_entry_once_and_warns(self):
+        content = (
+            "---\nuses:\n  schemas: [sales, sales, finance]\n  tables: [A.B, A.B]\n---\n# Revenue\n"
+        )
+
+        uses, warnings = _parse_uses_frontmatter(content)
+
+        self.assertEqual(uses, (("schema", "sales"), ("schema", "finance"), ("table", "A.B")))
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("schema sales", warnings[0])
+        self.assertIn("table A.B", warnings[0])
+        self.assertIn("stored once", warnings[0])
+
+    def test_distinct_entries_produce_no_warning(self):
+        uses, warnings = _parse_uses_frontmatter("---\nuses:\n  schemas: [sales, Sales]\n---\n# Revenue\n")
+
+        self.assertEqual(uses, (("schema", "sales"), ("schema", "Sales")))
+        self.assertEqual(warnings, ())
+
+    def test_run_writes_a_repeated_schema_as_one_skill_use_row(self):
+        # BigQuery has no unique constraint: two identical rows would be stored, and fixing the file later would
+        # keep both because each still matches the one remaining entry.
+        class Destination:
+            def __init__(self):
+                self.reconciled = {}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def upsert_rows(self, table, rows):
+                pass
+
+            def reconcile_rows(self, table, rows, scope=None):
+                self.reconciled[table.name] = list(rows)
+
+        dest = Destination()
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "revenue.md").write_text("---\nuses:\n  schemas: [sales, sales]\n---\n# Revenue\n")
+            cfg = {
+                "warehouse": {"type": "bigquery"},
+                "metadata_connection": {"path": tmp, "provider": "fivetran"},
+            }
+            stderr = io.StringIO()
+            with (
+                patch("agents_schema.skills.open_destination", return_value=dest),
+                patch("agents_schema.skills.publish_builtin_skill"),
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(stderr),
+            ):
+                skills.run(cfg)
+
+        self.assertEqual(dest.reconciled["AGENTS.SKILL_USE"], [("fivetran", "skill/revenue", "schema", "sales")])
+        self.assertIn("stored once", stderr.getvalue())
 
     def test_parse_uses_frontmatter_warns_for_unqualified_tables(self):
         content = "---\nuses:\n  tables:\n    - ARR_SNAPSHOT\n---\n# Revenue\n"

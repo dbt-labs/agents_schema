@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -168,7 +169,15 @@ def _parse_uses_frontmatter(content: str) -> tuple[tuple[tuple[str, str], ...], 
     extra = sorted(set(uses) - {"schemas", "tables"})
     if extra:
         return (), ("uses only supports schemas and tables",)
-    return tuple(rows), ()
+
+    # A repeated entry would otherwise be written twice (BigQuery has no unique constraint), and because a
+    # later sync only removes rows that no longer match any listed entry, the extra row would survive
+    # fixing the file. Store each entry once and say so.
+    unique = tuple(dict.fromkeys(rows))
+    if len(unique) != len(rows):
+        repeated = sorted(f"{kind} {ref}" for (kind, ref), n in Counter(rows).items() if n > 1)
+        return unique, (f"uses lists the same entry more than once ({', '.join(repeated)}); it is stored once",)
+    return unique, ()
 
 
 def _frontmatter(content: str) -> tuple[str | None, str | None]:
