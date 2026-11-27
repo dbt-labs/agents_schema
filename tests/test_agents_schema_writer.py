@@ -20,6 +20,7 @@ from agents_schema.agents_schema_writer import (
 )
 from agents_schema.config import ConfigError
 from agents_schema.dbt import DBT_MODEL
+from agents_schema.osi import OSI_FIELD, OSI_MODEL
 from agents_schema.root import ROOT
 
 
@@ -301,6 +302,39 @@ class BigQueryAgentsSchemaWriterTests(unittest.TestCase):
         self.assertEqual(meta_field.args, ("meta", "JSON"))
         create_dataset_call = next(call for call in calls if call[0] == "create_dataset")
         self.assertEqual(create_dataset_call[1].location, "US")
+
+
+    def test_variant_columns_are_native_json_and_values_pass_through_unchanged(self):
+        # OSI ai_context is a string or an object, and expressions are lists of objects. A
+        # repeated string field rejects those, so BigQuery stores them in native JSON columns.
+        calls = []
+        structured = {"instructions": "Use amount_usd.", "synonyms": ["mrr"]}
+        expressions = [{"dialect": "ANSI_SQL", "expression": "SUM(amount)"}]
+        with _fake_bigquery_module():
+            writer = BigQueryAgentsSchemaWriter(_FakeBigQueryClient(calls), "p", location="US")
+            writer.insert_rows(
+                OSI_FIELD,
+                [
+                    ("ds", "f", "F", "", False, expressions, ["a"], structured, None),
+                    ("ds", "g", None, "", False, [], [], "plain text", None),
+                ],
+            )
+
+        load_call = next(call for call in calls if call[0] == "load")
+        fields = {field.args[0]: field for field in load_call[3].kwargs["schema"]}
+        for name in ("expressions", "ai_context", "custom_extensions"):
+            self.assertEqual(fields[name].args, (name, "JSON"))
+            self.assertEqual(fields[name].kwargs["mode"], "NULLABLE")
+        self.assertEqual(fields["synonyms"].args, ("synonyms", "STRING"))
+        self.assertEqual(fields["synonyms"].kwargs["mode"], "REPEATED")
+
+        first, second = load_call[1]
+        self.assertEqual(first["expressions"], expressions)
+        self.assertEqual(first["ai_context"], structured)
+        self.assertIsNone(first["custom_extensions"])
+        self.assertEqual(first["synonyms"], ["a"])
+        self.assertEqual(second["ai_context"], "plain text")
+        self.assertEqual(second["expressions"], [])
 
 
 class DatabricksAgentsSchemaWriterTests(unittest.TestCase):
@@ -714,6 +748,63 @@ class ScopedReconcileTests(unittest.TestCase):
                 with self.assertRaisesRegex(ConfigError, "outside the reconcile scope"):
                     writer.reconcile_rows(ROOT, rows, scope=self.SCOPE)
                 self.assertEqual(calls, [])
+
+
+class VariantColumnKindTests(unittest.TestCase):
+    """`variant` (arbitrary JSON) is native JSON on BigQuery and VARIANT on Databricks; the rest treat it like `array`."""
+
+    def test_snowflake_stores_variant_as_variant_with_parse_json(self):
+        from agents_schema.agents_schema_writer.snowflake import _create_table_sql, _merge_sql, _type_sql
+
+        self.assertEqual(_type_sql("variant"), _type_sql("array"))
+        ddl = _create_table_sql(OSI_FIELD, "AGENTS")
+        for column in ("expressions", "ai_context", "custom_extensions", "synonyms"):
+            self.assertIn(f"{column} VARIANT", ddl)
+        merge = _merge_sql(OSI_FIELD, "AGENTS", 1)
+        for column in ("expressions", "ai_context", "synonyms"):
+            self.assertIn(f"PARSE_JSON(%s) AS {column}", merge)
+
+    def test_values_are_encoded_exactly_as_array_values_were(self):
+        from agents_schema.agents_schema_writer.utils import bind_json_rows
+
+        row = ("m", "1.0", "d", ["mrr"], {"instructions": "x"}, None)
+        bound = bind_json_rows(OSI_MODEL, [row])[0]
+        self.assertEqual(bound[3], '["mrr"]')
+        self.assertEqual(bound[4], '{"instructions": "x"}')
+        self.assertEqual(bound[5], "[]")  # unchanged: a missing value is stored as an empty list
+        self.assertEqual(bind_json_rows(OSI_MODEL, [("m", "1.0", "d", [], "plain", None)])[0][4], '"plain"')
+
+    def test_databricks_stores_variant_as_variant_but_string_lists_stay_arrays(self):
+        from agents_schema.agents_schema_writer.databricks import _databricks_type
+        from agents_schema.agents_schema_writer.schema import Column
+        from agents_schema.agents_schema_writer.utils import databricks_placeholder
+
+        variant, array = Column("c", "variant"), Column("c", "array")
+        # ARRAY<STRING> via from_json turns an object or string ai_context into NULL; VARIANT keeps it
+        self.assertEqual(_databricks_type(variant), "VARIANT")
+        self.assertEqual(databricks_placeholder(variant), "parse_json(?)")
+        self.assertEqual(_databricks_type(array), "ARRAY<STRING>")
+        self.assertEqual(databricks_placeholder(array), "from_json(?, 'array<string>')")
+
+    def test_databricks_insert_parses_variant_columns_as_json_and_string_lists_as_arrays(self):
+        calls = []
+        structured = {"instructions": "x", "synonyms": ["a"]}
+        DatabricksAgentsSchemaWriter(_fake_connection(calls)).insert_rows(
+            OSI_FIELD,
+            [("ds", "f", "F", "", False, [{"dialect": "ANSI_SQL", "expression": "SUM(x)"}], ["a"], structured, None)],
+        )
+
+        sql, params = calls[0]
+        self.assertEqual(sql.count("parse_json(?)"), 3)  # expressions, ai_context, custom_extensions
+        self.assertEqual(sql.count("from_json(?, 'array<string>')"), 1)  # synonyms
+        self.assertIn('{"instructions": "x", "synonyms": ["a"]}', params)
+
+    def test_clickhouse_mapping_is_unchanged(self):
+        from agents_schema.agents_schema_writer.clickhouse import _clickhouse_type
+        from agents_schema.agents_schema_writer.schema import Column
+
+        self.assertEqual(_clickhouse_type(Column("c", "variant"), "JSON"), "Array(String)")
+        self.assertEqual(_clickhouse_type(Column("c", "variant"), "JSON"), _clickhouse_type(Column("c", "array"), "JSON"))
 
 
 class _FakeClickHouseClient:

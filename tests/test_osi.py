@@ -62,5 +62,22 @@ class OsiParserTests(unittest.TestCase):
             osi._load_osi_files(FIXTURES_INVALID)
 
 
+class OsiColumnKindTests(unittest.TestCase):
+    def test_arbitrary_json_columns_are_variant_and_string_lists_stay_array(self):
+        # ai_context (string or object), expressions and custom_extensions (lists of objects) and
+        # unique_keys (list of lists) are not string lists, so a repeated-string column cannot hold them.
+        variant_names = {"ai_context", "custom_extensions", "expressions", "unique_keys"}
+        array_names = {"synonyms", "primary_key", "from_columns", "to_columns"}
+        seen = set()
+        for table in osi._TABLES:
+            for column in table.columns:
+                if column.name in variant_names:
+                    seen.add(column.name)
+                    self.assertEqual(column.kind, "variant", f"{table.name}.{column.name}")
+                if column.name in array_names:
+                    self.assertEqual(column.kind, "array", f"{table.name}.{column.name}")
+        self.assertEqual(seen, variant_names)
+
+
 if __name__ == "__main__":
     unittest.main()
