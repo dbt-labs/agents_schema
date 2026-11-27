@@ -7,6 +7,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -250,8 +251,8 @@ def _snowflake_connect_kwargs_from_secret(destination: dict[str, Any]) -> dict[s
 _OIDC_REQUEST_ATTEMPTS = 3
 
 
-def _github_oidc_token(audience: str | None) -> str:
-    """Request a GitHub Actions OIDC ID token for Snowflake workload identity federation."""
+def _github_oidc_request_env() -> tuple[str, str]:
+    """Return the GitHub Actions OIDC request URL and token, or explain how to enable them."""
     request_url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL")
     request_token = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
     if not request_url or not request_token:
@@ -259,6 +260,12 @@ def _github_oidc_token(audience: str | None) -> str:
             "WAREHOUSE_CREDENTIALS.auth_method is 'workload_identity' but no GitHub Actions "
             "OIDC token is available; run inside GitHub Actions with 'permissions: id-token: write'"
         )
+    return request_url, request_token
+
+
+def _github_oidc_token(audience: str | None) -> str:
+    """Request a GitHub Actions OIDC ID token for Snowflake workload identity federation."""
+    request_url, request_token = _github_oidc_request_env()
     if not request_url.startswith("https://"):
         raise ConfigError("ACTIONS_ID_TOKEN_REQUEST_URL must be an https URL")
     # GitHub defaults the audience to the repository owner URL; Snowflake expects its own.
@@ -318,33 +325,79 @@ def _databricks_connect_kwargs(cfg: dict[str, Any]) -> dict[str, Any]:
 
 
 def _databricks_connect_kwargs_from_secret(destination: dict[str, Any]) -> dict[str, Any]:
+    auth_method = destination.get("auth_method")
+    if auth_method is not None and auth_method != "workload_identity":
+        raise ConfigError(
+            f"WAREHOUSE_CREDENTIALS.auth_method must be 'workload_identity' when set, got {auth_method!r}"
+        )
+    use_workload_identity = auth_method == "workload_identity"
+
     host = (
         destination.get("host")
         or destination.get("server_host_name")
         or destination.get("serverHostName")
     )
-    token = (
-        destination.get("token")
-        or destination.get("access_token")
-        or destination.get("personal_access_token")
-        or destination.get("personalAccessToken")
-    )
+    token_keys = [
+        name
+        for name in ("token", "access_token", "personal_access_token", "personalAccessToken")
+        if destination.get(name)
+    ]
     required = {
         "host": host,
         "http_path": destination.get("http_path") or destination.get("httpPath"),
         "catalog": destination.get("catalog"),
-        "token": token,
     }
+    if use_workload_identity:
+        if token_keys:
+            raise ConfigError(
+                "WAREHOUSE_CREDENTIALS.auth_method is 'workload_identity'; remove "
+                + ", ".join(token_keys)
+                + " (static credentials are ignored and would be misleading to keep)"
+            )
+        required["client_id"] = destination.get("client_id")
+    else:
+        required["token"] = destination[token_keys[0]] if token_keys else None
     missing = [name for name, value in required.items() if not value]
     if missing:
         raise ConfigError("WAREHOUSE_CREDENTIALS missing keys: " + ", ".join(missing))
 
-    return {
+    kwargs = {
         "server_hostname": required["host"],
         "http_path": required["http_path"],
         "catalog": required["catalog"],
-        "access_token": required["token"],
     }
+    if use_workload_identity:
+        kwargs["credentials_provider"] = _databricks_github_oidc_credentials(
+            required["host"], required["client_id"]
+        )
+    else:
+        kwargs["access_token"] = required["token"]
+    return kwargs
+
+
+def _databricks_github_oidc_credentials(
+    host: str, client_id: str
+) -> Callable[[], Callable[[], dict[str, str]]]:
+    from databricks.sdk.core import Config
+
+    _github_oidc_request_env()
+    try:
+        config = Config(host=host, client_id=client_id, auth_type="github-oidc")
+        token = config.oauth_token()
+    except ValueError as e:
+        raise ConfigError(
+            f"Databricks workload identity login failed: {e}\n"
+            "The service principal needs a federation policy matching the token's issuer, "
+            "subject and audience."
+        ) from None
+
+    def headers() -> dict[str, str]:
+        nonlocal token
+        if not token.valid:
+            token = config.oauth_token()
+        return {"Authorization": f"{token.token_type} {token.access_token}"}
+
+    return lambda: headers
 
 
 def _clickhouse_connect_kwargs(cfg: dict[str, Any]) -> dict[str, Any]:

@@ -75,9 +75,9 @@ and only `WAREHOUSE_CREDENTIALS` changes; no extra workflow input is needed.
 branch, tag, or environment. If login fails with error 394729, the message
 shows the `sub` Snowflake received; use that value as `SUBJECT`.
 
-`auth_method` names the credential source per warehouse: Snowflake accepts
-`workload_identity` (GitHub OIDC token, above), while BigQuery accepts `adc`
-or `service_account` (the default, using `credentials_json`). Key pair and password auth need no
+`auth_method` names the credential source per warehouse: Snowflake and
+Databricks accept `workload_identity` (GitHub OIDC token), while BigQuery accepts `adc`
+or `service_account` (the default, using `credentials_json`). Key pair, password, and personal access token auth need no
 `auth_method`.
 
 </details>
@@ -97,6 +97,41 @@ token: your-personal-access-token
 
 The token needs permission to create and write tables in the `agents` schema
 within the configured catalog.
+
+For keyless auth, use Databricks workload identity federation with the GitHub
+Actions OIDC token. No token is stored. Create a service principal, grant it
+`CAN USE` on the SQL warehouse and `USE CATALOG` and `CREATE SCHEMA` on the
+catalog, then add a service principal federation policy in the account console:
+
+```bash
+databricks account service-principal-federation-policy create <service-principal-id> --json '{
+  "oidc_policy": {
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:your-org/your-repo:ref:refs/heads/main"
+  }
+}'
+```
+
+Then set `WAREHOUSE_CREDENTIALS` to:
+
+```yaml
+type: databricks
+auth_method: workload_identity
+host: dbc-abc123.cloud.databricks.com
+http_path: /sql/1.0/warehouses/abc123
+catalog: main
+client_id: <service-principal-application-id>
+```
+
+As with Snowflake, the reusable workflows already request `id-token: write`, so
+grant it in the calling workflow (see
+[Using Workload Identity Federation](#using-workload-identity-federation)) and
+only `WAREHOUSE_CREDENTIALS` changes. The policy's `subject` must match the
+token's `sub` claim exactly, so it is specific to a branch, tag, or environment.
+Federation policies are an account-level feature and are not available on
+Databricks Free Edition. If login fails with `invalid_grant`, the message shows
+the issuer, subject and audience Databricks received; use those values in the
+policy.
 
 </details>
 

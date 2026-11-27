@@ -23,6 +23,7 @@ classifiers = [
 dependencies = [
     "clickhouse-connect>=0.8.0",
     "cryptography>=3.1.0",
+    "databricks-sdk>=0.55.0",
     "databricks-sql-connector>=3.0.0,<5",
     "google-auth>=2.0",
     "google-cloud-bigquery>=3.0.0",
