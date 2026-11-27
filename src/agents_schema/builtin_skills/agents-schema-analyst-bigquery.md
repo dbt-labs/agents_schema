@@ -84,8 +84,10 @@ SQLEOF
    For Sigma `formula`: a metric such as `Sum([ORDERS/Amount])` is one aggregation (`Sum`, `Avg`, `Count`,
    `CountDistinct`, `Min`, `Max`) of one column, to run against the table in `source_path`. The bracketed name is Sigma's
    display name for the column, which can differ from the warehouse column's name (for example `Order Id` for
-   `ORDER_ID`); confirm the real column with a focused `SELECT * FROM <source_path> LIMIT 1`, and if you cannot tell
-   which column it is, say so instead of guessing. The formula of a `computed` Sigma column (`kind = 'computed'`) is
+   `ORDER_ID`); confirm the real column from the table's schema, not by reading data (`LIMIT` does not reduce the bytes BigQuery
+   scans, so a `SELECT *` can scan the whole table):
+   `` SELECT column_name FROM `<project_id>.<dataset>`.INFORMATION_SCHEMA.COLUMNS WHERE table_name = '<table>' ``, with the
+   project, dataset and table taken from `source_path`. If you cannot tell which column it is, say so instead of guessing. The formula of a `computed` Sigma column (`kind = 'computed'`) is
    Sigma syntax, not SQL — never copy it into a query.
 
 5. **Pick the time grain from metadata.** Use the time dimension the metadata marks
