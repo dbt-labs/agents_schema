@@ -27,7 +27,7 @@ The canonical spelling of every delivered object is uppercase: the `AGENTS` sche
 
 `AGENTS.ROOT` is the intended provider registry for the Agents Schema. It gives generic consumers one place to discover which providers have published metadata, how to use their tables, and which warehouse-delivered skills are available.
 
-The current dbt, LookML, OSI, and skills ingestion workflows upsert their own provider rows into `AGENTS.ROOT` and write the source-specific tables documented below. Each workflow preserves `ROOT` rows from other providers.
+Each ingestion workflow upserts its provider's registry rows in `AGENTS.ROOT`. Workflows that publish skills also upsert those skill rows by provider and key. See [Delivered Source Tables](#delivered-source-tables) for the tables owned by each source.
 
 ```sql
 CREATE TABLE AGENTS.ROOT (
@@ -87,8 +87,8 @@ ORDER BY provider, key;
 
 ### Built-in analyst skill
 
-The `agents-schema` CLI publishes one built-in skill on every run, matched to the destination
-warehouse:
+The dbt, LookML, OSI, skills, and Snowflake Semantic ingestions publish a
+built-in skill matched to the destination warehouse:
 
 ```
 provider = skills
@@ -96,9 +96,8 @@ key      = skill/agents-schema-analyst
 content  = the agents-schema-analyst skill body for the active destination
 ```
 
-Because the key is fixed and only the destination-matched body is written, switching destinations
-replaces the body rather than adding rows. Snowflake destinations receive the Snowflake variant,
-Databricks the Databricks variant, and BigQuery the BigQuery variant.
+Each publish upserts the destination-specific body at the fixed provider and key.
+Variants are available for Snowflake, Databricks, BigQuery, and ClickHouse.
 
 ### Example rows
 
@@ -111,6 +110,9 @@ dbt        dependency                Direct dbt DAG edges. See AGENTS.DBT_DEPEND
 lookml     overview                  # LookML\nSemantic metadata parsed from LookML files.
 lookml     view                      One row per LookML view. See AGENTS.LOOKML_VIEW.
 lookml     explore                   One row per LookML explore. See AGENTS.LOOKML_EXPLORE.
+omni       overview                  # Omni\nSemantic metadata parsed from Omni YAML files.
+omni       view                      One row per Omni view. See AGENTS.OMNI_VIEW.
+omni       topic                     One row per Omni topic. See AGENTS.OMNI_TOPIC.
 osi        overview                  # OSI\nOpen Semantic Interchange metadata. The canonical semantic-layer source.
 osi        model                     One row per OSI semantic model. See AGENTS.OSI_MODEL.
 osi        dataset                   One row per OSI dataset. See AGENTS.OSI_DATASET.
@@ -132,18 +134,20 @@ acme_corp  costs                     # Query Costs\nUse this before running expe
 
 ## Delivered Source Tables
 
-The current package delivers one table family per metadata source:
+The package delivers these tables for each metadata source:
 
 | Source | Tables |
 |---|---|
 | dbt | `AGENTS.DBT_MODEL`, `AGENTS.DBT_COLUMN`, `AGENTS.DBT_DEPENDENCY` |
 | LookML | `AGENTS.LOOKML_VIEW`, `AGENTS.LOOKML_DIMENSION`, `AGENTS.LOOKML_MEASURE`, `AGENTS.LOOKML_EXPLORE` |
-| OSI | `AGENTS.OSI_DATASET`, `AGENTS.OSI_FIELD`, `AGENTS.OSI_METRIC`, `AGENTS.OSI_RELATIONSHIP` |
+| Omni | `AGENTS.OMNI_VIEW`, `AGENTS.OMNI_DIMENSION`, `AGENTS.OMNI_MEASURE`, `AGENTS.OMNI_TOPIC`, `AGENTS.OMNI_TOPIC_JOIN` |
+| OSI | `AGENTS.OSI_MODEL`, `AGENTS.OSI_DATASET`, `AGENTS.OSI_FIELD`, `AGENTS.OSI_METRIC`, `AGENTS.OSI_RELATIONSHIP` |
 | Sigma | `AGENTS.SIGMA_DATA_MODEL`, `AGENTS.SIGMA_ELEMENT`, `AGENTS.SIGMA_COLUMN`, `AGENTS.SIGMA_METRIC` |
 | Skills | `AGENTS.SKILL_USE` |
-| Snowflake Semantic | `AGENTS.ROOT` only (pointer rows; no additional tables) |
+| Snowflake Semantic | Pointer rows in `AGENTS.ROOT` |
 
-Each ingestion replaces its own table family with `CREATE OR REPLACE TABLE` and then inserts the rows parsed from the source metadata.
+Table-producing ingestions replace their own table families and insert the rows
+parsed from source metadata.
 
 ---
 
@@ -389,6 +393,101 @@ CREATE OR REPLACE TABLE AGENTS.LOOKML_EXPLORE (
 | `description` | Explore `description`. |
 | `ai_context` | Explore `ai_context`. |
 | `file_path` | Relative path to the `.lkml` file from the configured LookML directory. |
+
+---
+
+## Source: Omni
+
+The Omni ingestion scans an Omni connection directory recursively for `*.view.yaml` and `*.topic.yaml` files. It skips files with YAML syntax errors. It writes views, dimensions, measures, topics, and topic join edges. Stored file paths are relative to the connection directory.
+
+### `AGENTS.OMNI_VIEW`
+
+One row per parsed view file. `view_name` comes from a `# Reference this view as ...` comment in the first five lines. The fallback is `<parent_directory>__<view_stem>` for nested files and `<view_stem>` for files at the root of the connection directory.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OMNI_VIEW (
+  view_name   VARCHAR NOT NULL,
+  schema      VARCHAR,
+  table_name  VARCHAR,
+  label       VARCHAR,
+  description TEXT,
+  file_path   VARCHAR,
+  PRIMARY KEY (view_name)
+);
+```
+
+The `schema`, `table_name`, `label`, and `description` columns come from the corresponding view YAML fields.
+
+### `AGENTS.OMNI_DIMENSION`
+
+One row per entry in a view's `dimensions` mapping.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OMNI_DIMENSION (
+  view_name   VARCHAR NOT NULL,
+  field_name  VARCHAR NOT NULL,
+  label       VARCHAR,
+  sql         TEXT,
+  format      VARCHAR,
+  description TEXT,
+  primary_key BOOLEAN,
+  PRIMARY KEY (view_name, field_name)
+);
+```
+
+`field_name` is the dimension key. The other fields come from that dimension's YAML; `primary_key` is `false` when missing.
+
+### `AGENTS.OMNI_MEASURE`
+
+One row per entry in a view's `measures` mapping.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OMNI_MEASURE (
+  view_name      VARCHAR NOT NULL,
+  measure_name   VARCHAR NOT NULL,
+  label          VARCHAR,
+  aggregate_type VARCHAR,
+  sql            TEXT,
+  description    TEXT,
+  PRIMARY KEY (view_name, measure_name)
+);
+```
+
+`measure_name` is the measure key. The remaining fields come from that measure's YAML.
+
+### `AGENTS.OMNI_TOPIC`
+
+One row per parsed topic file. `topic_name` is the filename without `.topic.yaml`.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OMNI_TOPIC (
+  topic_name  VARCHAR NOT NULL,
+  base_view   VARCHAR,
+  label       VARCHAR,
+  group_label VARCHAR,
+  description TEXT,
+  ai_context  TEXT,
+  file_path   VARCHAR,
+  PRIMARY KEY (topic_name)
+);
+```
+
+The other columns come from the corresponding topic YAML fields. A missing `base_view` is stored as an empty string.
+
+### `AGENTS.OMNI_TOPIC_JOIN`
+
+One row per distinct edge in a topic's nested `joins` mapping.
+
+```sql
+CREATE OR REPLACE TABLE AGENTS.OMNI_TOPIC_JOIN (
+  topic_name VARCHAR NOT NULL,
+  from_view  VARCHAR NOT NULL,
+  to_view    VARCHAR NOT NULL,
+  PRIMARY KEY (topic_name, from_view, to_view)
+);
+```
+
+Top-level edges start at the topic's `base_view`. Nested edges start at their parent view.
 
 ---
 
@@ -673,7 +772,7 @@ CREATE OR REPLACE TABLE AGENTS.SIGMA_METRIC (
 
 ## Source: Snowflake Semantic
 
-The Snowflake Semantic ingestion publishes pointer rows into `AGENTS.ROOT` for one or more named native Snowflake semantic views. It does not create additional `AGENTS.*` tables — the semantic definition (dimensions, metrics, relationships, and query behavior) lives in Snowflake itself and should be inspected there.
+The Snowflake Semantic ingestion publishes pointer rows into `AGENTS.ROOT` for one or more named native Snowflake semantic views. The semantic definition (dimensions, metrics, relationships, and query behavior) lives in Snowflake. The ingestion also publishes the destination-matched built-in analyst skill under the `skills` provider.
 
 Each semantic view produces one row in `AGENTS.ROOT` under provider `snowflake_semantic`. The key convention is `semantic_view/<fully_qualified_name>`.
 
@@ -727,7 +826,7 @@ Agents Schema tables can be populated in several ways:
 - **Scheduled workflows** that periodically refresh metadata from source systems or repositories
 - **Platform engineering jobs** that maintain user-published provider tables for internal metadata, skills, query recipes, or operational context
 
-This repository currently provides source-specific GitHub reusable workflows for dbt, LookML, OSI, and skills ingestion. Those workflows are one implementation path, not a requirement that all Agents Schema metadata be produced through GitHub Actions.
+This repository currently provides source-specific GitHub reusable workflows for dbt, LookML, Omni, OSI, Sigma, skills, and Snowflake Semantic ingestion. Those workflows are one implementation path, not a requirement that all Agents Schema metadata be produced through GitHub Actions.
 
 Each source ingestion owns its table family and may replace those tables on each run. Consumers should treat these tables as generated metadata, not as hand-edited state.
 
@@ -744,6 +843,7 @@ The following provider names are reserved:
 |---|---|
 | `dbt` | dbt metadata in `AGENTS.DBT_*` |
 | `lookml` | LookML metadata in `AGENTS.LOOKML_*` |
+| `omni` | Omni metadata in `AGENTS.OMNI_*` |
 | `osi` | OSI metadata in `AGENTS.OSI_*` |
 | `sigma` | Sigma data model metadata in `AGENTS.SIGMA_*` |
 | `skills` | Skills extension metadata in `AGENTS.SKILL_USE` |
@@ -765,6 +865,12 @@ The following provider names are reserved:
 | `AGENTS.LOOKML_DIMENSION` | LookML | LookML dimensions and dimension groups |
 | `AGENTS.LOOKML_MEASURE` | LookML | LookML measures |
 | `AGENTS.LOOKML_EXPLORE` | LookML | LookML explores |
+| `AGENTS.OMNI_VIEW` | Omni | Omni views and their warehouse table references |
+| `AGENTS.OMNI_DIMENSION` | Omni | Omni view dimensions |
+| `AGENTS.OMNI_MEASURE` | Omni | Omni view measures |
+| `AGENTS.OMNI_TOPIC` | Omni | Omni topics and base views |
+| `AGENTS.OMNI_TOPIC_JOIN` | Omni | Join edges within Omni topics |
+| `AGENTS.OSI_MODEL` | OSI | OSI semantic models |
 | `AGENTS.OSI_DATASET` | OSI | OSI datasets and dataset-level context |
 | `AGENTS.OSI_FIELD` | OSI | OSI dataset fields |
 | `AGENTS.OSI_METRIC` | OSI | OSI metrics |
@@ -774,4 +880,4 @@ The following provider names are reserved:
 | `AGENTS.SIGMA_COLUMN` | Sigma | Sigma element columns with direct/computed kind |
 | `AGENTS.SIGMA_METRIC` | Sigma | Sigma element metrics (simple SQL aggregates only) |
 
-Snowflake Semantic writes only to `AGENTS.ROOT` under provider `snowflake_semantic` — one overview row and one `semantic_view/<name>` pointer row per configured view. See [Source: Snowflake Semantic](#source-snowflake-semantic).
+The `snowflake_semantic` provider publishes one overview row and one `semantic_view/<name>` pointer row per configured view in `AGENTS.ROOT`. See [Source: Snowflake Semantic](#source-snowflake-semantic).
